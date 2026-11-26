@@ -294,3 +294,119 @@ pub fn init_at(directory: &Path, target: &str, force: bool) -> Result<WriteTreeI
 
     Ok(WriteTreeInit::of(&init))
 }
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+    use std::path::PathBuf;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    use rorolala_utils_location::Locate as _;
+    use rorolala_workspace::Workspace;
+
+    use super::{WriteTreeInit, init_at, plan, plan_at};
+    use crate::write::WriteError;
+
+    fn scratch(label: &str) -> PathBuf {
+        static NEXT: AtomicUsize = AtomicUsize::new(0);
+
+        let dir = std::env::temp_dir().join(format!(
+            "rola-tree-init-{}-{label}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        ));
+
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+
+        dir
+    }
+
+    #[test]
+    fn a_directory_inside_the_workspace_can_be_a_tree() {
+        let dir = scratch("plan");
+        Workspace::create(&dir).unwrap();
+        let workspace = Workspace::locate(&dir).unwrap();
+        let layout = workspace.layout().unwrap();
+        let tree = dir.join("renders");
+        fs::create_dir_all(&tree).unwrap();
+
+        let placed = plan(&workspace, &layout, &tree).unwrap();
+        assert!(!placed.is_root);
+        assert_eq!(placed.prefix.as_ref().unwrap().as_str(), "renders");
+        assert_eq!(placed.collapse, Vec::new());
+
+        let root = plan(&workspace, &layout, &dir).unwrap();
+        assert!(root.is_root);
+        assert!(root.prefix.is_none());
+
+        fs::create_dir_all(tree.join(".rola-tree")).unwrap();
+        assert!(plan(&workspace, &layout, &tree).is_none());
+
+        let file = dir.join("a.txt");
+        fs::write(&file, b"one").unwrap();
+        assert!(plan(&workspace, &layout, &file).is_none());
+
+        let outside = scratch("outside");
+        assert!(plan(&workspace, &layout, &outside).is_none());
+
+        let _ = fs::remove_dir_all(&dir);
+        let _ = fs::remove_dir_all(&outside);
+    }
+
+    #[test]
+    fn a_relative_target_is_read_from_the_run_directory() {
+        let dir = scratch("plan-at");
+        Workspace::create(&dir).unwrap();
+        let workspace = Workspace::locate(&dir).unwrap();
+        fs::create_dir_all(dir.join("renders")).unwrap();
+
+        let planned = plan_at(&workspace, &dir, "renders").unwrap();
+        assert_eq!(planned.prefix.as_ref().unwrap().as_str(), "renders");
+
+        assert!(plan_at(&workspace, &dir, "missing").is_err());
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_tree_answer_hands_over_what_it_found() {
+        let answer = WriteTreeInit {
+            path: "renders".to_owned(),
+            collapsed: 2,
+            is_root: false,
+        };
+
+        assert_eq!(answer.path(), "renders");
+        assert_eq!(answer.collapsed(), 2);
+        assert!(!answer.is_root());
+    }
+
+    #[test]
+    fn a_directory_outside_every_workspace_makes_no_tree() {
+        let dir = scratch("no-workspace");
+
+        assert!(matches!(
+            init_at(&dir, "", false),
+            Err(WriteError::NoWorkspace)
+        ));
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_forced_init_makes_a_tree_and_takes_the_files_in() {
+        let dir = scratch("init");
+        Workspace::create(&dir).unwrap();
+        fs::create_dir_all(dir.join("renders")).unwrap();
+        fs::write(dir.join("renders/a.psd"), b"one").unwrap();
+
+        let made = init_at(&dir, "renders", true).unwrap();
+
+        assert_eq!(made.path(), "renders");
+        assert!(!made.is_root());
+        assert!(dir.join("renders/.rola-tree").is_dir());
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+}

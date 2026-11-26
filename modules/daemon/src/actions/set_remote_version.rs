@@ -57,3 +57,19 @@ impl Action for ActionSetRemoteVersion {
         Ok(EntryWriteOutcome::from(outcome))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use rorolala_auth::Account;
+    use rorolala_protocol::{Action as _, ActionContext, OnlyWorkspace};
+
+    use super::ActionSetRemoteVersion;
+
+    #[tokio::test]
+    async fn setting_a_version_with_no_channel_is_refused() {
+        let ctx = ActionContext::new_workspace_ctx(Account::default());
+        let input = OnlyWorkspace::from(Some((String::new(), String::new())));
+
+        assert!(ActionSetRemoteVersion::process(input, ctx).await.is_err());
+    }
+}

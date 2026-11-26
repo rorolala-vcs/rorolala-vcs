@@ -103,3 +103,34 @@ pub mod maybe_hash {
         .transpose()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use rorolala_storage::Blake3Hash;
+
+    use super::{from_hex, to_hex};
+
+    #[test]
+    fn a_hash_is_written_as_sixty_four_lowercase_digits() {
+        let mut hash: Blake3Hash = [0; 32];
+        hash[0] = 0xab;
+        hash[31] = 0x01;
+
+        let hex = to_hex(&hash);
+
+        assert_eq!(hex.len(), 64);
+        assert!(hex.starts_with("ab"));
+        assert!(hex.ends_with("01"));
+    }
+
+    #[test]
+    fn a_hex_string_reads_back_or_is_refused() {
+        let hash: Blake3Hash = [0xcd; 32];
+        let hex = to_hex(&hash);
+
+        assert_eq!(from_hex(&hex), Some(hash));
+        assert_eq!(from_hex("not hex"), None);
+        assert_eq!(from_hex(&"a".repeat(63)), None);
+        assert_eq!(from_hex(&"z".repeat(64)), None);
+    }
+}

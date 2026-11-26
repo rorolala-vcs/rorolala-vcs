@@ -250,3 +250,154 @@ impl From<VCSIndexError> for VCSIndexWritingError {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::error::Error as _;
+    use std::io;
+
+    use rorolala_errors::Failure as _;
+    use rorolala_storage::Key;
+
+    use super::{
+        ParseVCSIndexObjectError, TextError, VCSIndexError, VCSIndexReadingError,
+        VCSIndexWritingError,
+    };
+
+    #[test]
+    fn a_parse_failure_says_which_kind_was_expected() {
+        assert_eq!(
+            ParseVCSIndexObjectError::ExpectVariant.to_string(),
+            "expected a variant object, found a version object"
+        );
+        assert_eq!(
+            ParseVCSIndexObjectError::ExpectVersion.to_string(),
+            "expected a version object, found a variant object"
+        );
+        assert_eq!(
+            ParseVCSIndexObjectError::ExpectCreator.to_string(),
+            "expected a creator object, found another kind"
+        );
+        assert_eq!(
+            ParseVCSIndexObjectError::ExpectMessage.to_string(),
+            "expected a message object, found another kind"
+        );
+    }
+
+    #[test]
+    fn a_text_failure_names_itself_and_says_why() {
+        assert_eq!(TextError::TooLong.name(), "text_too_long");
+        assert_eq!(
+            TextError::TooLong.reason(),
+            "the text is longer than 256 bytes"
+        );
+        assert_eq!(TextError::NotUtf8.name(), "text_not_utf8");
+        assert_eq!(TextError::NotUtf8.reason(), "the text is not valid UTF-8");
+    }
+
+    #[test]
+    fn an_index_failure_says_what_went_wrong() {
+        let key = Key::new([1; 32]);
+
+        assert_eq!(
+            VCSIndexError::NotFound(key).to_string(),
+            format!("no index object is stored under {key}")
+        );
+        assert_eq!(
+            VCSIndexError::Malformed.to_string(),
+            "what is stored is not an index object"
+        );
+        assert_eq!(
+            VCSIndexError::Corrupt(key).to_string(),
+            format!("what is stored under {key} does not hash to it")
+        );
+        assert_eq!(
+            VCSIndexError::UnsupportedChoice.to_string(),
+            "the index writes whole objects and cannot be told to cut one"
+        );
+
+        let io = VCSIndexError::from(io::Error::other("disk"));
+        assert!(io.to_string().contains("disk"));
+        assert!(io.source().is_some());
+        assert!(matches!(
+            VCSIndexError::from(TextError::TooLong),
+            VCSIndexError::Malformed
+        ));
+    }
+
+    #[test]
+    fn a_reading_failure_names_itself_and_says_why() {
+        let missing = VCSIndexReadingError::NotFound {
+            key: "key".to_owned(),
+        };
+        assert_eq!(missing.name(), "vcs_index_reading_not_found");
+        assert!(missing.reason().contains("key"));
+
+        assert_eq!(
+            VCSIndexReadingError::Malformed.name(),
+            "vcs_index_reading_malformed"
+        );
+        assert!(
+            VCSIndexReadingError::Malformed
+                .reason()
+                .contains("index object")
+        );
+
+        let corrupt = VCSIndexReadingError::Corrupt {
+            key: "key".to_owned(),
+        };
+        assert_eq!(corrupt.name(), "vcs_index_reading_corrupt");
+        assert!(corrupt.reason().contains("key"));
+
+        let io = VCSIndexReadingError::from(VCSIndexError::from(io::Error::other("disk")));
+        assert_eq!(io.name(), "vcs_index_reading_io");
+        assert!(io.reason().contains("disk"));
+    }
+
+    #[test]
+    fn an_index_failure_is_carried_into_a_reading_failure() {
+        let key = Key::new([1; 32]);
+
+        assert!(matches!(
+            VCSIndexReadingError::from(VCSIndexError::NotFound(key)),
+            VCSIndexReadingError::NotFound { .. }
+        ));
+        assert!(matches!(
+            VCSIndexReadingError::from(VCSIndexError::Corrupt(key)),
+            VCSIndexReadingError::Corrupt { .. }
+        ));
+        assert!(matches!(
+            VCSIndexReadingError::from(VCSIndexError::Malformed),
+            VCSIndexReadingError::Malformed
+        ));
+        assert!(matches!(
+            VCSIndexReadingError::from(VCSIndexError::UnsupportedChoice),
+            VCSIndexReadingError::Malformed
+        ));
+        assert!(matches!(
+            VCSIndexReadingError::from(VCSIndexError::from(io::Error::other("disk"))),
+            VCSIndexReadingError::Io(_)
+        ));
+    }
+
+    #[test]
+    fn a_writing_failure_names_itself_and_says_why() {
+        assert_eq!(
+            VCSIndexWritingError::Malformed.name(),
+            "vcs_index_writing_malformed"
+        );
+        assert_eq!(
+            VCSIndexWritingError::Malformed.reason(),
+            "what was handed over is not an index object"
+        );
+
+        let io = VCSIndexWritingError::from(VCSIndexError::from(io::Error::other("disk")));
+        assert_eq!(io.name(), "vcs_index_writing_io");
+        assert!(io.reason().contains("disk"));
+
+        assert!(matches!(
+            VCSIndexWritingError::from(VCSIndexError::UnsupportedChoice),
+            VCSIndexWritingError::Malformed
+        ));
+    }
+}

@@ -432,16 +432,18 @@ pub(crate) fn prune_empty_directories(entries: &mut BTreeMap<String, TreeEntry>)
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
     use std::fs;
 
     use rorolala_layout::Layout;
-    use rorolala_storage::{RorolalaStorage, StorageSet};
-    use rorolala_tree::{Tree, TreeEntry, TreeStructure};
+    use rorolala_storage::{Key, RorolalaStorage, StorageSet};
+    use rorolala_tree::{FileMode, Tree, TreeEntry, TreeStructure};
     use rorolala_utils_location::Locate as _;
     use rorolala_vcs::VCSIndex;
     use rorolala_workspace::Workspace;
 
-    use super::{RemoveOptions, remove_paths};
+    use super::{RemoveOptions, collect_targets, remove_paths};
+    use crate::write::WriteError;
 
     #[test]
     fn a_staged_file_is_taken_from_the_structure_and_the_work() {
@@ -492,5 +494,44 @@ mod tests {
         assert!(!dir.join("tree/one.txt").exists());
 
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_path_outside_or_unknown_to_the_tree_is_refused() {
+        let root = std::env::temp_dir().join("rola-tree-remove-targets");
+        let cwd = root.clone();
+        let mut entries = BTreeMap::new();
+        entries.insert(
+            "a.txt".to_owned(),
+            TreeEntry::file("a.txt", FileMode::Regular, Key::new([1; 32])),
+        );
+        entries.insert("renders".to_owned(), TreeEntry::directory("renders"));
+        entries.insert(
+            "renders/b.psd".to_owned(),
+            TreeEntry::file("renders/b.psd", FileMode::Regular, Key::new([2; 32])),
+        );
+
+        assert_eq!(
+            collect_targets(&entries, &root, &cwd, &["a.txt".to_owned()], false).unwrap(),
+            vec!["a.txt"]
+        );
+        assert_eq!(
+            collect_targets(&entries, &root, &cwd, &["renders".to_owned()], true).unwrap(),
+            vec!["renders", "renders/b.psd"]
+        );
+        assert!(matches!(
+            collect_targets(&entries, &root, &cwd, &["nothing".to_owned()], false),
+            Err(WriteError::InvalidPath { .. })
+        ));
+        assert!(matches!(
+            collect_targets(&entries, &root, &cwd, &["renders".to_owned()], false),
+            Err(WriteError::InvalidPath { .. })
+        ));
+
+        let outside = std::env::temp_dir().join("rola-tree-remove-elsewhere");
+        assert!(matches!(
+            collect_targets(&entries, &root, &outside, &["a.txt".to_owned()], false),
+            Err(WriteError::InvalidPath { .. })
+        ));
     }
 }

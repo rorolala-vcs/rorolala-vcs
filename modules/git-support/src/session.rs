@@ -189,3 +189,96 @@ impl Session {
         Ok(failures)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+    use std::path::{Path, PathBuf};
+    use std::process::Command;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    use super::Session;
+    use crate::error::Error;
+    use crate::project::Project;
+
+    fn scratch(label: &str) -> PathBuf {
+        static NEXT: AtomicUsize = AtomicUsize::new(0);
+
+        let dir = std::env::temp_dir().join(format!(
+            "rola-git-session-{}-{label}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        ));
+
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+
+        dir
+    }
+
+    fn git(dir: &Path) {
+        let status = Command::new("git").arg("init").arg(dir).output().unwrap();
+        assert!(status.status.success());
+    }
+
+    #[test]
+    fn a_session_is_opened_where_a_project_uses_git_support() {
+        let dir = scratch("open");
+        git(&dir);
+        fs::write(
+            dir.join(Project::CONFIG_FILE),
+            "[features]\ngit_support = true\n",
+        )
+        .unwrap();
+
+        let session = Session::open(&dir).unwrap().unwrap();
+
+        assert_eq!(session.project().root(), dir.as_path());
+        assert_eq!(
+            session.repository().root().canonicalize().unwrap(),
+            dir.canonicalize().unwrap()
+        );
+        assert!(session.name().is_ok());
+        let _ = session.state();
+        let _ = session.lock();
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn a_directory_outside_every_project_is_no_session() {
+        let dir = scratch("none");
+
+        assert!(Session::open(&dir).unwrap().is_none());
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn a_project_without_git_support_is_refused() {
+        let dir = scratch("disabled");
+        fs::write(
+            dir.join(Project::CONFIG_FILE),
+            "[features]\ngit_support = false\n",
+        )
+        .unwrap();
+
+        assert!(matches!(Session::open(&dir), Err(Error::Disabled)));
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn a_project_outside_a_repository_is_refused() {
+        let dir = scratch("no-repository");
+        fs::write(
+            dir.join(Project::CONFIG_FILE),
+            "[features]\ngit_support = true\n",
+        )
+        .unwrap();
+
+        assert!(matches!(Session::open(&dir), Err(Error::NoRepository)));
+
+        let _ = fs::remove_dir_all(dir);
+    }
+}

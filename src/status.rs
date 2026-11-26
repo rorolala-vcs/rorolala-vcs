@@ -503,7 +503,10 @@ mod tests {
     use rorolala_workspace::Workspace;
     use uuid::Uuid;
 
-    use super::{RolaStatus, Status, free_rola_status, is_tree, rola_status_locate, tree_mark};
+    use super::{
+        RolaStatus, Status, TreeChange, TreeConflict, TreeStatus, TreeUntracked, free_rola_status,
+        is_tree, rola_status_locate, tree_mark,
+    };
 
     /// A directory of its own, emptied first so a rerun starts clean.
     ///
@@ -661,5 +664,53 @@ mod tests {
         }
 
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_tree_reading_answers_each_part_it_holds() {
+        let change = TreeChange {
+            path: "a".to_owned(),
+            kind: "file".to_owned(),
+            change: "added".to_owned(),
+            old_path: String::new(),
+        };
+        let untracked = TreeUntracked {
+            path: "b".to_owned(),
+            kind: "file".to_owned(),
+        };
+        let conflict = TreeConflict {
+            path: "c".to_owned(),
+            theirs: rorolala_tree::conflict_copy("c"),
+        };
+        let status = TreeStatus {
+            staged: vec![change],
+            unstaged: Vec::new(),
+            untracked: vec![untracked],
+            conflicts: vec![conflict],
+            wrong: false,
+        };
+
+        assert!(!status.is_clean());
+        assert!(!status.wrong());
+        assert_eq!(status.staged_count(), 1);
+        let staged = status.staged_at(0).unwrap();
+        assert_eq!(staged.path(), "a");
+        assert_eq!(staged.kind(), "file");
+        assert_eq!(staged.change(), "added");
+        assert_eq!(staged.old_path(), "");
+        assert_eq!(status.unstaged_count(), 0);
+        assert!(status.unstaged_at(0).is_none());
+        assert_eq!(status.untracked_count(), 1);
+        assert_eq!(status.untracked_at(0).unwrap().path(), "b");
+        assert_eq!(status.untracked_at(0).unwrap().kind(), "file");
+        assert_eq!(status.conflict_count(), 1);
+        assert_eq!(status.conflict_at(0).unwrap().path(), "c");
+        assert_eq!(
+            status.conflict_at(0).unwrap().theirs(),
+            rorolala_tree::conflict_copy("c")
+        );
+        assert!(status.staged_at(1).is_none());
+        assert!(status.conflict_at(1).is_none());
+        assert!(TreeStatus::default().is_clean());
     }
 }

@@ -154,3 +154,70 @@ fn object_with_number(bytes: &[u8], number: Option<u64>) -> Result<VCSIndexObjec
 fn codec_failed(error: impl std::fmt::Display) -> ActionError {
     ActionError::Codec(BincodeError::new(error.to_string()))
 }
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use rorolala_auth::Account;
+    use rorolala_protocol::{Action as _, ActionContext, ActionError, OnlyWorkspace};
+    use rorolala_storage::Key;
+    use rorolala_vcs::{VCSIndex, VCSIndexObject, VCSWrite as _, Version};
+
+    use super::{
+        ActionReadRemoteIndex, ReadRemoteIndexRequest, codec_failed, object_with_number,
+        read_the_object,
+    };
+
+    fn scratch(label: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "rola-read-remote-index-{}-{label}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+
+        dir
+    }
+
+    #[tokio::test]
+    async fn a_hash_with_no_channel_is_refused() {
+        let ctx = ActionContext::new_workspace_ctx(Account::default());
+        let input = OnlyWorkspace::from(Some(ReadRemoteIndexRequest::default()));
+
+        assert!(ActionReadRemoteIndex::process(input, ctx).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn a_key_the_index_does_not_hold_is_no_object() {
+        let dir = scratch("missing");
+        let index = VCSIndex::create(dir.clone());
+
+        assert!(
+            read_the_object(&index, &Key::new([1; 32]))
+                .await
+                .unwrap()
+                .is_none()
+        );
+
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn a_version_is_read_back_with_the_number_that_crossed_beside_it() {
+        let version = VCSIndexObject::Version(Version::new_bare_version([1; 32], 0));
+        let bytes = version.encode();
+
+        let object = object_with_number(&bytes, Some(9)).unwrap();
+        let VCSIndexObject::Version(version) = object else {
+            panic!("a version was read");
+        };
+
+        assert_eq!(version.version_num(), 9);
+    }
+
+    #[test]
+    fn bytes_that_are_not_an_object_are_refused() {
+        assert!(object_with_number(&[], None).is_err());
+        assert!(matches!(codec_failed("bad"), ActionError::Codec(_)));
+    }
+}

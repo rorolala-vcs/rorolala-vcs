@@ -60,3 +60,48 @@ impl From<io::Error> for Error {
         Self::Io(source)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::error::Error as _;
+    use std::io;
+    use std::path::PathBuf;
+
+    use crate::Key;
+
+    use super::Error;
+
+    #[test]
+    fn a_storage_failure_says_what_went_wrong() {
+        let key = Key::new([1; 32]);
+
+        assert_eq!(
+            Error::NotFound(key).to_string(),
+            format!("no object is stored under {key}")
+        );
+        assert_eq!(
+            Error::Corrupt(key).to_string(),
+            format!("what is stored under {key} does not hash to it")
+        );
+        assert_eq!(
+            Error::Malformed.to_string(),
+            "what is stored does not read as its format"
+        );
+        assert_eq!(
+            Error::ReadOnly {
+                path: PathBuf::from("a")
+            }
+            .to_string(),
+            "`a` is read-only"
+        );
+    }
+
+    #[test]
+    fn an_io_failure_is_a_storage_failure_and_keeps_its_source() {
+        let error = Error::from(io::Error::other("disk"));
+
+        assert!(error.to_string().contains("disk"));
+        assert!(error.source().is_some());
+        assert!(Error::Malformed.source().is_none());
+    }
+}

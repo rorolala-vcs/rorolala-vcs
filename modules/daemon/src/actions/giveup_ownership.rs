@@ -92,3 +92,19 @@ impl Action for ActionGiveupOwnership {
         Ok(Ownerships::from(outcomes))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{GiveupOwnershipRequest, OwnershipChange};
+
+    #[test]
+    fn a_request_becomes_the_change_the_exchange_carries() {
+        let request =
+            GiveupOwnershipRequest::new("note".to_owned(), vec!["a".to_owned(), "b".to_owned()]);
+
+        let change: OwnershipChange = request.into();
+
+        assert_eq!(change.name, "note");
+        assert_eq!(change.uuids, ["a", "b"]);
+    }
+}

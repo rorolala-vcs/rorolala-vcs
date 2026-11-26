@@ -246,7 +246,8 @@ mod tests {
     use rorolala_utils_location::Locate as _;
     use rorolala_workspace::Workspace;
 
-    use super::pack_workspace;
+    use super::{WritePack, pack_at, pack_index_at, pack_vault_at, pack_workspace};
+    use crate::write::WriteError;
     use crate::write::track::{TrackOptions, track_file};
 
     #[test]
@@ -268,6 +269,34 @@ mod tests {
         .unwrap();
 
         let _packed = pack_workspace(&workspace, true, true).unwrap();
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_pack_answer_says_whether_anything_changed() {
+        let changed = WritePack { changed: true };
+
+        assert!(changed.changed());
+        assert!(!WritePack::default().changed());
+    }
+
+    #[test]
+    fn a_directory_with_no_index_or_workspace_packs_nothing() {
+        let dir =
+            std::env::temp_dir().join(format!("rola-write-pack-absent-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+
+        assert!(matches!(pack_index_at(&dir), Err(WriteError::NoIndex)));
+        assert!(matches!(
+            pack_at(&dir, true, true),
+            Err(WriteError::NoWorkspace)
+        ));
+        assert!(matches!(
+            pack_vault_at(&dir, true, true),
+            Err(WriteError::NoVault)
+        ));
 
         let _ = fs::remove_dir_all(&dir);
     }

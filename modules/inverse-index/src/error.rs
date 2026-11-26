@@ -136,3 +136,70 @@ impl Failure for InverseIndexReadingError {
 }
 
 rorolala_errors::failure!(InverseIndexReadingError);
+
+#[cfg(test)]
+mod tests {
+    use std::io;
+
+    use rorolala_errors::Failure as _;
+    use rorolala_storage::Key;
+    use rorolala_vcs::VCSIndexError;
+
+    use super::{InverseIndexError, InverseIndexReadingError};
+
+    #[test]
+    fn a_build_failure_says_what_went_wrong() {
+        let read = InverseIndexError::from(rorolala_vcs::VCSIndexReadingError::from(
+            VCSIndexError::NotFound(Key::new([1; 32])),
+        ));
+        assert!(read.to_string().contains("the index could not be read"));
+        assert_eq!(read.name(), "inverse_index_read");
+
+        assert_eq!(
+            InverseIndexError::Malformed.to_string(),
+            "what is there is not an inverse index"
+        );
+        assert_eq!(
+            InverseIndexError::Malformed.name(),
+            "inverse_index_malformed"
+        );
+
+        let io = InverseIndexError::from(io::Error::other("disk"));
+        assert!(io.to_string().contains("disk"));
+        assert_eq!(io.name(), "inverse_index_io");
+        assert_eq!(
+            InverseIndexError::Malformed.reason(),
+            InverseIndexError::Malformed.to_string()
+        );
+    }
+
+    #[test]
+    fn a_reading_failure_says_what_went_wrong() {
+        let missing = InverseIndexReadingError::NotFound {
+            key: "key".to_owned(),
+        };
+        assert!(missing.to_string().contains("key"));
+        assert_eq!(missing.name(), "inverse_index_reading_not_found");
+
+        assert_eq!(
+            InverseIndexReadingError::Malformed.name(),
+            "inverse_index_reading_malformed"
+        );
+
+        let read = InverseIndexReadingError::Read {
+            cause: "cause".to_owned(),
+        };
+        assert!(read.to_string().contains("cause"));
+        assert_eq!(read.name(), "inverse_index_reading_read");
+
+        let io = InverseIndexReadingError::from(io::Error::other("disk"));
+        assert!(io.to_string().contains("disk"));
+        assert_eq!(io.name(), "inverse_index_reading_io");
+        assert_eq!(read.reason(), read.to_string());
+
+        let carried = InverseIndexReadingError::from(rorolala_vcs::VCSIndexReadingError::from(
+            VCSIndexError::Malformed,
+        ));
+        assert!(matches!(carried, InverseIndexReadingError::Read { .. }));
+    }
+}

@@ -136,3 +136,49 @@ fn wanted(which: &str, kind: Option<VCSIndexKind>) -> bool {
         _ => true,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use rorolala_auth::Account;
+    use rorolala_protocol::{Action as _, ActionContext, OnlyWorkspace};
+    use rorolala_vcs::{VCSIndex, VCSIndexKind};
+
+    use super::{ActionListRemoteIndex, ListRemoteIndexRequest, asks_for_kind, listed, wanted};
+
+    #[test]
+    fn a_listing_word_names_a_kind_or_every_object() {
+        assert!(asks_for_kind(" variants "));
+        assert!(asks_for_kind("versions"));
+        assert!(asks_for_kind("str"));
+        assert!(!asks_for_kind(""));
+
+        assert!(wanted("variants", Some(VCSIndexKind::Variant)));
+        assert!(!wanted("variants", Some(VCSIndexKind::Version)));
+        assert!(wanted("versions", Some(VCSIndexKind::Version)));
+        assert!(wanted("str", Some(VCSIndexKind::Creator)));
+        assert!(wanted("str", Some(VCSIndexKind::Message)));
+        assert!(!wanted("str", Some(VCSIndexKind::Variant)));
+        assert!(wanted("", None));
+    }
+
+    #[tokio::test]
+    async fn an_empty_index_lists_nothing() {
+        let dir =
+            std::env::temp_dir().join(format!("rola-list-remote-index-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let index = VCSIndex::create(dir.clone());
+
+        assert_eq!(listed(&index, "variants").await.unwrap(), "");
+        assert_eq!(listed(&index, "").await.unwrap(), "");
+
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[tokio::test]
+    async fn a_listing_with_no_channel_is_refused() {
+        let ctx = ActionContext::new_workspace_ctx(Account::default());
+        let input = OnlyWorkspace::from(Some(ListRemoteIndexRequest::default()));
+
+        assert!(ActionListRemoteIndex::process(input, ctx).await.is_err());
+    }
+}

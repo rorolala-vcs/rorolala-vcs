@@ -157,3 +157,40 @@ impl EntryRemoveOutcome {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{EntryRemove, EntryRemoveOutcome, RemoveKind};
+
+    #[test]
+    fn every_removal_outcome_crosses_and_comes_back() {
+        for (outcome, kind) in [
+            (EntryRemove::Removed, RemoveKind::Removed),
+            (EntryRemove::Missing, RemoveKind::Missing),
+            (
+                EntryRemove::Refused {
+                    owner: Some("alice".to_owned()),
+                },
+                RemoveKind::Refused,
+            ),
+            (EntryRemove::Malformed, RemoveKind::Malformed),
+        ] {
+            let crossed = EntryRemoveOutcome::from(outcome.clone());
+
+            assert_eq!(crossed.kind(), kind);
+            assert_eq!(crossed.outcome(), outcome);
+        }
+    }
+
+    #[test]
+    fn a_refusal_names_the_holder_only_when_there_is_one() {
+        let held = EntryRemoveOutcome::from(EntryRemove::Refused {
+            owner: Some("alice".to_owned()),
+        });
+        assert_eq!(held.owner(), "alice");
+
+        let nobody = EntryRemoveOutcome::from(EntryRemove::Refused { owner: None });
+        assert_eq!(nobody.owner(), "");
+        assert_eq!(nobody.outcome(), EntryRemove::Refused { owner: None });
+    }
+}

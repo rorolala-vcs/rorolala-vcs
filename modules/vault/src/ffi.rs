@@ -118,3 +118,63 @@ pub unsafe extern "C" fn rola_vault_lock_release(guard: *mut RolaVaultLocking) {
     // the lock back.
     drop(unsafe { Box::from_raw(guard) });
 }
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+    use std::ptr;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    use crate::{RolaVault, Vault};
+
+    use super::{
+        RolaVaultLocking, rola_vault_is_locking, rola_vault_lock_acquire, rola_vault_lock_release,
+    };
+
+    fn scratch(label: &str) -> PathBuf {
+        static NEXT: AtomicUsize = AtomicUsize::new(0);
+
+        let dir = std::env::temp_dir().join(format!(
+            "rola-vault-ffi-{}-{label}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        ));
+
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        dir
+    }
+
+    #[test]
+    fn a_vault_lock_is_taken_and_given_back() {
+        let dir = scratch("lock");
+        let vault = RolaVault(Vault::at(dir.clone()));
+
+        // SAFETY: the handle is live for the call.
+        assert!(!unsafe { rola_vault_is_locking(&raw const vault) });
+
+        // SAFETY: as above.
+        let guard: *mut RolaVaultLocking = unsafe { rola_vault_lock_acquire(&raw const vault) };
+        assert!(!guard.is_null());
+        // SAFETY: as above.
+        assert!(unsafe { rola_vault_is_locking(&raw const vault) });
+
+        // SAFETY: the pointer came from the acquire above and has not been released.
+        unsafe { rola_vault_lock_release(guard) };
+        // SAFETY: as above.
+        assert!(!unsafe { rola_vault_is_locking(&raw const vault) });
+
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn a_null_handle_is_not_locked() {
+        // SAFETY: null is what the exports accept as nothing to act on.
+        assert!(!unsafe { rola_vault_is_locking(ptr::null()) });
+        // SAFETY: as above.
+        assert!(unsafe { rola_vault_lock_acquire(ptr::null()) }.is_null());
+        // SAFETY: as above.
+        unsafe { rola_vault_lock_release(ptr::null_mut()) };
+    }
+}

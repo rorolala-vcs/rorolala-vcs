@@ -509,6 +509,130 @@ impl Status {
     }
 }
 
+#[cfg(test)]
+mod ffi_tests {
+    use std::path::PathBuf;
+
+    use crate::PathState;
+    use crate::base::{Relation, Standing as BaseStanding};
+    use crate::ffi::{BrokenKind, Standing as FfiStanding};
+
+    use super::{Broken, Merge, Rename, Status};
+
+    fn status() -> Status {
+        Status {
+            root: PathBuf::from("/ws"),
+            lost: vec!["lost".to_owned()],
+            untagged: vec!["untagged".to_owned()],
+            ignored: vec!["ignored".to_owned()],
+            modified: vec!["modified".to_owned()],
+            renamed: vec![Rename {
+                from: "from".to_owned(),
+                to: "to".to_owned(),
+                modified: true,
+                strong: true,
+            }],
+            unowned: vec!["unowned".to_owned()],
+            unclaimed: vec!["unclaimed".to_owned()],
+            merging: vec![Merge {
+                target: "target".to_owned(),
+                variant: "variant".to_owned(),
+                path: "path".to_owned(),
+                moved: Some("moved".to_owned()),
+            }],
+            broken: vec![Broken::NoTarget {
+                variant: "variant".to_owned(),
+            }],
+            wrong_base: vec!["wrong".to_owned()],
+            standing: vec![(
+                "path".to_owned(),
+                BaseStanding {
+                    relation: Relation::Same,
+                    distance: Some(0),
+                },
+            )],
+        }
+    }
+
+    #[test]
+    fn the_lists_answer_what_they_hold_and_nothing_past_the_end() {
+        let status = status();
+
+        assert_eq!(status.lost_count(), 1);
+        assert_eq!(status.lost_at(0), "lost");
+        assert_eq!(status.lost_at(1), "");
+        assert_eq!(status.untagged_count(), 1);
+        assert_eq!(status.untagged_at(0), "untagged");
+        assert_eq!(status.untagged_at(1), "");
+        assert_eq!(status.ignored_count(), 1);
+        assert_eq!(status.ignored_at(0), "ignored");
+        assert_eq!(status.ignored_at(1), "");
+        assert_eq!(status.modified_count(), 1);
+        assert_eq!(status.modified_at(0), "modified");
+        assert_eq!(status.modified_at(1), "");
+        assert_eq!(status.wrong_base_count(), 1);
+        assert_eq!(status.wrong_base_at(0), "wrong");
+        assert_eq!(status.wrong_base_at(1), "");
+        assert_eq!(status.unowned_count(), 1);
+        assert_eq!(status.unowned_at(0), "unowned");
+        assert_eq!(status.unowned_at(1), "");
+        assert_eq!(status.root_string(), "/ws");
+    }
+
+    #[test]
+    fn a_rename_and_a_merge_answer_their_parts() {
+        let status = status();
+
+        assert_eq!(status.renamed_count(), 1);
+        assert_eq!(status.renamed_from(0), "from");
+        assert_eq!(status.renamed_to(0), "to");
+        assert!(status.renamed_modified(0));
+        assert!(status.renamed_strong(0));
+        assert_eq!(status.renamed_from(1), "");
+
+        assert_eq!(status.merging_count(), 1);
+        assert_eq!(status.merging_target(0), "target");
+        assert_eq!(status.merging_variant(0), "variant");
+        assert_eq!(status.merging_path(0), "path");
+        assert_eq!(status.merging_moved(0), "moved");
+        assert_eq!(status.merging_moved(1), "");
+    }
+
+    #[test]
+    fn a_broken_merge_says_why_and_what_it_is_about() {
+        let status = status();
+
+        assert_eq!(status.broken_count(), 1);
+        assert_eq!(status.broken_kind(0), BrokenKind::NoTarget);
+        assert_eq!(status.broken_kind(1), BrokenKind::None);
+        assert_eq!(status.broken_what(0), "variant");
+        assert_eq!(status.broken_what(1), "");
+        assert_eq!(status.broken_target(0), "");
+        assert_eq!(status.broken_target(1), "");
+    }
+
+    #[test]
+    fn a_path_is_answered_by_state_and_standing() {
+        let status = status();
+        let path = PathBuf::from("/ws/path");
+
+        assert_eq!(status.state(&path), PathState::Unknown);
+        assert_eq!(status.standing(&path), FfiStanding::Same);
+        assert_eq!(status.standing_distance(&path), 0);
+
+        assert_eq!(status.standing_count(), 1);
+        assert_eq!(status.standing_path(0), "path");
+        assert_eq!(status.standing_path(1), "");
+        assert_eq!(status.standing_relation_at(0), FfiStanding::Same);
+        assert_eq!(status.standing_relation_at(1), FfiStanding::Unknown);
+
+        let unknown = PathBuf::from("/elsewhere");
+        assert_eq!(status.state(&unknown), PathState::Unknown);
+        assert_eq!(status.standing(&unknown), FfiStanding::Unknown);
+        assert_eq!(status.standing_distance(&unknown), -1);
+    }
+}
+
 /// The changed paths whose version is behind or apart from the one upstream is at.
 ///
 /// It is asked of a Workspace rather than of a Layout because the copy that answers it lives under the

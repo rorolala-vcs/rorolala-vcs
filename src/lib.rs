@@ -369,3 +369,77 @@ fn unhex(text: &str) -> Option<Vec<u8>> {
 
     Some(bytes)
 }
+
+#[cfg(test)]
+mod tests {
+    use rorolala_storage::Key;
+    use rorolala_tree::{FileMode, TreeEntry as RawEntry, TreeStructure};
+
+    use super::TreeEntries;
+
+    fn hex(bytes: &[u8]) -> String {
+        use std::fmt::Write as _;
+
+        let mut text = String::with_capacity(bytes.len() * 2);
+        for byte in bytes {
+            let _ = write!(text, "{byte:02x}");
+        }
+
+        text
+    }
+
+    fn encoded() -> Vec<u8> {
+        TreeStructure::build(
+            None,
+            [
+                RawEntry::file("a.txt", FileMode::Regular, Key::new([1; 32])),
+                RawEntry::file("run.sh", FileMode::Executable, Key::new([2; 32])),
+                RawEntry::directory("renders"),
+                RawEntry::symlink("latest", "a.txt"),
+            ],
+        )
+        .unwrap()
+        .encode()
+    }
+
+    #[test]
+    fn a_structure_decodes_into_entries_with_their_words() {
+        let entries = TreeEntries::decode(&encoded()).unwrap();
+
+        assert_eq!(entries.count(), 4);
+        assert!(entries.at(4).is_none());
+
+        let find = |path: &str| {
+            (0..entries.count())
+                .filter_map(|index| entries.at(index))
+                .find(|entry| entry.path() == path)
+                .unwrap()
+        };
+
+        let file = find("a.txt");
+        assert_eq!(file.kind(), "file");
+        assert_eq!(file.mode(), "regular");
+        assert_ne!(file.storage(), "");
+        assert_eq!(file.target(), "");
+
+        assert_eq!(find("run.sh").mode(), "executable");
+
+        let directory = find("renders");
+        assert_eq!(directory.kind(), "directory");
+        assert_eq!(directory.mode(), "");
+        assert_eq!(directory.storage(), "");
+
+        let link = find("latest");
+        assert_eq!(link.kind(), "symlink");
+        assert_eq!(link.mode(), "");
+        assert_eq!(link.target(), "a.txt");
+    }
+
+    #[test]
+    fn the_hex_a_caller_holds_is_read_or_refused() {
+        assert!(super::tree_entries(&hex(&encoded())).is_some());
+        assert!(super::tree_entries("0").is_none());
+        assert!(super::tree_entries("zz").is_none());
+        assert!(super::tree_entries(&hex(&[0, 1, 2])).is_none());
+    }
+}

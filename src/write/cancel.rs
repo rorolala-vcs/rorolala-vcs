@@ -75,3 +75,28 @@ pub fn cancel(cancellation: &Cancellation) {
 pub fn is_cancelled(cancellation: &Cancellation) -> bool {
     cancellation.is_cancelled()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{Cancellation, cancel, is_cancelled, new_cancellation};
+
+    #[test]
+    fn a_cancellation_is_set_once_and_keeps_saying_so() {
+        let cancellation = Cancellation::new();
+        assert!(!cancellation.is_cancelled());
+
+        cancellation.cancel();
+        assert!(cancellation.is_cancelled());
+
+        assert!(!Cancellation::default().is_cancelled());
+    }
+
+    #[test]
+    fn the_abi_makes_and_sets_a_cancellation() {
+        let cancellation = new_cancellation().unwrap();
+        assert!(!is_cancelled(&cancellation));
+
+        cancel(&cancellation);
+        assert!(is_cancelled(&cancellation));
+    }
+}

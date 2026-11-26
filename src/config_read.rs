@@ -265,6 +265,8 @@ mod tests {
     use rorolala_utils_location::Locate as _;
     use rorolala_workspace::{Config as WorkspaceConfig, Workspace};
 
+    use super::{StorageBinding, StorageBindings};
+
     /// A directory of its own, emptied first so a rerun starts clean.
     fn scratch(label: &str) -> PathBuf {
         static NEXT: AtomicUsize = AtomicUsize::new(0);
@@ -358,5 +360,32 @@ mod tests {
         assert!(config.max_concurrency() > 0);
 
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_storage_binding_answers_what_the_configuration_said() {
+        let binding = StorageBinding {
+            path: ".".to_owned(),
+            root: "/ws".to_owned(),
+            own: true,
+            present: true,
+            writable: false,
+            reason: "read-only".to_owned(),
+        };
+
+        assert_eq!(binding.path(), ".");
+        assert_eq!(binding.root(), "/ws");
+        assert!(binding.own());
+        assert!(binding.present());
+        assert!(!binding.writable());
+        assert_eq!(binding.reason(), "read-only");
+
+        let bindings = StorageBindings {
+            bindings: vec![binding],
+        };
+        assert_eq!(bindings.count(), 1);
+        assert!(bindings.at(0).is_some());
+        assert!(bindings.at(1).is_none());
+        assert_eq!(StorageBindings::default().count(), 0);
     }
 }

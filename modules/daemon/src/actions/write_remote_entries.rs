@@ -234,3 +234,38 @@ impl EntryWriteOutcome {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{EntryWrite, EntryWriteKind, EntryWriteOutcome, EntryWrites};
+
+    #[test]
+    fn every_write_outcome_crosses_and_comes_back() {
+        for (outcome, kind) in [
+            (EntryWrite::Written, EntryWriteKind::Written),
+            (EntryWrite::Exists, EntryWriteKind::Exists),
+            (EntryWrite::Taken, EntryWriteKind::Taken),
+            (EntryWrite::Missing, EntryWriteKind::Missing),
+            (EntryWrite::Refused, EntryWriteKind::Refused),
+            (EntryWrite::Malformed, EntryWriteKind::Malformed),
+        ] {
+            let crossed = EntryWriteOutcome::from(outcome);
+
+            assert_eq!(crossed.kind(), kind);
+            assert_eq!(crossed.outcome(), outcome);
+        }
+    }
+
+    #[test]
+    fn a_batch_answers_its_outcomes_in_order() {
+        let writes = EntryWrites::from(vec![EntryWrite::Written, EntryWrite::Taken]);
+
+        assert_eq!(writes.count(), 2);
+        assert!(writes.at(0).is_some());
+        assert!(writes.at(2).is_none());
+        assert_eq!(
+            writes.outcomes(),
+            vec![EntryWrite::Written, EntryWrite::Taken]
+        );
+    }
+}

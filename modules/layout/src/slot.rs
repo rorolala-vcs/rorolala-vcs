@@ -24,3 +24,23 @@ impl Slot {
         self.path.is_none() && self.data.is_none()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use crate::path::LayoutPath;
+
+    use super::Slot;
+
+    #[test]
+    fn a_slot_is_empty_only_without_a_path_and_without_data() {
+        assert!(Slot::default().is_empty());
+
+        let placed = Slot {
+            path: Some(LayoutPath::from_relative(Path::new("a.psd")).unwrap()),
+            data: None,
+        };
+        assert!(!placed.is_empty());
+    }
+}

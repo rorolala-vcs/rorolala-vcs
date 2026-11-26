@@ -36,3 +36,20 @@ impl IgnoreRuleSet {
         self.is_ignore(path, is_dir)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use super::load_rules;
+
+    #[test]
+    fn a_directory_with_no_rules_is_an_empty_set_that_ignores_nothing() {
+        let root = std::env::temp_dir();
+        let rules = root.join("rola-ignore-rules-that-are-not-there");
+
+        let set = load_rules(&rules, &root).unwrap();
+
+        assert!(!set.ignored(Path::new("a.psd"), false));
+    }
+}

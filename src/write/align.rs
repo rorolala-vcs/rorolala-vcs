@@ -3020,3 +3020,241 @@ mod tests {
         assert_eq!(refusal.move_kind(), "tracked");
     }
 }
+
+#[cfg(test)]
+mod cross_tests {
+    use super::{
+        AlignInput, AlignMode, AlignRequest, Did, Item, Messages, Mode, MoveKind, Outcome, Refusal,
+        Settled, WriteAlign, WriteAlignEntry, WriteAlignRefusal, WriteError,
+    };
+    use crate::write::request::WriteCommon;
+
+    #[test]
+    fn every_did_word_is_written() {
+        let cases = [
+            (Did::Deleted, "deleted"),
+            (Did::Moved, "moved"),
+            (Did::Broke, "broke"),
+            (Did::Asserted, "asserted"),
+            (Did::RestoredMove, "restored_move"),
+            (Did::RestoredCompletely, "restored_completely"),
+            (Did::RestoredModify, "restored_modify"),
+            (Did::RestoredDelete, "restored_delete"),
+            (Did::RestoredMerge, "restored_merge"),
+            (Did::Unmerged, "unmerged"),
+        ];
+
+        for (did, word) in cases {
+            let entry = WriteAlignEntry::of(&Item {
+                did,
+                what: "a.txt".to_owned(),
+            });
+
+            assert_eq!(entry.did(), word);
+            assert_eq!(entry.what(), "a.txt");
+        }
+    }
+
+    #[test]
+    fn every_refusal_word_is_written() {
+        let cases = [
+            (Refusal::Argument, "argument"),
+            (
+                Refusal::Ignored {
+                    path: "a".to_owned(),
+                },
+                "ignored",
+            ),
+            (
+                Refusal::NotLost {
+                    path: "a".to_owned(),
+                },
+                "not_lost",
+            ),
+            (
+                Refusal::NotModified {
+                    path: "a".to_owned(),
+                },
+                "not_modified",
+            ),
+            (
+                Refusal::NotStaged {
+                    path: "a".to_owned(),
+                },
+                "not_staged",
+            ),
+            (
+                Refusal::NotRestorable {
+                    path: "a".to_owned(),
+                },
+                "not_restorable",
+            ),
+            (
+                Refusal::RestoreExists {
+                    path: "a".to_owned(),
+                },
+                "restore_exists",
+            ),
+            (
+                Refusal::NoRename {
+                    path: "a".to_owned(),
+                },
+                "no_rename",
+            ),
+            (
+                Refusal::RealMove {
+                    from: "a".to_owned(),
+                    to: "b".to_owned(),
+                },
+                "real_move",
+            ),
+            (
+                Refusal::Move {
+                    path: "a".to_owned(),
+                    kind: MoveKind::Missing,
+                },
+                "move",
+            ),
+            (Refusal::TreeUnsupported, "tree_unsupported"),
+            (Refusal::LayoutExists, "layout_exists"),
+            (Refusal::LayoutMissing, "layout_missing"),
+            (
+                Refusal::LayoutFailed {
+                    cause: "bad".to_owned(),
+                },
+                "layout_failed",
+            ),
+            (
+                Refusal::Failed {
+                    cause: "bad".to_owned(),
+                },
+                "failed",
+            ),
+        ];
+
+        for (refusal, word) in cases {
+            let crossed = WriteAlignRefusal::of(&refusal);
+
+            assert_eq!(crossed.kind(), word);
+        }
+
+        let moved = WriteAlignRefusal::of(&Refusal::RealMove {
+            from: "a".to_owned(),
+            to: "b".to_owned(),
+        });
+        assert_eq!(moved.from(), "a");
+        assert_eq!(moved.to(), "b");
+
+        for (kind, word) in [
+            (MoveKind::Missing, "missing"),
+            (MoveKind::NotATree, "not_a_tree"),
+            (MoveKind::Tracked, "tracked"),
+        ] {
+            let crossed = WriteAlignRefusal::of(&Refusal::Move {
+                path: "a".to_owned(),
+                kind,
+            });
+            assert_eq!(crossed.path(), "a");
+            assert_eq!(crossed.move_kind(), word);
+        }
+
+        let failed = WriteAlignRefusal::of(&Refusal::Failed {
+            cause: "bad".to_owned(),
+        });
+        assert_eq!(failed.cause(), "bad");
+    }
+
+    #[test]
+    fn every_align_mode_becomes_the_mode_it_runs() {
+        let cases = [
+            (AlignMode::Delete, Mode::Delete),
+            (AlignMode::Rename, Mode::Rename),
+            (AlignMode::Break, Mode::Break),
+            (
+                AlignMode::MoveTo {
+                    path: "a".to_owned(),
+                },
+                Mode::Move("a".to_owned()),
+            ),
+            (AlignMode::RestoreMove, Mode::RestoreMove),
+            (AlignMode::RestoreModify, Mode::RestoreModify),
+            (AlignMode::RestoreStaged, Mode::RestoreStaged),
+            (AlignMode::RestoreDelete, Mode::RestoreDelete),
+            (AlignMode::Restore, Mode::Restore),
+        ];
+
+        for (mode, expected) in cases {
+            assert_eq!(Mode::from(&mode), expected);
+        }
+    }
+
+    #[test]
+    fn a_request_input_becomes_the_request() {
+        let input = AlignInput {
+            common: WriteCommon::default(),
+            path: "a.txt".to_owned(),
+            mode: AlignMode::Delete,
+            completely: true,
+            include_ignored: true,
+        };
+
+        let request = AlignRequest::from(input);
+
+        assert_eq!(request.path, "a.txt");
+        assert_eq!(request.mode, AlignMode::Delete);
+        assert!(request.completely);
+        assert!(request.include_ignored);
+    }
+
+    #[test]
+    fn every_outcome_shape_crosses() {
+        let paths = WriteAlign::of(&Outcome::Paths(vec![Item {
+            did: Did::Moved,
+            what: "a.txt".to_owned(),
+        }]));
+        assert_eq!(paths.kind(), "paths");
+        assert_eq!(paths.paths_count(), 1);
+        assert!(paths.paths_at(1).is_none());
+        assert_eq!(paths.path(), "");
+        assert!(!paths.staged());
+        assert!(paths.refusal().is_none());
+
+        let tree = WriteAlign::of(&Outcome::Tree {
+            path: "renders".to_owned(),
+        });
+        assert_eq!(tree.kind(), "tree");
+        assert_eq!(tree.path(), "renders");
+        assert!(!tree.staged());
+
+        let file = WriteAlign::of(&Outcome::TreeFile {
+            path: "renders/a.psd".to_owned(),
+            staged: true,
+        });
+        assert_eq!(file.kind(), "tree_file");
+        assert_eq!(file.path(), "renders/a.psd");
+        assert!(file.staged());
+    }
+
+    #[test]
+    fn a_settled_run_keeps_its_outcome_and_what_it_took() {
+        let settled = Settled::of(Ok(Outcome::Tree {
+            path: "renders".to_owned(),
+        }));
+        assert!(settled.outcome.is_ok());
+        assert_eq!(settled.took, Vec::new());
+
+        let failed = Settled::of(Err(WriteError::NoIndex));
+        assert!(failed.outcome.is_err());
+    }
+
+    #[test]
+    fn messages_start_empty() {
+        let messages = Messages::default();
+
+        assert_eq!(messages.not_recorded, "the tree records no version yet");
+        assert_eq!(
+            messages.unsupported,
+            "the tree holds a path this build cannot write back"
+        );
+    }
+}

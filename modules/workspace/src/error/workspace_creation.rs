@@ -74,3 +74,53 @@ impl rorolala_errors::Failure for CreationError {
 }
 
 rorolala_errors::failure!(CreationError);
+
+#[cfg(test)]
+mod tests {
+    use rorolala_errors::Failure as _;
+
+    use super::CreationError;
+
+    #[test]
+    fn every_way_a_workspace_fails_names_itself_and_says_why() {
+        let cases = [
+            (
+                CreationError::DataDirCreateFailed,
+                "workspace_creation_data_dir_create_failed",
+            ),
+            (
+                CreationError::ConfigLocked,
+                "workspace_creation_config_locked",
+            ),
+            (
+                CreationError::ConfigRenderFailed,
+                "workspace_creation_config_render_failed",
+            ),
+            (
+                CreationError::ConfigStageFailed,
+                "workspace_creation_config_stage_failed",
+            ),
+            (
+                CreationError::ConfigPublishFailed,
+                "workspace_creation_config_publish_failed",
+            ),
+            (
+                CreationError::ConfigWriteRenderFailed,
+                "workspace_creation_config_write_render_failed",
+            ),
+            (
+                CreationError::ConfigWriteStageFailed,
+                "workspace_creation_config_write_stage_failed",
+            ),
+            (
+                CreationError::UnknownError,
+                "workspace_creation_unknown_error",
+            ),
+        ];
+
+        for (error, name) in cases {
+            assert_eq!(error.name(), name);
+            assert_ne!(error.reason(), "");
+        }
+    }
+}

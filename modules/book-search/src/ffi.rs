@@ -217,3 +217,71 @@ impl BookSnippet {
         self.0.ranges.get(index).map_or(0, crate::Range::length)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::{Field, Hit, Range, Snippet};
+
+    use super::{BookHit, BookResults, BookSnippet, locate, open};
+
+    fn snippet() -> Snippet {
+        Snippet {
+            field: Field::Content,
+            text: "the text".to_owned(),
+            ranges: vec![Range { start: 4, end: 8 }],
+        }
+    }
+
+    fn hit() -> Hit {
+        Hit {
+            name: "a".to_owned(),
+            title: "title".to_owned(),
+            description: "description".to_owned(),
+            score: 1.5,
+            snippets: vec![snippet()],
+        }
+    }
+
+    #[test]
+    fn a_result_list_answers_its_count_and_its_hits() {
+        let results = BookResults(vec![hit()]);
+
+        assert_eq!(results.count(), 1);
+        assert!(results.hit(0).is_some());
+        assert!(results.hit(1).is_none());
+    }
+
+    #[test]
+    fn a_hit_answers_what_a_list_draws() {
+        let hit = BookHit(hit());
+
+        assert_eq!(hit.name(), "a");
+        assert_eq!(hit.title(), "title");
+        assert_eq!(hit.description(), "description");
+        assert_eq!(hit.score(), 1.5);
+        assert_eq!(hit.snippet_count(), 1);
+        assert!(hit.snippet(0).is_some());
+        assert!(hit.snippet(1).is_none());
+    }
+
+    #[test]
+    fn a_snippet_answers_its_field_text_and_ranges() {
+        let snippet = BookSnippet(snippet());
+
+        assert_eq!(snippet.field(), "content");
+        assert_eq!(snippet.text(), "the text");
+        assert_eq!(snippet.range_count(), 1);
+        assert_eq!(snippet.range_start(0), 4);
+        assert_eq!(snippet.range_length(0), 4);
+        assert_eq!(snippet.range_start(1), 0);
+        assert_eq!(snippet.range_length(1), 0);
+    }
+
+    #[test]
+    fn a_book_that_is_not_there_cannot_be_opened_or_located() {
+        let path = std::env::temp_dir().join("rola-book-that-is-not-there.book");
+
+        assert!(open(&path).is_err());
+        assert!(locate(&path).is_none());
+    }
+}

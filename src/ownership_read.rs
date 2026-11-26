@@ -42,3 +42,20 @@ pub fn locate_ownership(directory: &Path) -> Option<Ownership> {
 pub fn current_account() -> String {
     auth::current_account().unwrap_or_default()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{current_account, locate_ownership};
+
+    #[test]
+    fn a_directory_no_workspace_holds_answers_nothing() {
+        let directory = std::env::temp_dir().join("rola-ownership-read-no-workspace");
+
+        assert!(locate_ownership(&directory).is_none());
+    }
+
+    #[test]
+    fn the_current_account_is_a_string_even_when_none_is_named() {
+        let _ = current_account();
+    }
+}

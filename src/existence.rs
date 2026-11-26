@@ -535,3 +535,178 @@ fn candidates(workspace: &Workspace) -> Result<Vec<(String, VaultAddress)>, Exis
 
     Ok(candidates)
 }
+
+#[cfg(test)]
+mod tests {
+    use rorolala_status::{Existence, SearchTarget, Target};
+    use rorolala_storage::Key;
+
+    use super::{SearchSource, SearchSources, Sourced, needed};
+    use rorolala_layout::LayoutPath;
+    use rorolala_protocol::VaultAddress;
+
+    use rorolala_auth::Account;
+    use rorolala_workspace::Workspace;
+
+    fn key(seed: u8) -> Key {
+        Key::new([seed; 32])
+    }
+
+    fn sourced(contents: Option<Vec<Key>>) -> Sourced {
+        Sourced {
+            existence: Existence {
+                version: Some(key(1)),
+                variant: Some(key(2)),
+                storage: Some(key(3)),
+                held: true,
+                missing: Vec::new(),
+                tree: true,
+                contents,
+            },
+            sources: vec!["alpha".to_owned()],
+            unreachable: vec!["beta".to_owned()],
+        }
+    }
+
+    #[test]
+    fn a_variant_answer_names_the_hash_it_was_asked_with() {
+        let source = SearchSource::new(
+            &SearchTarget::Variant {
+                hash: "h".to_owned(),
+            },
+            &sourced(Some(vec![key(4)])),
+        );
+
+        assert_eq!(source.kind(), "variant");
+        assert_eq!(source.hash(), "h");
+        assert_eq!(source.path(), "");
+        assert_eq!(source.version(), key(1).hex());
+        assert_eq!(source.variant(), key(2).hex());
+        assert_eq!(source.storage(), key(3).hex());
+        assert!(source.offline());
+        assert!(source.tree());
+        assert!(source.expanded());
+        assert_eq!(source.source_count(), 1);
+        assert_eq!(source.source_at(0), "alpha");
+        assert_eq!(source.source_at(1), "");
+        assert_eq!(source.unreachable_count(), 1);
+        assert_eq!(source.unreachable_at(0), "beta");
+        assert_eq!(source.unreachable_at(1), "");
+    }
+
+    #[test]
+    fn a_version_and_an_entry_name_their_own_part() {
+        let version = SearchSource::new(
+            &SearchTarget::Version {
+                hash: "v".to_owned(),
+            },
+            &sourced(None),
+        );
+        assert_eq!(version.kind(), "version");
+        assert_eq!(version.hash(), "v");
+        assert_eq!(version.path(), "");
+        assert!(!version.expanded());
+
+        let entry = SearchSource::new(
+            &SearchTarget::Entry {
+                path: "a.psd".to_owned(),
+            },
+            &sourced(None),
+        );
+        assert_eq!(entry.kind(), "entry");
+        assert_eq!(entry.hash(), "");
+        assert_eq!(entry.path(), "a.psd");
+    }
+
+    #[test]
+    fn a_source_answers_whether_it_is_offline_and_expanded() {
+        let held = sourced(Some(Vec::new()));
+        assert!(held.offline());
+        assert!(held.expanded());
+
+        let unknown = sourced(None);
+        assert!(unknown.offline());
+        assert!(!unknown.expanded());
+    }
+
+    #[test]
+    fn a_set_of_answers_is_read_by_index() {
+        let source = SearchSource::new(
+            &SearchTarget::Entry {
+                path: "a".to_owned(),
+            },
+            &sourced(None),
+        );
+        let sources = SearchSources {
+            targets: vec![source],
+        };
+
+        assert_eq!(sources.count(), 1);
+        assert!(sources.at(0).is_some());
+        assert!(sources.at(1).is_none());
+    }
+
+    #[test]
+    fn what_a_target_needs_is_read_from_what_this_side_resolved() {
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let workspace = Workspace::default();
+        let account = Account::default();
+        let address: VaultAddress = "127.0.0.1:1".parse().unwrap();
+        let held_key = key(1);
+
+        let held = Existence {
+            version: None,
+            variant: None,
+            storage: Some(held_key),
+            held: true,
+            missing: Vec::new(),
+            tree: false,
+            contents: Some(vec![key(2)]),
+        };
+        assert_eq!(
+            needed(
+                &runtime,
+                &workspace,
+                &account,
+                &address,
+                &Target::Storage(held_key),
+                &held
+            ),
+            Some(vec![held_key, key(2)])
+        );
+
+        let storage_only = Existence {
+            storage: None,
+            contents: None,
+            ..held
+        };
+        assert_eq!(
+            needed(
+                &runtime,
+                &workspace,
+                &account,
+                &address,
+                &Target::Storage(held_key),
+                &storage_only
+            ),
+            Some(vec![held_key])
+        );
+
+        let entry = Existence {
+            version: None,
+            ..storage_only
+        };
+        let path = LayoutPath::new("a").unwrap();
+        assert_eq!(
+            needed(
+                &runtime,
+                &workspace,
+                &account,
+                &address,
+                &Target::Entry(path),
+                &entry
+            ),
+            None
+        );
+    }
+}

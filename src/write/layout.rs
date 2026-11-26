@@ -1283,7 +1283,8 @@ mod tests {
     use std::fs;
 
     use super::{
-        LayoutOp, apply, civil_from_days, set_version, soft_deletable, soft_delete_target,
+        LayoutOp, apply, apply_ops, civil_from_days, set_version, soft_deletable,
+        soft_delete_target,
     };
     use crate::write::WriteError;
     use rorolala_layout::{EntryKind, LayoutPath, MutableData};
@@ -1439,5 +1440,198 @@ mod tests {
         ));
         assert!(soft_deletable(&LayoutPath::new("@/new/a.psd").unwrap()));
         assert!(soft_deletable(&LayoutPath::new("art/a.psd").unwrap()));
+    }
+
+    #[test]
+    fn a_batch_needs_a_workspace_and_a_layout_it_knows() {
+        let dir =
+            std::env::temp_dir().join(format!("rola-write-layout-open-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+
+        assert!(matches!(
+            apply_ops(&dir, "", &[]),
+            Err(WriteError::NoWorkspace)
+        ));
+
+        rorolala_workspace::Workspace::create(&dir).unwrap();
+        assert!(matches!(
+            apply_ops(&dir, "other", &[]),
+            Err(WriteError::Precondition { .. })
+        ));
+        assert!(apply_ops(&dir, "", &[]).is_ok());
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+}
+
+#[cfg(test)]
+mod op_tests {
+    use std::fs;
+
+    use rorolala_layout::EntryKind;
+    use rorolala_utils_location::Locate as _;
+    use rorolala_workspace::Workspace;
+    use uuid::Uuid;
+
+    use super::{
+        LayoutOp, LayoutPath, WriteLayoutOp, add_cached_entry, cached_copy, none_if_empty, op_of,
+        path_of, set_cached_owners, set_cached_version,
+    };
+
+    fn version() -> String {
+        "a".repeat(64)
+    }
+
+    #[test]
+    fn every_write_op_becomes_the_typed_one() {
+        let id = Uuid::from_u128(1);
+        let text = id.to_string();
+
+        let created = op_of(WriteLayoutOp::CreateEntry {
+            uuid: text.clone(),
+            path: "a/b.psd".to_owned(),
+            version: version(),
+            owner: "alice".to_owned(),
+            description: "first".to_owned(),
+            kind: "tree".to_owned(),
+        })
+        .unwrap();
+        let LayoutOp::CreateEntry {
+            id: got,
+            path,
+            data,
+        } = created
+        else {
+            panic!("a create was made");
+        };
+        assert_eq!(got, id);
+        assert_eq!(path.unwrap().as_str(), "a/b.psd");
+        assert_eq!(data.owner(), Some("alice"));
+        assert_eq!(data.kind(), EntryKind::Tree);
+
+        let updated = op_of(WriteLayoutOp::UpdateEntry {
+            uuid: text.clone(),
+            version: version(),
+            owner: String::new(),
+            description: String::new(),
+        })
+        .unwrap();
+        assert!(matches!(updated, LayoutOp::UpdateEntry { id: got, .. } if got == id));
+
+        let removed = op_of(WriteLayoutOp::RemoveEntry { uuid: text.clone() }).unwrap();
+        assert!(matches!(removed, LayoutOp::RemoveEntry { id: got } if got == id));
+
+        let bound = op_of(WriteLayoutOp::CreatePath {
+            path: "a/b.psd".to_owned(),
+            uuid: text.clone(),
+        })
+        .unwrap();
+        assert!(matches!(bound, LayoutOp::CreatePath { id: got, .. } if got == id));
+
+        let moved = op_of(WriteLayoutOp::MovePath {
+            from: "a".to_owned(),
+            to: "b".to_owned(),
+        })
+        .unwrap();
+        assert!(matches!(
+            moved,
+            LayoutOp::MovePath { from, to } if from.as_str() == "a" && to.as_str() == "b"
+        ));
+
+        let unbound = op_of(WriteLayoutOp::RemovePath {
+            path: "a".to_owned(),
+        })
+        .unwrap();
+        assert!(matches!(unbound, LayoutOp::RemovePath { path } if path.as_str() == "a"));
+
+        let archived = op_of(WriteLayoutOp::SoftDeletePath {
+            path: "a".to_owned(),
+        })
+        .unwrap();
+        assert!(matches!(archived, LayoutOp::SoftDeletePath { path } if path.as_str() == "a"));
+
+        let held = op_of(WriteLayoutOp::ChangeOwnership {
+            uuid: text.clone(),
+            owner: String::new(),
+        })
+        .unwrap();
+        assert!(matches!(held, LayoutOp::ChangeOwnership { id: got, owner: None } if got == id));
+
+        let changed = op_of(WriteLayoutOp::ChangeUuid {
+            from: text,
+            to: Uuid::from_u128(2).to_string(),
+        })
+        .unwrap();
+        assert!(
+            matches!(changed, LayoutOp::ChangeUuid { from, to } if from == id && to == Uuid::from_u128(2))
+        );
+    }
+
+    #[test]
+    fn a_name_that_does_not_read_is_refused() {
+        assert!(
+            op_of(WriteLayoutOp::RemoveEntry {
+                uuid: "not a uuid".to_owned(),
+            })
+            .is_err()
+        );
+        assert!(
+            op_of(WriteLayoutOp::RemovePath {
+                path: String::new(),
+            })
+            .is_err()
+        );
+        assert!(
+            op_of(WriteLayoutOp::UpdateEntry {
+                uuid: Uuid::from_u128(1).to_string(),
+                version: "not a version".to_owned(),
+                owner: String::new(),
+                description: String::new(),
+            })
+            .is_err()
+        );
+
+        assert_eq!(none_if_empty(String::new()), None);
+        assert_eq!(none_if_empty("a".to_owned()), Some("a".to_owned()));
+        assert!(path_of("").is_err());
+    }
+
+    #[test]
+    fn a_fetched_copy_is_written_and_read_back() {
+        let dir =
+            std::env::temp_dir().join(format!("rola-write-layout-cache-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        Workspace::create(&dir).unwrap();
+        let workspace = Workspace::locate(&dir).unwrap();
+        let id = Uuid::from_u128(1);
+        let path = LayoutPath::new("a.psd").unwrap();
+
+        assert!(cached_copy(&workspace, "alpha").unwrap().is_none());
+
+        let layout = workspace.layout().unwrap();
+        let mut batch = layout.batch();
+        add_cached_entry(&mut batch, id, &path, [1; 32], Some("alice".to_owned())).unwrap();
+        add_cached_entry(&mut batch, id, &path, [1; 32], None).unwrap();
+        batch.commit().unwrap();
+
+        let layout = workspace.layout().unwrap();
+        let mut batch = layout.batch();
+        set_cached_version(&mut batch, id, [2; 32]).unwrap();
+        set_cached_version(&mut batch, Uuid::from_u128(2), [2; 32]).unwrap();
+        set_cached_owners(
+            &mut batch,
+            &[(id, Some("bob".to_owned())), (Uuid::from_u128(2), None)],
+        )
+        .unwrap();
+        batch.commit().unwrap();
+
+        let read = workspace.layout().unwrap();
+        let entry = read.entry(id).unwrap();
+        assert_eq!(entry.version(), [2; 32]);
+        assert_eq!(entry.owner(), Some("bob"));
+
+        let _ = fs::remove_dir_all(&dir);
     }
 }

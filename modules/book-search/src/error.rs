@@ -93,3 +93,78 @@ impl Failure for BookError {
 }
 
 rorolala_errors::failure!(BookError);
+
+#[cfg(test)]
+mod tests {
+    use std::io;
+
+    use rorolala_errors::Failure as _;
+
+    use super::BookError;
+
+    #[test]
+    fn a_book_failure_says_what_went_wrong() {
+        assert!(
+            BookError::from(io::Error::other("disk"))
+                .to_string()
+                .contains("disk")
+        );
+        assert_eq!(
+            BookError::Malformed {
+                detail: "bad".to_owned()
+            }
+            .to_string(),
+            "the book could not be read: bad"
+        );
+        assert_eq!(
+            BookError::Unsupported { version: 9 }.to_string(),
+            "the book is written in format 9, which this build does not know"
+        );
+        assert_eq!(
+            BookError::Duplicate {
+                name: "a".to_owned()
+            }
+            .to_string(),
+            "two articles are named `a`, so neither is found"
+        );
+        assert_eq!(BookError::Empty.to_string(), "the book has no articles");
+        assert_eq!(
+            BookError::Oversized {
+                detail: "too big".to_owned()
+            }
+            .to_string(),
+            "the book is larger than its format allows: too big"
+        );
+    }
+
+    #[test]
+    fn a_book_failure_names_itself_by_kind() {
+        assert_eq!(BookError::from(io::Error::other("disk")).name(), "book_io");
+        assert_eq!(
+            BookError::Malformed {
+                detail: String::new()
+            }
+            .name(),
+            "book_malformed"
+        );
+        assert_eq!(
+            BookError::Unsupported { version: 1 }.name(),
+            "book_unsupported"
+        );
+        assert_eq!(
+            BookError::Duplicate {
+                name: String::new()
+            }
+            .name(),
+            "book_duplicate"
+        );
+        assert_eq!(BookError::Empty.name(), "book_empty");
+        assert_eq!(
+            BookError::Oversized {
+                detail: String::new()
+            }
+            .name(),
+            "book_oversized"
+        );
+    }
+}

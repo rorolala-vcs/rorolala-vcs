@@ -69,3 +69,58 @@ impl From<std::io::Error> for TreeError {
         Self::Io(source.to_string())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::io;
+    use std::path::PathBuf;
+
+    use super::TreeError;
+
+    #[test]
+    fn a_tree_failure_says_what_went_wrong() {
+        assert_eq!(
+            TreeError::Malformed.to_string(),
+            "the bytes are not a tree structure"
+        );
+        assert_eq!(
+            TreeError::Path("a".to_owned()).to_string(),
+            "a is not a path a tree may hold"
+        );
+        assert_eq!(
+            TreeError::Duplicate("a".to_owned()).to_string(),
+            "a is held twice"
+        );
+        assert_eq!(
+            TreeError::Conflict("a".to_owned()).to_string(),
+            "a is a file or a link, so it holds nothing"
+        );
+        assert_eq!(
+            TreeError::NotATree(PathBuf::from("a")).to_string(),
+            "a is not inside a tree"
+        );
+        assert_eq!(
+            TreeError::OutsideWorkspace(PathBuf::from("a")).to_string(),
+            "a is not inside the Workspace"
+        );
+    }
+
+    #[test]
+    fn a_reason_is_written_as_it_was_given() {
+        assert_eq!(TreeError::Io("io".to_owned()).to_string(), "io");
+        assert_eq!(TreeError::Store("store".to_owned()).to_string(), "store");
+        assert_eq!(TreeError::Index("index".to_owned()).to_string(), "index");
+        assert_eq!(TreeError::Layout("layout".to_owned()).to_string(), "layout");
+        assert_eq!(
+            TreeError::Staging("staging".to_owned()).to_string(),
+            "staging"
+        );
+    }
+
+    #[test]
+    fn an_io_failure_is_a_tree_failure() {
+        let error = TreeError::from(io::Error::other("disk"));
+
+        assert!(matches!(error, TreeError::Io(ref reason) if reason == "disk"));
+    }
+}

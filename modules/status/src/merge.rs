@@ -114,3 +114,45 @@ fn storage_of(
         _ => None,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use rorolala_layout::{Layout, LayoutPath};
+    use rorolala_vcs::VCSIndex;
+    use rorolala_workspace::Merging;
+
+    use super::storage_of;
+    use super::variant_moves;
+
+    fn scratch(label: &str) -> PathBuf {
+        let dir =
+            std::env::temp_dir().join(format!("rola-status-merge-{}-{label}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        dir
+    }
+
+    #[test]
+    fn a_reading_with_no_merge_in_progress_finds_no_move() {
+        let dir = scratch("none");
+        let layout = Layout::open(&dir).unwrap();
+        let index = VCSIndex::create(dir.clone());
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let merging = Merging::default();
+
+        assert!(variant_moves(&merging, &layout, &dir, None, &runtime, &[]).is_empty());
+        assert!(variant_moves(&merging, &layout, &dir, Some(&index), &runtime, &[]).is_empty());
+
+        let missing = LayoutPath::from_relative("missing.psd".as_ref()).unwrap();
+        assert!(
+            variant_moves(&merging, &layout, &dir, Some(&index), &runtime, &[missing]).is_empty()
+        );
+
+        assert!(storage_of(&index, &runtime, &[0; 32]).is_none());
+
+        let _ = std::fs::remove_dir_all(dir);
+    }
+}

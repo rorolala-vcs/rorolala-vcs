@@ -197,3 +197,84 @@ fn must_say(cwd: &Path, args: &[&str]) -> Result<String, Error> {
 
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_owned())
 }
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+    use std::path::PathBuf;
+    use std::process::Command;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    use super::{Repository, same_directory};
+
+    fn scratch(label: &str) -> PathBuf {
+        static NEXT: AtomicUsize = AtomicUsize::new(0);
+
+        let dir = std::env::temp_dir().join(format!(
+            "rola-git-{}-{label}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        ));
+
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+
+        dir
+    }
+
+    fn repository(label: &str) -> (PathBuf, Repository) {
+        let dir = scratch(label);
+        let status = Command::new("git").arg("init").arg(&dir).output().unwrap();
+        assert!(status.status.success());
+
+        let repository = Repository::discover(&dir).unwrap().unwrap();
+
+        (dir, repository)
+    }
+
+    #[test]
+    fn a_repository_answers_where_it_is_and_where_its_exclude_is() {
+        let (dir, repository) = repository("layout");
+        fs::create_dir_all(dir.join("materials")).unwrap();
+        fs::write(dir.join("materials/a.psd"), b"one").unwrap();
+
+        assert_eq!(
+            repository.root().canonicalize().unwrap(),
+            dir.canonicalize().unwrap()
+        );
+        assert!(repository.git_dir().is_absolute());
+        assert!(repository.common_dir().is_absolute());
+        assert!(!repository.is_linked_work_tree());
+        assert!(repository.exclude_path().unwrap().ends_with("exclude"));
+
+        let relative = repository.relative(&dir.join("materials/a.psd")).unwrap();
+        assert_eq!(relative, PathBuf::from("materials/a.psd"));
+
+        let outside = scratch("outside");
+        assert!(repository.relative(&outside).is_err());
+
+        let _ = fs::remove_dir_all(dir);
+        let _ = fs::remove_dir_all(outside);
+    }
+
+    #[test]
+    fn a_directory_outside_a_repository_has_none() {
+        let dir = scratch("none");
+
+        assert!(Repository::discover(&dir).unwrap().is_none());
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn two_spellings_of_one_directory_are_the_same() {
+        let dir = scratch("same");
+        let other = scratch("other");
+
+        assert!(same_directory(&dir, &dir.join(".")));
+        assert!(!same_directory(&dir, &other));
+
+        let _ = fs::remove_dir_all(dir);
+        let _ = fs::remove_dir_all(other);
+    }
+}

@@ -82,3 +82,15 @@ pub const UNKNOWN_VERSION: u64 = u64::MAX - 1;
 pub const fn unknown_version() -> u64 {
     UNKNOWN_VERSION
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{ROOT_VERSION, UNKNOWN_VERSION, unknown_version};
+
+    #[test]
+    fn the_root_and_the_unknown_version_are_told_apart() {
+        // A version number is derived rather than stored, so the two sentinels must not collide.
+        assert_ne!(ROOT_VERSION, UNKNOWN_VERSION);
+        assert_eq!(unknown_version(), UNKNOWN_VERSION);
+    }
+}

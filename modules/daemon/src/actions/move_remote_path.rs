@@ -151,3 +151,34 @@ impl PathMoveOutcome {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use rorolala_auth::Account;
+    use rorolala_protocol::{Action as _, ActionContext, OnlyWorkspace};
+
+    use super::{ActionMoveRemotePath, PathMove, PathMoveKind, PathMoveOutcome};
+
+    #[test]
+    fn every_move_outcome_crosses_and_comes_back() {
+        for (outcome, kind) in [
+            (PathMove::Moved, PathMoveKind::Moved),
+            (PathMove::Missing, PathMoveKind::Missing),
+            (PathMove::Taken, PathMoveKind::Taken),
+            (PathMove::Malformed, PathMoveKind::Malformed),
+        ] {
+            let crossed = PathMoveOutcome::from(outcome.clone());
+
+            assert_eq!(crossed.kind(), kind);
+            assert_eq!(crossed.outcome(), outcome);
+        }
+    }
+
+    #[tokio::test]
+    async fn a_move_with_no_channel_is_refused() {
+        let ctx = ActionContext::new_workspace_ctx(Account::default());
+        let input = OnlyWorkspace::from(Some((String::new(), String::new())));
+
+        assert!(ActionMoveRemotePath::process(input, ctx).await.is_err());
+    }
+}

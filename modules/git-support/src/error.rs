@@ -140,3 +140,101 @@ impl From<toml::de::Error> for Error {
         Self::Config(source)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::error::Error as _;
+    use std::io;
+
+    use super::Error;
+
+    #[test]
+    fn a_git_support_failure_says_what_went_wrong() {
+        assert!(
+            Error::from(io::Error::other("disk"))
+                .to_string()
+                .contains("disk")
+        );
+        assert_eq!(
+            Error::State("state".to_owned()).to_string(),
+            "the state could not be read: state"
+        );
+        assert_eq!(Error::ConfigValue("value".to_owned()).to_string(), "value");
+        assert_eq!(
+            Error::Git {
+                command: "git status".to_owned(),
+                reason: "failed".to_owned()
+            }
+            .to_string(),
+            "`git status` failed: failed"
+        );
+        assert_eq!(
+            Error::NoProject.to_string(),
+            "the directory is inside no project"
+        );
+        assert_eq!(
+            Error::NoRepository.to_string(),
+            "the project is inside no git work tree"
+        );
+        assert!(
+            Error::LinkedWorkTree
+                .to_string()
+                .contains("linked work tree")
+        );
+        assert!(Error::Disabled.to_string().contains("features.git_support"));
+        assert_eq!(
+            Error::Content {
+                path: "a".to_owned(),
+                expected: "one".to_owned(),
+                found: "two".to_owned()
+            }
+            .to_string(),
+            "`a` holds two, not the one the lock names"
+        );
+        assert_eq!(
+            Error::Taken {
+                path: "a".to_owned()
+            }
+            .to_string(),
+            "`a` already holds something"
+        );
+        assert_eq!(
+            Error::Unavailable {
+                content: "c".to_owned()
+            }
+            .to_string(),
+            "no source holds the content c"
+        );
+        assert_eq!(
+            Error::Structure {
+                content: "c".to_owned()
+            }
+            .to_string(),
+            "the content c is not a tree structure this build reads"
+        );
+        assert_eq!(
+            Error::TreeContent {
+                path: "a".to_owned(),
+                at: ".".to_owned()
+            }
+            .to_string(),
+            "`a` is not the tree that was placed"
+        );
+        assert_eq!(
+            Error::TreeContent {
+                path: "a".to_owned(),
+                at: "b".to_owned()
+            }
+            .to_string(),
+            "`a` differs from the tree that was placed at `b`"
+        );
+    }
+
+    #[test]
+    fn a_configuration_that_does_not_read_is_a_configuration_failure() {
+        let error = Error::from("a =".parse::<toml::Value>().unwrap_err());
+
+        assert!(error.to_string().contains("rola.toml"));
+        assert!(error.source().is_some());
+    }
+}

@@ -589,4 +589,24 @@ mod tests {
 
         let _ = fs::remove_dir_all(&root);
     }
+
+    /// A tree must carry its mark and sit inside the Workspace it is opened for.
+    #[test]
+    fn a_tree_must_carry_its_mark_and_sit_inside_the_workspace() {
+        let root = scratch("open");
+
+        assert!(matches!(
+            Tree::open(&root, &root),
+            Err(TreeError::NotATree(_))
+        ));
+
+        let tree = root.join("tree");
+        fs::create_dir_all(tree.join(crate::consts::MARK)).expect("a mark");
+        assert!(matches!(
+            Tree::open(&root.join("elsewhere"), &tree),
+            Err(TreeError::OutsideWorkspace(_))
+        ));
+
+        let _ = fs::remove_dir_all(&root);
+    }
 }

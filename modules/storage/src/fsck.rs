@@ -76,3 +76,21 @@ impl FsckReport {
             + self.malformed.len()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::FsckReport;
+
+    #[test]
+    fn a_report_is_clean_only_when_every_list_is_empty() {
+        assert!(FsckReport::default().is_clean());
+        assert_eq!(FsckReport::default().problems(), 0);
+
+        let dirty = FsckReport {
+            broken_packs: vec![1],
+            ..FsckReport::default()
+        };
+        assert!(!dirty.is_clean());
+        assert_eq!(dirty.problems(), 1);
+    }
+}

@@ -1767,3 +1767,184 @@ mod tests {
         ));
     }
 }
+
+#[cfg(test)]
+mod frame_tests {
+    use std::collections::{BTreeMap, BTreeSet};
+
+    use rorolala_auth::Account;
+    use rorolala_protocol::ActionContext;
+    use rorolala_storage::{Bytes, Key};
+    use rorolala_utils_progress::Direction;
+
+    use super::{
+        Carried, Lead, Outgoing, Packet, Side, Taken, Unit, UnitKind, direction, first_of, holds,
+        opposite, packet_header, sending, split_u32,
+    };
+
+    fn key(seed: u8) -> Key {
+        Key::new([seed; 32])
+    }
+
+    fn carried(seed: u8, manifest: bool, large: bool, bytes: Vec<u8>) -> Carried {
+        Carried::new(key(seed), Lead::of(manifest, large), Bytes::from(bytes))
+    }
+
+    #[test]
+    fn a_packet_crosses_and_reads_back() {
+        let mut outgoing = Outgoing {
+            carried: vec![carried(1, false, false, vec![1, 2, 3])],
+            bytes: 0,
+            completed: 4,
+        };
+        let (header, parts) = outgoing.parts();
+        let mut bytes = header.to_vec();
+        for part in parts {
+            bytes.extend_from_slice(part);
+        }
+
+        let packet = Packet::decode(&bytes).unwrap();
+
+        assert_eq!(packet.finished, 4);
+        assert_eq!(packet.carried.len(), 1);
+        assert_eq!(packet.carried[0].key, key(1));
+        assert!(!packet.carried[0].lead.manifest());
+        assert!(!packet.carried[0].lead.large());
+        assert_eq!(packet.carried[0].bytes, [1, 2, 3]);
+        assert_eq!(packet.bytes(), 3);
+
+        outgoing.clear();
+        assert_eq!(outgoing.carried.len(), 0);
+    }
+
+    #[test]
+    fn a_packet_that_does_not_read_is_refused() {
+        assert!(Packet::decode(&[]).is_none());
+
+        let short = packet_header(0, 1).to_vec();
+        assert!(Packet::decode(&short).is_none());
+
+        let mut bad_lead = packet_header(0, 1).to_vec();
+        bad_lead.push(4);
+        bad_lead.extend_from_slice(&[0; 32]);
+        bad_lead.extend_from_slice(&0_u32.to_be_bytes());
+        assert!(Packet::decode(&bad_lead).is_none());
+
+        let mut leftover = packet_header(0, 0).to_vec();
+        leftover.push(0);
+        assert!(Packet::decode(&leftover).is_none());
+
+        let empty_header = packet_header(7, 0);
+        let empty = Packet::decode(&empty_header).unwrap();
+        assert_eq!(empty.finished, 7);
+        assert_eq!(empty.carried.len(), 0);
+    }
+
+    #[test]
+    fn a_lead_says_what_the_entry_is() {
+        for (manifest, large, byte) in [
+            (false, false, 0),
+            (true, false, 1),
+            (false, true, 2),
+            (true, true, 3),
+        ] {
+            let lead = Lead::of(manifest, large);
+            assert_eq!(lead.manifest(), manifest);
+            assert_eq!(lead.large(), large);
+            assert!(lead == Lead::read(byte).unwrap());
+        }
+
+        assert!(Lead::read(4).is_none());
+    }
+
+    #[test]
+    fn a_taken_answer_says_a_status_and_the_units_it_cannot_produce() {
+        assert_eq!(Taken::Held(Vec::new()).said(), vec![0]);
+        assert_eq!(Taken::Failed.said(), vec![1]);
+
+        let missing = Taken::Held(vec![key(1)]).said();
+        assert_eq!(missing[0], 2);
+        assert_eq!(missing.len(), 1 + 32);
+    }
+
+    #[test]
+    fn a_first_key_is_read_from_a_run_of_digests() {
+        assert_eq!(first_of(&[0; 32]), Some(key(0)));
+        assert!(first_of(&[0; 31]).is_none());
+    }
+
+    #[test]
+    fn a_side_and_its_opposite_are_told_apart() {
+        assert!(matches!(opposite(Side::Vault), Side::Workspace));
+        assert!(matches!(opposite(Side::Workspace), Side::Vault));
+        assert_eq!(direction(Side::Vault), Direction::Up);
+        assert_eq!(direction(Side::Workspace), Direction::Down);
+
+        let workspace = ActionContext::new_workspace_ctx(Account::default());
+        assert!(sending(&workspace, Side::Vault));
+        assert!(!sending(&workspace, Side::Workspace));
+    }
+
+    #[test]
+    fn a_whole_unit_is_held_when_its_object_or_every_chunk_is() {
+        let manifest = key(1);
+        let chunk = key(2);
+        let mut objects = BTreeSet::new();
+        let mut manifests = BTreeMap::new();
+
+        assert!(!holds(&Unit::whole(manifest), &objects, &manifests));
+
+        objects.insert(chunk);
+        manifests.insert(manifest, vec![chunk]);
+        assert!(holds(&Unit::whole(manifest), &objects, &manifests));
+
+        manifests.insert(manifest, vec![chunk, key(3)]);
+        assert!(!holds(&Unit::whole(manifest), &objects, &manifests));
+
+        objects.insert(manifest);
+        assert!(holds(&Unit::whole(manifest), &objects, &manifests));
+
+        assert!(holds(
+            &Unit {
+                key: manifest,
+                kind: UnitKind::Manifest
+            },
+            &objects,
+            &manifests
+        ));
+        assert!(holds(
+            &Unit {
+                key: chunk,
+                kind: UnitKind::Object
+            },
+            &objects,
+            &manifests
+        ));
+    }
+
+    #[test]
+    fn a_packet_has_room_for_entries_it_can_hold() {
+        let mut outgoing = Outgoing {
+            carried: Vec::new(),
+            bytes: 0,
+            completed: 0,
+        };
+
+        assert!(!outgoing.room_for(1));
+
+        outgoing.add(carried(1, false, false, vec![1]));
+        assert!(outgoing.room_for(1));
+        assert!(!outgoing.room_for(usize::MAX));
+
+        let (_, parts) = outgoing.parts();
+        assert_eq!(parts.len(), 2);
+        assert_eq!(Outgoing::last_header(9), packet_header(9, 0));
+    }
+
+    #[test]
+    fn a_header_is_two_big_endian_numbers() {
+        assert_eq!(split_u32(&[0, 0, 0, 1]), Some((1, &[][..])));
+        assert_eq!(split_u32(&[0, 0, 0, 1, 9]), Some((1, &[9][..])));
+        assert!(split_u32(&[0, 0, 0]).is_none());
+    }
+}

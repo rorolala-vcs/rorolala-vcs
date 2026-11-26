@@ -26,3 +26,13 @@ impl VersionNumber {
         self.0
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::VersionNumber;
+
+    #[test]
+    fn a_version_number_answers_the_number_it_was_made_with() {
+        assert_eq!(VersionNumber::from(7).value(), 7);
+    }
+}

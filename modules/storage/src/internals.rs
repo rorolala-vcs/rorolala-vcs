@@ -98,3 +98,56 @@ impl Internals for RorolalaStorage {
         Self::read_manifest(self, key).await
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use crate::{Codec, Key, Manifest, RorolalaStorage};
+
+    use super::Internals;
+
+    fn scratch(label: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "rola-storage-internals-{}-{label}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+
+        dir
+    }
+
+    #[test]
+    fn a_store_answers_where_it_keeps_what_it_holds() {
+        let dir = scratch("layout");
+        let store = RorolalaStorage::create(dir.clone());
+        let key = Key::new([1; 32]);
+
+        assert!(Internals::config_path(&store).starts_with(&dir));
+        assert!(Internals::object_path(&store, &key).starts_with(&dir));
+        assert!(Internals::manifest_path(&store, &key).starts_with(&dir));
+        let (packed, index) = Internals::pack_paths(&store, 0);
+        assert!(packed.starts_with(&dir));
+        assert!(index.starts_with(&dir));
+
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        assert_eq!(
+            runtime.block_on(Internals::packs(&store)).unwrap(),
+            Vec::<u64>::new()
+        );
+        assert_eq!(
+            runtime.block_on(Internals::broken_packs(&store)).unwrap(),
+            Vec::<u64>::new()
+        );
+        let _ = runtime.block_on(Internals::read_pack_index(&store, 0));
+        let _ = runtime.block_on(Internals::read_manifest(&store, &key));
+        let _ = runtime.block_on(Internals::write_manifest(
+            &store,
+            &key,
+            &Manifest::new(Vec::new()),
+            Codec::Raw,
+        ));
+
+        let _ = std::fs::remove_dir_all(dir);
+    }
+}

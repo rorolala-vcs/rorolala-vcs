@@ -1339,3 +1339,191 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
     }
 }
+
+#[cfg(test)]
+mod cross_tests {
+    use rorolala_protocol::ActionError;
+    use rorolala_utils_lazyffi::StrSpan;
+
+    use super::{
+        FetchInput, FetchWithEntry, FetchWithMissing, FetchWithRefusal, FetchWithReport,
+        FetchWithRequest, FetchWithSource, HashMiss, WriteError, WriteFetch, WriteFetchEntry,
+        WriteFetchSource, is_remote, reads_as_hash, sort_dedup, under,
+    };
+    use crate::write::request::WriteCommon;
+
+    #[test]
+    fn a_fetch_input_becomes_the_request() {
+        let input = FetchInput {
+            common: WriteCommon::default(),
+            layout: "truth".to_owned(),
+            words: StrSpan::from(vec!["a".to_owned(), "b".to_owned()]),
+            recursive: true,
+        };
+
+        let request = FetchWithRequest::from(input);
+
+        assert_eq!(request.layout, "truth");
+        assert_eq!(request.words, vec!["a".to_owned(), "b".to_owned()]);
+        assert!(request.recursive);
+    }
+
+    #[test]
+    fn a_report_crosses_its_entries_and_sources() {
+        let report = FetchWithReport {
+            entries: vec![FetchWithEntry {
+                target: "target".to_owned(),
+                path: "path".to_owned(),
+                version: "version".to_owned(),
+            }],
+            brought: vec![FetchWithSource {
+                vault: "alpha".to_owned(),
+                count: 2,
+            }],
+        };
+
+        let answer = WriteFetch::of(&report);
+
+        assert_eq!(answer.entry_count(), 1);
+        let entry = answer.entry_at(0).unwrap();
+        assert_eq!(entry.target(), "target");
+        assert_eq!(entry.path(), "path");
+        assert_eq!(entry.version(), "version");
+        assert!(answer.entry_at(1).is_none());
+
+        assert_eq!(answer.brought_count(), 1);
+        let source = answer.brought_at(0).unwrap();
+        assert_eq!(source.vault(), "alpha");
+        assert_eq!(source.count(), 2);
+        assert!(answer.brought_at(1).is_none());
+    }
+
+    #[test]
+    fn an_entry_and_a_source_answer_what_they_hold() {
+        let entry = WriteFetchEntry::of(&FetchWithEntry {
+            target: "t".to_owned(),
+            path: ".".to_owned(),
+            version: "v".to_owned(),
+        });
+        assert_eq!(entry.target(), "t");
+        assert_eq!(entry.path(), ".");
+        assert_eq!(entry.version(), "v");
+
+        let source = WriteFetchSource::of(&FetchWithSource {
+            vault: "alpha".to_owned(),
+            count: 3,
+        });
+        assert_eq!(source.vault(), "alpha");
+        assert_eq!(source.count(), 3);
+    }
+
+    #[test]
+    fn every_refusal_is_the_write_error_a_caller_branches_on() {
+        assert!(matches!(
+            WriteError::from(FetchWithRefusal::Cancelled),
+            WriteError::Cancelled
+        ));
+        assert!(matches!(
+            WriteError::from(FetchWithRefusal::NoLayout),
+            WriteError::NoLayout
+        ));
+        assert!(matches!(
+            WriteError::from(FetchWithRefusal::NotCached {
+                layout: "truth".to_owned(),
+                vault: "alpha".to_owned(),
+            }),
+            WriteError::NotCached
+        ));
+        assert!(matches!(
+            WriteError::from(FetchWithRefusal::LayoutName),
+            WriteError::Precondition { .. }
+        ));
+        assert!(matches!(
+            WriteError::from(FetchWithRefusal::LayoutFailed {
+                reason: "bad".to_owned(),
+            }),
+            WriteError::Layout { .. }
+        ));
+        assert!(matches!(
+            WriteError::from(FetchWithRefusal::Hash {
+                hash: "h".to_owned(),
+                miss: HashMiss::Unknown,
+            }),
+            WriteError::Precondition { .. }
+        ));
+        assert!(matches!(
+            WriteError::from(FetchWithRefusal::Hash {
+                hash: "h".to_owned(),
+                miss: HashMiss::Ambiguous(vec!["a".to_owned()]),
+            }),
+            WriteError::Precondition { .. }
+        ));
+        assert!(matches!(
+            WriteError::from(FetchWithRefusal::Chain {
+                target: "t".to_owned(),
+                reason: "bad".to_owned(),
+            }),
+            WriteError::Index { .. }
+        ));
+        assert!(matches!(
+            WriteError::from(FetchWithRefusal::Incomplete {
+                entries: vec![FetchWithMissing {
+                    target: "t".to_owned(),
+                    path: ".".to_owned(),
+                }],
+            }),
+            WriteError::NotFound { .. }
+        ));
+        assert!(matches!(
+            WriteError::from(FetchWithRefusal::Action(ActionError::NoChannel)),
+            WriteError::Action { .. }
+        ));
+        assert!(matches!(
+            WriteError::from(FetchWithRefusal::Failed(WriteError::NoIndex)),
+            WriteError::NoIndex
+        ));
+    }
+
+    #[test]
+    fn a_word_is_read_as_a_hash_or_a_remote_name() {
+        assert!(reads_as_hash(&"a".repeat(64)));
+        assert!(reads_as_hash(&"a".repeat(12)));
+        assert!(!reads_as_hash("not a hash"));
+
+        assert!(is_remote("truth@vault"));
+        assert!(is_remote("a@b"));
+        assert!(!is_remote("a"));
+        assert!(!is_remote("@b"));
+        assert!(!is_remote("a@"));
+    }
+
+    #[test]
+    fn a_path_under_a_prefix_is_not_one_that_merely_starts_alike() {
+        let under_path = rorolala_layout::LayoutPath::new("a/b").unwrap();
+
+        assert!(under("a", &under_path));
+        assert!(under("a/b", &under_path));
+        assert!(!under(
+            "a",
+            &rorolala_layout::LayoutPath::new("ab").unwrap()
+        ));
+        assert!(!under(
+            "a/b",
+            &rorolala_layout::LayoutPath::new("a").unwrap()
+        ));
+
+        let mut keys = vec![
+            rorolala_storage::Key::new([2; 32]),
+            rorolala_storage::Key::new([1; 32]),
+            rorolala_storage::Key::new([2; 32]),
+        ];
+        sort_dedup(&mut keys);
+        assert_eq!(
+            keys,
+            vec![
+                rorolala_storage::Key::new([1; 32]),
+                rorolala_storage::Key::new([2; 32])
+            ]
+        );
+    }
+}

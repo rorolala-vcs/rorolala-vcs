@@ -1778,3 +1778,119 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
+
+#[cfg(test)]
+mod cross_tests {
+    use super::{
+        Applied, Kind, Messages, Report, SyncAgreed, WriteError, WriteSync, WriteSyncApply,
+        WriteSyncTook, none_if_empty,
+    };
+
+    #[test]
+    fn an_agreed_entry_is_read_back_with_its_empty_names_absent() {
+        let agreed = SyncAgreed {
+            uuid: "u".to_owned(),
+            local_path: "a".to_owned(),
+            remote_path: String::new(),
+            planned_path: String::new(),
+            local_version: String::new(),
+            remote_version: String::new(),
+            kind: "create".to_owned(),
+        };
+
+        let given = agreed.given().unwrap();
+
+        assert_eq!(given.uuid, "u");
+        assert_eq!(given.local_path.as_deref(), Some("a"));
+        assert_eq!(given.remote_path, None);
+        assert!(matches!(given.kind, Kind::Create));
+
+        let broken = SyncAgreed {
+            kind: "not a kind".to_owned(),
+            ..agreed
+        };
+        assert!(matches!(
+            broken.given(),
+            Err(WriteError::Precondition { .. })
+        ));
+
+        assert_eq!(none_if_empty(""), None);
+        assert_eq!(none_if_empty("a"), Some("a".to_owned()));
+    }
+
+    #[test]
+    fn a_one_shot_sync_crosses_its_counts_and_takes() {
+        let applied = Applied {
+            applied: 1,
+            received: 2,
+            failed: vec!["bad".to_owned()],
+            index_objects: 3,
+            storage_objects: 4,
+            missing_layout: true,
+            took: vec![("alpha".to_owned(), 5)],
+        };
+
+        let answer = WriteSync::of(&applied);
+
+        assert_eq!(answer.applied(), 1);
+        assert_eq!(answer.received(), 2);
+        assert_eq!(answer.failed_count(), 1);
+        assert_eq!(answer.failed_at(0), "bad");
+        assert_eq!(answer.failed_at(1), "");
+        assert_eq!(answer.index_objects(), 3);
+        assert_eq!(answer.storage_objects(), 4);
+        assert!(answer.missing_layout());
+        assert_eq!(answer.took_count(), 1);
+        assert_eq!(answer.took_at(0).unwrap().vault(), "alpha");
+        assert_eq!(answer.took_at(0).unwrap().objects(), 5);
+        assert!(answer.took_at(1).is_none());
+    }
+
+    #[test]
+    fn an_applied_sync_crosses_what_it_did() {
+        let report = Report {
+            layout: "main".to_owned(),
+            vault: "alpha".to_owned(),
+            applied: 1,
+            received: 2,
+            up_to_date: 3,
+            failed: vec!["bad".to_owned()],
+            layout_read: true,
+            index_objects: 4,
+            storage_objects: 5,
+        };
+
+        let answer = WriteSyncApply::of(&report);
+
+        assert_eq!(answer.layout(), "main");
+        assert_eq!(answer.vault(), "alpha");
+        assert_eq!(answer.applied(), 1);
+        assert_eq!(answer.received(), 2);
+        assert_eq!(answer.up_to_date(), 3);
+        assert_eq!(answer.failed_count(), 1);
+        assert_eq!(answer.failed_at(0), "bad");
+        assert_eq!(answer.failed_at(1), "");
+        assert!(answer.layout_read());
+        assert_eq!(answer.index_objects(), 4);
+        assert_eq!(answer.storage_objects(), 5);
+    }
+
+    #[test]
+    fn a_took_answer_names_its_vault_and_count() {
+        let took = WriteSyncTook {
+            vault: "alpha".to_owned(),
+            count: 7,
+        };
+
+        assert_eq!(took.vault(), "alpha");
+        assert_eq!(took.objects(), 7);
+    }
+
+    #[test]
+    fn the_default_words_are_the_ones_the_library_uses() {
+        let messages = Messages::default();
+
+        assert_eq!(messages.malformed, "the entry does not read");
+        assert_eq!(messages.written, "written");
+    }
+}

@@ -465,3 +465,101 @@ mod tests {
         assert!(matches!(store, ActionError::Store(_)));
     }
 }
+
+#[cfg(test)]
+mod exchange_tests {
+    use std::future::Future;
+    use std::path::PathBuf;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    use rorolala_auth::{Account, KeyAlgorithm, Member, SecureStream, SigningKey};
+    use rorolala_protocol::{Action as _, ActionContext, Channel, OnlyWorkspace, Socket};
+    use rorolala_utils_constants::{VAULT_INDEX_DIR, WORKSPACE_INDEX_DIR};
+    use rorolala_utils_location::Locate as _;
+    use rorolala_vault::Vault;
+    use rorolala_vcs::{VCSIndex, VCSIndexObject, Version};
+    use rorolala_workspace::Workspace;
+
+    use super::ActionSyncIndexAll;
+
+    fn scratch(label: &str) -> PathBuf {
+        static NEXT: AtomicUsize = AtomicUsize::new(0);
+
+        let dir = std::env::temp_dir().join(format!(
+            "rola-sync-index-{}-{label}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        ));
+
+        let _ = std::fs::remove_dir_all(&dir);
+
+        dir
+    }
+
+    fn run<T>(future: impl Future<Output = T>) -> T {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("a runtime")
+            .block_on(future)
+    }
+
+    fn session() -> (Channel, Channel) {
+        run(async {
+            let server = SigningKey::from_bytes(KeyAlgorithm::Ed25519, [1; 32]).expect("a key");
+            let expected = server.public_key();
+            let client = SigningKey::from_bytes(KeyAlgorithm::Ed25519, [2; 32]).expect("a key");
+            let (client_io, server_io) = tokio::io::duplex(64 * 1024);
+            let client_io: Box<dyn Socket> = Box::new(client_io);
+            let server_io: Box<dyn Socket> = Box::new(server_io);
+
+            let (client, server) = tokio::join!(
+                SecureStream::connect(client_io, &client, &expected),
+                SecureStream::accept(server_io, &server),
+            );
+
+            (
+                client.expect("the client handshakes"),
+                server.expect("the server handshakes"),
+            )
+        })
+    }
+
+    #[test]
+    fn an_index_sync_carries_what_the_vault_holds_to_the_workspace() {
+        let workspace_root = scratch("workspace");
+        Workspace::create(&workspace_root).unwrap();
+        let workspace = Workspace::locate(&workspace_root).unwrap();
+        let workspace_index = VCSIndex::create(workspace_root.join(WORKSPACE_INDEX_DIR));
+
+        let vault_root = scratch("vault");
+        Vault::create(&vault_root).unwrap();
+        let vault = Vault::locate(&vault_root).unwrap();
+        let vault_index = VCSIndex::create(vault_root.join(VAULT_INDEX_DIR));
+        let written = run(vault_index.write(VCSIndexObject::Version(Version::root()))).unwrap();
+
+        let (client, server) = session();
+        let workspace_ctx = ActionContext::new_workspace_ctx(Account::default())
+            .with_current_workspace(&workspace)
+            .with_channel(client);
+        let vault_ctx = ActionContext::new_vault_ctx(Member::default())
+            .with_current_vault(&vault)
+            .with_channel(server);
+
+        let (here, there) = run(async {
+            tokio::join!(
+                ActionSyncIndexAll::process(OnlyWorkspace::from(Some(())), workspace_ctx),
+                ActionSyncIndexAll::process(OnlyWorkspace::from(Some(())), vault_ctx),
+            )
+        });
+
+        here.expect("the Workspace side answers");
+        there.expect("the Vault side answers");
+
+        let held = run(workspace_index.object_keys()).unwrap();
+        assert!(held.contains(&written));
+
+        let _ = std::fs::remove_dir_all(&workspace_root);
+        let _ = std::fs::remove_dir_all(&vault_root);
+    }
+}

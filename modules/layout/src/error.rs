@@ -107,3 +107,65 @@ impl From<rorolala_storage::Error> for LayoutError {
         Self::Storage(source)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::error::Error as _;
+    use std::io;
+
+    use rorolala_storage::Key;
+
+    use super::LayoutError;
+
+    #[test]
+    fn a_layout_failure_says_what_went_wrong() {
+        assert_eq!(
+            LayoutError::Path("a".to_owned()).to_string(),
+            "`a` is not a path a layout may name"
+        );
+        assert_eq!(
+            LayoutError::Name("a".to_owned()).to_string(),
+            "`a` is not a name a layout may be given"
+        );
+        assert_eq!(
+            LayoutError::AlreadyExists.to_string(),
+            "it is already there"
+        );
+        assert_eq!(LayoutError::NotFound.to_string(), "there is nothing there");
+        assert_eq!(
+            LayoutError::Malformed.to_string(),
+            "the layout's own bytes are not one this build wrote"
+        );
+        assert_eq!(LayoutError::Index("index".to_owned()).to_string(), "index");
+    }
+
+    #[test]
+    fn missing_content_is_named_one_key_at_a_time() {
+        let one = LayoutError::MissingContent(vec![Key::new([1; 32])]);
+        assert!(
+            one.to_string()
+                .starts_with("the store does not hold what the layout needs: ")
+        );
+
+        let two = LayoutError::MissingContent(vec![Key::new([1; 32]), Key::new([2; 32])]);
+        assert!(two.to_string().contains(", "));
+    }
+
+    #[test]
+    fn an_io_failure_is_not_found_only_when_the_os_says_so() {
+        let missing = LayoutError::from(io::Error::from(io::ErrorKind::NotFound));
+        assert!(missing.is_not_found());
+        assert!(missing.source().is_some());
+
+        let denied = LayoutError::from(io::Error::from(io::ErrorKind::PermissionDenied));
+        assert!(!denied.is_not_found());
+    }
+
+    #[test]
+    fn a_storage_failure_is_a_layout_failure() {
+        let error = LayoutError::from(rorolala_storage::Error::Malformed);
+
+        assert!(matches!(error, LayoutError::Storage(_)));
+        assert!(error.source().is_some());
+    }
+}

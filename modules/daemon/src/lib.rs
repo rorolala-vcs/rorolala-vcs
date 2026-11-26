@@ -251,3 +251,44 @@ fn init_close_channel() -> Cancellation {
 
     Cancellation { rx, future }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use super::{daemon_serve_vault, daemon_serve_vault_async, init_close_channel};
+
+    fn missing(label: &str) -> PathBuf {
+        std::env::temp_dir().join(format!(
+            "rola-daemon-{}-{label}-{}",
+            std::process::id(),
+            label
+        ))
+    }
+
+    #[test]
+    fn a_session_without_a_vault_stops_before_serving() {
+        let path = missing("no-vault");
+
+        let exit = daemon_serve_vault(&path, None);
+
+        assert!(exit.code() > 0);
+    }
+
+    #[tokio::test]
+    async fn a_session_without_a_vault_awaited_stops_before_serving() {
+        let path = missing("no-vault-async");
+
+        let exit = daemon_serve_vault_async(&path, None).await;
+
+        assert!(exit.code() > 0);
+    }
+
+    #[test]
+    fn a_cancellation_hands_out_a_signal_that_is_not_set() {
+        let cancellation = init_close_channel();
+        let signal = cancellation.get_rx();
+
+        assert!(!*signal.rx.borrow());
+    }
+}

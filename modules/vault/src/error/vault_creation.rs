@@ -81,3 +81,51 @@ impl rorolala_errors::Failure for CreationError {
 }
 
 rorolala_errors::failure!(CreationError);
+
+#[cfg(test)]
+mod tests {
+    use rorolala_errors::Failure as _;
+
+    use super::CreationError;
+
+    #[test]
+    fn every_way_a_vault_fails_names_itself_and_says_why() {
+        let cases = [
+            (
+                CreationError::DirCreateFailed,
+                "vault_creation_dir_create_failed",
+            ),
+            (
+                CreationError::LayoutCreateFailed,
+                "vault_creation_layout_create_failed",
+            ),
+            (CreationError::ConfigLocked, "vault_creation_config_locked"),
+            (
+                CreationError::ConfigRenderFailed,
+                "vault_creation_config_render_failed",
+            ),
+            (
+                CreationError::ConfigStageFailed,
+                "vault_creation_config_stage_failed",
+            ),
+            (
+                CreationError::ConfigPublishFailed,
+                "vault_creation_config_publish_failed",
+            ),
+            (
+                CreationError::ConfigWriteRenderFailed,
+                "vault_creation_config_write_render_failed",
+            ),
+            (
+                CreationError::ConfigWriteStageFailed,
+                "vault_creation_config_write_stage_failed",
+            ),
+            (CreationError::UnknownError, "vault_creation_unknown_error"),
+        ];
+
+        for (error, name) in cases {
+            assert_eq!(error.name(), name);
+            assert_ne!(error.reason(), "");
+        }
+    }
+}

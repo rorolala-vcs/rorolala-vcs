@@ -95,3 +95,35 @@ impl KeyLocateRule {
         self.find_env = value;
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::KeyLocateRule;
+
+    #[test]
+    fn a_rule_searches_everywhere_until_a_switch_is_turned_off() {
+        let mut rule = KeyLocateRule::new();
+        assert!(rule.find_global());
+        assert!(rule.find_local());
+        assert!(rule.find_user());
+        assert!(rule.find_env());
+
+        rule.set_find_global(false);
+        rule.set_find_local(false);
+        rule.set_find_user(false);
+        rule.set_find_env(false);
+
+        assert!(!rule.find_global());
+        assert!(!rule.find_local());
+        assert!(!rule.find_user());
+        assert!(!rule.find_env());
+    }
+
+    #[test]
+    fn the_default_rule_is_the_one_that_searches_everywhere() {
+        assert!(KeyLocateRule::default().find_global());
+        assert!(KeyLocateRule::default().find_local());
+        assert!(KeyLocateRule::default().find_user());
+        assert!(KeyLocateRule::default().find_env());
+    }
+}

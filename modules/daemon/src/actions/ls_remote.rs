@@ -97,3 +97,33 @@ async fn listed(local: &StorageSet, which: &str) -> Result<String, ActionError> 
 
     Ok(keys.iter().map(Key::hex).collect::<Vec<_>>().join("\n"))
 }
+
+#[cfg(test)]
+mod tests {
+    use rorolala_auth::Account;
+    use rorolala_protocol::{Action as _, ActionContext, OnlyWorkspace};
+    use rorolala_storage::{RorolalaStorage, StorageSet};
+
+    use super::{ActionListRemote, ListRemoteRequest, listed};
+
+    #[tokio::test]
+    async fn a_listing_names_what_the_store_holds() {
+        let dir = std::env::temp_dir().join(format!("rola-ls-remote-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let store = RorolalaStorage::create(dir.clone());
+        let set = StorageSet::sole(store);
+
+        assert_eq!(listed(&set, "manifests").await.unwrap(), "");
+        assert_eq!(listed(&set, "").await.unwrap(), "");
+
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[tokio::test]
+    async fn a_listing_with_no_channel_is_refused() {
+        let ctx = ActionContext::new_workspace_ctx(Account::default());
+        let input = OnlyWorkspace::from(Some(ListRemoteRequest::default()));
+
+        assert!(ActionListRemote::process(input, ctx).await.is_err());
+    }
+}

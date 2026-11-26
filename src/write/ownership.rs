@@ -1347,3 +1347,166 @@ mod tests {
         assert!(!same_entries(&wanted, &[]));
     }
 }
+
+#[cfg(test)]
+mod ffi_tests {
+    use rorolala_layout::LayoutPath;
+    use rorolala_utils_lazyffi::StrSpan;
+    use uuid::Uuid;
+
+    use super::{
+        Item, Kind, Outcome, OwnershipAgreed, OwnershipInput, OwnershipKind, OwnershipPlanReport,
+        OwnershipRequest, Refusal, Wanted, WantedView, WriteOwnershipApply, WriteOwnershipPlan,
+        WriteOwnershipRefusal, WriteOwnershipWanted,
+    };
+    use crate::write::request::WriteCommon;
+
+    #[test]
+    fn a_kind_crosses_to_the_one_the_plan_reads() {
+        assert_eq!(Kind::from(OwnershipKind::Hold), Kind::Hold);
+        assert_eq!(Kind::from(OwnershipKind::Giveup), Kind::Giveup);
+    }
+
+    #[test]
+    fn a_request_input_becomes_the_request() {
+        let input = OwnershipInput {
+            common: WriteCommon::default(),
+            kind: OwnershipKind::Hold,
+            paths: StrSpan::from(vec!["a".to_owned(), "b".to_owned()]),
+            allow_partial: true,
+        };
+
+        let request = OwnershipRequest::from(input);
+
+        assert_eq!(request.kind, OwnershipKind::Hold);
+        assert_eq!(request.paths, vec!["a".to_owned(), "b".to_owned()]);
+        assert!(request.allow_partial);
+    }
+
+    #[test]
+    fn an_agreed_entry_and_a_wanted_entry_become_views() {
+        let agreed = WantedView::from(OwnershipAgreed {
+            path: "a".to_owned(),
+            uuid: "u".to_owned(),
+        });
+        assert_eq!(
+            agreed,
+            WantedView {
+                path: "a".to_owned(),
+                uuid: "u".to_owned()
+            }
+        );
+
+        let wanted = WantedView::from(Wanted {
+            path: LayoutPath::new("a").unwrap(),
+            id: Uuid::from_u128(7),
+        });
+        assert_eq!(wanted.path, "a");
+        assert_eq!(wanted.uuid, Uuid::from_u128(7).to_string());
+    }
+
+    #[test]
+    fn every_refusal_crosses_with_its_words() {
+        let cases = [
+            (Refusal::Path("a".to_owned()), "path", "a", "", ""),
+            (Refusal::Upstream("a".to_owned()), "upstream", "a", "", ""),
+            (Refusal::Version("a".to_owned()), "version", "a", "", ""),
+            (Refusal::Changed("a".to_owned()), "changed", "a", "", ""),
+            (
+                Refusal::Taken {
+                    path: "a".to_owned(),
+                    owner: "alice".to_owned(),
+                },
+                "taken",
+                "a",
+                "alice",
+                "",
+            ),
+            (
+                Refusal::NotHeld {
+                    path: "a".to_owned(),
+                    owner: None,
+                },
+                "not_held",
+                "a",
+                "",
+                "",
+            ),
+            (Refusal::Failed("bad".to_owned()), "failed", "", "", "bad"),
+        ];
+
+        for (refusal, kind, path, owner, cause) in cases {
+            let crossed = WriteOwnershipRefusal::of(&refusal);
+
+            assert_eq!(crossed.kind(), kind);
+            assert_eq!(crossed.path(), path);
+            assert_eq!(crossed.owner(), owner);
+            assert_eq!(crossed.cause(), cause);
+        }
+    }
+
+    #[test]
+    fn a_plan_crosses_every_entry_and_refusal() {
+        let report = OwnershipPlanReport {
+            wanted: vec![WantedView {
+                path: "a".to_owned(),
+                uuid: "u".to_owned(),
+            }],
+            refused: vec![Refusal::Path("b".to_owned())],
+            skipped: 3,
+        };
+
+        let plan = WriteOwnershipPlan::of(&report);
+
+        assert_eq!(plan.wanted_count(), 1);
+        assert_eq!(plan.wanted_at(0).unwrap().path(), "a");
+        assert_eq!(plan.wanted_at(0).unwrap().uuid(), "u");
+        assert!(plan.wanted_at(1).is_none());
+        assert_eq!(plan.refused_count(), 1);
+        assert_eq!(plan.refused_at(0).unwrap().kind(), "path");
+        assert!(plan.refused_at(1).is_none());
+        assert_eq!(plan.skipped(), 3);
+    }
+
+    #[test]
+    fn an_apply_crosses_entries_and_failures() {
+        let outcome = Outcome {
+            entries: vec![
+                Item {
+                    path: "a".to_owned(),
+                    uuid: "u".to_owned(),
+                    owner: Some("alice".to_owned()),
+                },
+                Item {
+                    path: "b".to_owned(),
+                    uuid: "v".to_owned(),
+                    owner: None,
+                },
+            ],
+            failed: vec![Refusal::Failed("bad".to_owned())],
+        };
+
+        let apply = WriteOwnershipApply::of(&outcome);
+
+        assert_eq!(apply.entry_count(), 2);
+        assert_eq!(apply.entry_at(0).unwrap().path(), "a");
+        assert_eq!(apply.entry_at(0).unwrap().uuid(), "u");
+        assert_eq!(apply.entry_at(0).unwrap().owner(), "alice");
+        assert_eq!(apply.entry_at(1).unwrap().owner(), "");
+        assert!(apply.entry_at(2).is_none());
+        assert_eq!(apply.failed_count(), 1);
+        assert_eq!(apply.failed_at(0).unwrap().kind(), "failed");
+        assert!(apply.failed_at(1).is_none());
+    }
+
+    #[test]
+    fn a_wanted_entry_answers_its_path_and_uuid() {
+        let wanted = WriteOwnershipWanted {
+            path: "a".to_owned(),
+            uuid: "u".to_owned(),
+        };
+
+        assert_eq!(wanted.path(), "a");
+        assert_eq!(wanted.uuid(), "u");
+    }
+}

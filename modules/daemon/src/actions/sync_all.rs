@@ -161,3 +161,90 @@ pub(crate) fn local_stores(ctx: &ActionContext<'_>) -> Result<StorageSet, Action
 
     Err(ActionError::MissingValue)
 }
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    use rorolala_auth::Account;
+    use rorolala_protocol::{Action as _, ActionContext, ActionError, OnlyWorkspace};
+    use rorolala_storage::{RorolalaStorage, StorageSet};
+    use rorolala_utils_location::Locate as _;
+    use rorolala_vault::Vault;
+    use rorolala_workspace::Workspace;
+
+    use super::{ActionSyncAll, SyncAllRequest, local_stores};
+
+    fn scratch(label: &str) -> PathBuf {
+        static NEXT: AtomicUsize = AtomicUsize::new(0);
+
+        let dir = std::env::temp_dir().join(format!(
+            "rola-sync-all-{}-{label}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        ));
+
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        dir
+    }
+
+    #[test]
+    fn a_side_with_no_store_says_so() {
+        let ctx = ActionContext::new_workspace_ctx(Account::default());
+
+        assert!(matches!(local_stores(&ctx), Err(ActionError::MissingValue)));
+    }
+
+    #[test]
+    fn a_side_with_handed_stores_uses_them() {
+        let dir = scratch("handed");
+        let store = RorolalaStorage::create(dir.join("store"));
+        let set = StorageSet::sole(store);
+        let ctx = ActionContext::new_workspace_ctx(Account::default()).with_local_stores(&set);
+
+        assert!(local_stores(&ctx).is_ok());
+
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn a_workspace_side_uses_the_workspaces_store() {
+        let dir = scratch("workspace");
+        Workspace::create(&dir).unwrap();
+        let workspace = Workspace::locate(&dir).unwrap();
+        let ctx =
+            ActionContext::new_workspace_ctx(Account::default()).with_current_workspace(&workspace);
+
+        assert!(local_stores(&ctx).is_ok());
+
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn a_vault_side_uses_the_vaults_store() {
+        let dir = scratch("vault");
+        Vault::create(&dir).unwrap();
+        let vault = Vault::locate(&dir).unwrap();
+        let ctx = ActionContext::new_workspace_ctx(Account::default()).with_current_vault(&vault);
+
+        assert!(local_stores(&ctx).is_ok());
+
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[tokio::test]
+    async fn a_sync_all_with_no_channel_is_refused() {
+        let dir = scratch("process");
+        let store = RorolalaStorage::create(dir.join("store"));
+        let set = StorageSet::sole(store);
+        let ctx = ActionContext::new_workspace_ctx(Account::default()).with_local_stores(&set);
+        let input = OnlyWorkspace::from(Some(SyncAllRequest::default()));
+
+        assert!(ActionSyncAll::process(input, ctx).await.is_err());
+
+        let _ = std::fs::remove_dir_all(dir);
+    }
+}

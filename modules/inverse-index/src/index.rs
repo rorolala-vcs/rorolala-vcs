@@ -836,7 +836,7 @@ mod direct {
 mod tests {
     use rorolala_vcs::{Hash, ROOT_VERSION};
 
-    use super::{RebuildMode, count_numbered, is_appendable, mode_of};
+    use super::{InverseIndex, RebuildMode, count_numbered, is_appendable, mode_of};
     use crate::{Edge, Table};
 
     #[test]
@@ -980,5 +980,25 @@ mod tests {
 
         // A number once written is not written again.
         assert_eq!(count_numbered(&mut table), 0);
+    }
+
+    #[test]
+    fn an_inverse_index_names_the_index_it_is_built_for() {
+        let dir =
+            std::env::temp_dir().join(format!("rola-inverse-index-at-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let index = rorolala_vcs::VCSIndex::create(dir.clone());
+        let inverse = InverseIndex::at(index);
+
+        assert_eq!(inverse.get_root(), dir.as_path());
+
+        let empty =
+            std::env::temp_dir().join(format!("rola-inverse-index-empty-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&empty);
+        std::fs::create_dir_all(&empty).unwrap();
+        assert!(InverseIndex::locate(&empty).is_none());
+
+        let _ = std::fs::remove_dir_all(&dir);
+        let _ = std::fs::remove_dir_all(&empty);
     }
 }

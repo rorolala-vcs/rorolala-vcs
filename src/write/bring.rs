@@ -2472,3 +2472,211 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
+
+#[cfg(test)]
+mod cross_tests {
+    use uuid::Uuid;
+
+    use std::path::Path;
+
+    use super::{
+        HashMiss, Item, Messages, Outcome, Refusal, VariantRefusal, VariantReport, WriteBring,
+        WriteBringEntry, WriteError, is_pattern, parent, pattern_base, placeable, prefix, refused,
+        resolve_against, rooted, under,
+    };
+
+    #[test]
+    fn every_variant_refusal_is_the_write_error_a_caller_branches_on() {
+        let cases = [
+            VariantRefusal::NotAVariantHash {
+                hash: "h".to_owned(),
+                miss: HashMiss::Malformed,
+            },
+            VariantRefusal::NotAVariantHash {
+                hash: "h".to_owned(),
+                miss: HashMiss::Unknown,
+            },
+            VariantRefusal::NotAVariantHash {
+                hash: "h".to_owned(),
+                miss: HashMiss::Ambiguous(vec!["a".to_owned(), "b".to_owned()]),
+            },
+            VariantRefusal::NotATarget,
+            VariantRefusal::AlreadyMerging,
+            VariantRefusal::AlreadyBroughtIn,
+            VariantRefusal::UnknownVariant,
+            VariantRefusal::OffChain,
+            VariantRefusal::NoStore,
+            VariantRefusal::NoContent,
+            VariantRefusal::PlaceOutside,
+            VariantRefusal::PlaceTaken {
+                path: "a".to_owned(),
+            },
+            VariantRefusal::Chain,
+            VariantRefusal::NoTrack,
+            VariantRefusal::NoAccount,
+            VariantRefusal::NoVault,
+        ];
+
+        for refusal in cases {
+            let _ = WriteError::from(refusal);
+        }
+
+        let failed = WriteError::from(VariantRefusal::Failed(WriteError::NoIndex));
+        assert!(matches!(failed, WriteError::NoIndex));
+
+        let malformed = WriteError::from(VariantRefusal::NotAVariantHash {
+            hash: "h".to_owned(),
+            miss: HashMiss::Malformed,
+        });
+        assert!(matches!(malformed, WriteError::NotFound { .. }));
+
+        let ambiguous = WriteError::from(VariantRefusal::NotAVariantHash {
+            hash: "h".to_owned(),
+            miss: HashMiss::Ambiguous(vec!["a".to_owned()]),
+        });
+        assert!(matches!(ambiguous, WriteError::Precondition { .. }));
+    }
+
+    #[test]
+    fn every_reference_refusal_is_the_write_error_a_caller_branches_on() {
+        let id = Uuid::from_u128(1);
+
+        assert!(matches!(
+            refused(Refusal::Argument),
+            WriteError::Precondition { .. }
+        ));
+        assert!(matches!(
+            refused(Refusal::Unknown("r".to_owned())),
+            WriteError::NotFound { .. }
+        ));
+        assert!(matches!(
+            refused(Refusal::Unnamed(id)),
+            WriteError::Precondition { .. }
+        ));
+        assert!(matches!(
+            refused(Refusal::Taken("a".to_owned())),
+            WriteError::Precondition { .. }
+        ));
+        assert!(matches!(
+            refused(Refusal::Known(id.to_string())),
+            WriteError::Precondition { .. }
+        ));
+    }
+
+    #[test]
+    fn a_bring_of_entries_crosses_its_entries_and_failures() {
+        let outcome = Outcome {
+            entries: vec![Item {
+                uuid: "u".to_owned(),
+                remote_path: Some("remote".to_owned()),
+                local_path: "local".to_owned(),
+            }],
+            failed: vec!["bad".to_owned()],
+        };
+
+        let answer = WriteBring::of_entries(&outcome);
+
+        assert!(!answer.joined());
+        assert_eq!(answer.entry_count(), 1);
+        let entry = answer.entry_at(0).unwrap();
+        assert_eq!(entry.uuid(), "u");
+        assert_eq!(entry.remote_path(), "remote");
+        assert_eq!(entry.local_path(), "local");
+        assert!(answer.entry_at(1).is_none());
+        assert_eq!(answer.failed_count(), 1);
+        assert_eq!(answer.failed_at(0), "bad");
+        assert_eq!(answer.failed_at(1), "");
+        assert_eq!(answer.target(), "");
+        assert_eq!(answer.variant(), "");
+        assert_eq!(answer.path(), "");
+    }
+
+    #[test]
+    fn a_variant_merge_crosses_the_three_things_it_names() {
+        let report = VariantReport {
+            target: "target".to_owned(),
+            variant: "variant".to_owned(),
+            path: "path".to_owned(),
+        };
+
+        let answer = WriteBring::of_variant(&report);
+
+        assert!(answer.joined());
+        assert_eq!(answer.entry_count(), 0);
+        assert_eq!(answer.failed_count(), 0);
+        assert_eq!(answer.target(), "target");
+        assert_eq!(answer.variant(), "variant");
+        assert_eq!(answer.path(), "path");
+    }
+
+    #[test]
+    fn an_entry_with_no_remote_path_says_so() {
+        let entry = WriteBringEntry::of(&Item {
+            uuid: "u".to_owned(),
+            remote_path: None,
+            local_path: "local".to_owned(),
+        });
+
+        assert_eq!(entry.uuid(), "u");
+        assert_eq!(entry.remote_path(), "");
+        assert_eq!(entry.local_path(), "local");
+    }
+
+    #[test]
+    fn the_default_words_are_the_ones_the_library_uses() {
+        let messages = Messages::default();
+
+        assert_eq!(messages.no_content, "the version's content is not here");
+        assert_eq!(messages.tree_mark, "the tree's mark could not be read");
+    }
+
+    #[test]
+    fn a_variant_request_is_built_from_the_values_a_caller_holds() {
+        let request = super::BringVariantRequest::new(
+            crate::write::request::Common::default(),
+            "variant".to_owned(),
+            "file".to_owned(),
+            Some("place".to_owned()),
+            true,
+        );
+
+        assert_eq!(request.variant, "variant");
+        assert_eq!(request.file, "file");
+        assert_eq!(request.to.as_deref(), Some("place"));
+        assert!(request.tree_merge);
+    }
+
+    #[test]
+    fn a_reference_is_read_as_a_path_or_a_pattern() {
+        assert_eq!(parent("a/b/c"), "a/b");
+        assert_eq!(parent("a"), "");
+        assert_eq!(pattern_base("Assets/*"), "Assets");
+        assert_eq!(pattern_base("Assets/**"), "Assets");
+        assert_eq!(pattern_base("*"), "");
+
+        assert!(under("a/b", "a"));
+        assert!(!under("a", "a"));
+        assert!(!under("ab", "a"));
+
+        assert!(is_pattern("a/*"));
+        assert!(!is_pattern("a/b"));
+
+        assert_eq!(placeable("@/new/a.fbx"), Some("new/a.fbx"));
+        assert_eq!(placeable("@/"), None);
+        assert_eq!(placeable("a/b"), Some("a/b"));
+
+        let root = std::env::temp_dir();
+        let absolute = root.join("abs");
+        assert_eq!(
+            rooted(&root, &absolute.display().to_string()),
+            absolute.display().to_string()
+        );
+        assert_eq!(rooted(&root, "rel"), root.join("rel").display().to_string());
+        assert_eq!(resolve_against(&root, "rel"), root.join("rel"));
+        assert_eq!(
+            resolve_against(&root, &absolute.display().to_string()),
+            absolute
+        );
+        assert_eq!(prefix(Path::new("a/b")), "a/b");
+    }
+}

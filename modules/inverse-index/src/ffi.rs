@@ -307,3 +307,128 @@ fn run<T>(future: impl Future<Output = T>) -> Result<T, io::Error> {
 
     Ok(runtime.block_on(future))
 }
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    use rorolala_vcs::VCSIndex;
+
+    use crate::{InverseIndex, InverseIndexReadingError, InverseIndexReport, RebuildMode};
+
+    use super::{key_of, locate_inverse_index, run};
+
+    fn scratch(label: &str) -> PathBuf {
+        static NEXT: AtomicUsize = AtomicUsize::new(0);
+
+        let dir = std::env::temp_dir().join(format!(
+            "rola-inverse-index-ffi-{}-{label}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        ));
+
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        dir
+    }
+
+    fn index(label: &str) -> (PathBuf, InverseIndex) {
+        let dir = scratch(label);
+        let index = InverseIndex::at(VCSIndex::create(dir.clone()));
+
+        (dir, index)
+    }
+
+    #[test]
+    fn an_invalid_hash_is_refused_before_the_index_is_read() {
+        let (dir, index) = index("hash");
+
+        assert!(matches!(
+            index.store_dependents_blocking("not a hash"),
+            Err(InverseIndexReadingError::Malformed)
+        ));
+        assert!(matches!(
+            index.variant_dependents_blocking("not a hash"),
+            Err(InverseIndexReadingError::Malformed)
+        ));
+        assert!(matches!(
+            index.version_dependents_blocking("not a hash"),
+            Err(InverseIndexReadingError::Malformed)
+        ));
+        assert!(matches!(
+            index.child_versions_blocking("not a hash"),
+            Err(InverseIndexReadingError::Malformed)
+        ));
+        assert!(matches!(
+            index.creator_dependents_blocking("not a hash"),
+            Err(InverseIndexReadingError::Malformed)
+        ));
+        assert!(matches!(
+            index.message_dependents_blocking("not a hash"),
+            Err(InverseIndexReadingError::Malformed)
+        ));
+        assert!(matches!(
+            index.join_dependents_blocking("not a hash"),
+            Err(InverseIndexReadingError::Malformed)
+        ));
+        assert!(matches!(
+            index.version_num_blocking("not a hash"),
+            Err(InverseIndexReadingError::Malformed)
+        ));
+
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn a_key_is_read_from_the_hex_a_caller_writes() {
+        let hex = "a".repeat(64);
+        let key = key_of(&hex).unwrap();
+
+        assert_eq!(key.hex(), hex);
+        assert!(matches!(
+            key_of("not a hash"),
+            Err(InverseIndexReadingError::Malformed)
+        ));
+        assert_eq!(run(async { 7 }).unwrap(), 7);
+    }
+
+    #[test]
+    fn a_report_answers_each_count_it_was_given() {
+        let report = InverseIndexReport {
+            mode: RebuildMode::Full,
+            objects: 1,
+            objects_read: 2,
+            variants: 3,
+            versions: 4,
+            creators: 5,
+            messages: 6,
+            versions_numbered: 7,
+            entries: 8,
+            dependents: 9,
+            fingerprint: "hex".to_owned(),
+        };
+
+        assert_eq!(report.mode(), "full");
+        assert_eq!(report.objects(), 1);
+        assert_eq!(report.objects_read(), 2);
+        assert_eq!(report.variants(), 3);
+        assert_eq!(report.versions(), 4);
+        assert_eq!(report.creators(), 5);
+        assert_eq!(report.messages(), 6);
+        assert_eq!(report.versions_numbered(), 7);
+        assert_eq!(report.entries(), 8);
+        assert_eq!(report.dependents(), 9);
+        assert_eq!(report.fingerprint(), "hex");
+    }
+
+    #[test]
+    fn a_directory_with_no_index_holds_no_inverse_index() {
+        let dir = scratch("locate");
+
+        assert!(locate_inverse_index(&dir).is_none());
+
+        let _ = std::fs::remove_dir_all(dir);
+    }
+}

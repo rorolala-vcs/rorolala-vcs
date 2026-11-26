@@ -49,3 +49,24 @@ impl From<io::Error> for TreeDiffError {
         Self::Io(source)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::error::Error as _;
+    use std::io;
+
+    use rorolala_layout::LayoutError;
+
+    use super::TreeDiffError;
+
+    #[test]
+    fn an_analysis_failure_keeps_the_failure_it_came_from() {
+        let io = TreeDiffError::from(io::Error::other("disk"));
+        assert!(io.to_string().contains("disk"));
+        assert!(io.source().is_some());
+
+        let layout = TreeDiffError::from(LayoutError::from(io::Error::other("layout")));
+        assert!(layout.to_string().contains("layout"));
+        assert!(layout.source().is_some());
+    }
+}
