@@ -13,6 +13,7 @@ use rorolala_vault::Vault;
 use rorolala_workspace::{Merging, Workspace};
 use uuid::Uuid;
 
+use crate::write::journal::{Effect, EntryState, Journal};
 use crate::write::WriteError;
 
 /// One change to a Layout.
@@ -86,9 +87,28 @@ pub enum LayoutOp {
 /// Returns [`WriteError::Layout`] when a change does not read or does not apply. The batch is not
 /// committed, so a caller that sees a failure sees the Layout as it was.
 pub fn apply(layout: &Layout, ops: &[LayoutOp]) -> Result<(), WriteError> {
+    apply_recorded(layout, ops, None)
+}
+
+/// Applies a batch of changes, recording each in `journal` when one is given.
+///
+/// # Errors
+///
+/// As [`apply`].
+// The match is the whole of the batch's shape: every operation the Layout takes is one arm here.
+#[allow(clippy::too_many_lines)]
+pub fn apply_recorded(
+    layout: &Layout,
+    ops: &[LayoutOp],
+    mut journal: Option<&mut Journal>,
+) -> Result<(), WriteError> {
     let mut batch = layout.batch();
 
     for op in ops {
+        if let Some(journal) = journal.as_deref_mut() {
+            record_op(journal, layout, &batch, op);
+        }
+
         match op.clone() {
             LayoutOp::CreateEntry { id, path, data } => {
                 batch
@@ -183,6 +203,97 @@ pub fn apply(layout: &Layout, ops: &[LayoutOp]) -> Result<(), WriteError> {
     batch.commit().map_err(|error| WriteError::Layout {
         reason: error.to_string(),
     })
+}
+
+/// Records what `op` changes, reading the state the batch holds before it.
+// The match is the whole of what a change can be: one arm per operation, and splitting it would only
+// move the arms one level away from the batch they read.
+#[allow(clippy::too_many_lines)]
+fn record_op(journal: &mut Journal, layout: &Layout, batch: &Batch<'_>, op: &LayoutOp) {
+    match op {
+        LayoutOp::CreateEntry { id, path, data } => journal.record(Effect::Entry {
+            id: *id,
+            path: path.as_ref().map(|path| path.as_str().to_owned()),
+            before: None,
+            after: Some(EntryState::of(data)),
+        }),
+        LayoutOp::UpdateEntry { id, data } => journal.record(Effect::Entry {
+            id: *id,
+            path: layout.path_of(*id).map(|path| path.as_str().to_owned()),
+            before: batch.entry(*id).as_ref().map(EntryState::of),
+            after: Some(EntryState::of(data)),
+        }),
+        LayoutOp::RemoveEntry { id } => journal.record(Effect::Entry {
+            id: *id,
+            path: layout.path_of(*id).map(|path| path.as_str().to_owned()),
+            before: batch.entry(*id).as_ref().map(EntryState::of),
+            after: None,
+        }),
+        LayoutOp::CreatePath { path, id } => journal.record(Effect::Path {
+            id: *id,
+            from: None,
+            to: Some(path.as_str().to_owned()),
+        }),
+        LayoutOp::MovePath { from, to } => {
+            let Some(id) = batch.id_of(from).or_else(|| layout.id_of(from)) else {
+                return;
+            };
+
+            journal.record(Effect::Path {
+                id,
+                from: Some(from.as_str().to_owned()),
+                to: Some(to.as_str().to_owned()),
+            });
+        }
+        LayoutOp::RemovePath { path } => {
+            let Some(id) = batch.id_of(path).or_else(|| layout.id_of(path)) else {
+                return;
+            };
+
+            journal.record(Effect::Path {
+                id,
+                from: Some(path.as_str().to_owned()),
+                to: None,
+            });
+        }
+        LayoutOp::SoftDeletePath { path } => {
+            let Some(id) = batch.id_of(path).or_else(|| layout.id_of(path)) else {
+                return;
+            };
+
+            journal.record(Effect::Path {
+                id,
+                from: Some(path.as_str().to_owned()),
+                to: Some(soft_delete_target(path).as_str().to_owned()),
+            });
+        }
+        LayoutOp::ChangeOwnership { id, owner } => {
+            let Some(before) = batch.entry(*id) else {
+                return;
+            };
+            let after = before.renewed(owner.clone(), before.version());
+
+            journal.record(Effect::Entry {
+                id: *id,
+                path: layout.path_of(*id).map(|path| path.as_str().to_owned()),
+                before: Some(EntryState::of(&before)),
+                after: Some(EntryState::of(&after)),
+            });
+        }
+        LayoutOp::ChangeUuid { from, to } => {
+            let Some(before) = batch.entry(*from) else {
+                return;
+            };
+
+            journal.record(Effect::Uuid {
+                from: *from,
+                to: *to,
+                path: layout.path_of(*from).map(|path| path.as_str().to_owned()),
+                before: EntryState::of(&before),
+                after: EntryState::of(&before),
+            });
+        }
+    }
 }
 
 /// Where a soft delete puts what it takes away: under the Vault's own archived marker.

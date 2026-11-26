@@ -14,6 +14,7 @@ use rorolala_version_search::{TargetMiss, short};
 use uuid::Uuid;
 
 use crate::status::upstream_version;
+use crate::write::journal::Journal;
 use crate::write::tweak::{self, Chain, Mark, Request, Row, Sheet, TweakRefusal};
 use crate::write::{Cancellation, WriteError};
 
@@ -123,6 +124,7 @@ pub fn collapse(
     options: &CollapseOptions,
     progress: &Progress,
     cancellation: &Cancellation,
+    journal: &mut Journal,
 ) -> Result<CollapseOutcome, CollapseRefusal> {
     let Some(index) = request.index else {
         return Err(WriteError::NoIndex.into());
@@ -147,7 +149,16 @@ pub fn collapse(
         .iter()
         .filter(|row| row.mark == Mark::Remove)
         .count();
-    let outcome = tweak::apply(request, id, path, &sheet, progress, cancellation)?;
+    let outcome = tweak::apply_with(
+        request,
+        id,
+        path,
+        &sheet,
+        &tweak::ApplyOptions::default(),
+        progress,
+        cancellation,
+        Some(journal),
+    )?;
 
     Ok(CollapseOutcome {
         from: outcome.from,
@@ -245,6 +256,7 @@ mod tests {
 
     use super::{CollapseOptions, CollapseOutcome, collapse};
     use crate::write::Cancellation;
+    use crate::write::Journal;
     use crate::write::tweak::{Chain, Request};
     use crate::write::track::{TrackOptions, track_file};
 
@@ -342,6 +354,7 @@ mod tests {
             options,
             &Progress::silent(),
             &Cancellation::new(),
+            &mut Journal::open(workspace, "collapse"),
         )
     }
 

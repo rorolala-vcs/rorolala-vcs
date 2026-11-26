@@ -46,6 +46,7 @@ use uuid::Uuid;
 use crate::fetch::Sources;
 use crate::tree::{Tree, TreeStructure, compare, conflict_copy, read_structure};
 use crate::write::checkout::remember;
+use crate::write::journal::{Effect, EntryState, Journal};
 use crate::write::layout::set_version;
 use crate::write::tree::put_back;
 use crate::write::{Cancellation, WriteError};
@@ -1567,6 +1568,7 @@ pub fn apply(
         },
         progress,
         cancellation,
+        None,
     )
 }
 
@@ -1583,6 +1585,7 @@ pub fn apply_with(
     options: &ApplyOptions,
     progress: &Progress,
     cancellation: &Cancellation,
+    mut journal: Option<&mut Journal>,
 ) -> Result<TweakOutcome, TweakRefusal> {
     let Some(index) = request.index else {
         return Err(WriteError::NoIndex.into());
@@ -1699,6 +1702,16 @@ pub fn apply_with(
         index.write_version(version).map_err(index_failed)?;
     }
 
+    if let Some(journal) = journal.as_deref_mut() {
+        let owner = data.owner().map(str::to_owned);
+        journal.record(Effect::Entry {
+            id,
+            path: Some(path.as_str().to_owned()),
+            before: Some(EntryState::of(&data)),
+            after: Some(EntryState::of(&data.renewed(owner, base))),
+        });
+    }
+
     // A tree is one entry whose work is many files, so what a file's bring-up reads in one content
     // key is a structure and the files it names. It is brought up before the Layout names the new
     // version, since a tree whose content does not decode as a structure must not be recorded.
@@ -1718,7 +1731,14 @@ pub fn apply_with(
     } else {
         set_version(request.layout, id, base)?;
 
-        bring_up_to_date(request, path, &chain, base, progress)?
+        bring_up_to_date(
+            request,
+            path,
+            &chain,
+            base,
+            progress,
+            journal.as_deref_mut(),
+        )?
     };
 
     remove_plan(root, id, &data.version())?;
@@ -1951,6 +1971,7 @@ fn bring_up_to_date(
     chain: &Chain,
     to: Blake3Hash,
     progress: &Progress,
+    mut journal: Option<&mut Journal>,
 ) -> Result<Vec<TweakWarning>, TweakRefusal> {
     let Some(store) = request.store else {
         return Ok(Vec::new());
@@ -1991,6 +2012,14 @@ fn bring_up_to_date(
         if !sources.bring(store, &[Key::new(now)]).is_empty() {
             return Ok(vec![TweakWarning::ContentUnavailable]);
         }
+    }
+
+    if let Some(journal) = journal.as_deref_mut() {
+        journal.record(Effect::File {
+            path: path.as_str().to_owned(),
+            before: Some(Key::new(was).hex()),
+            after: Some(Key::new(now).hex()),
+        });
     }
 
     if let Err(error) = runtime.block_on(store.extract_file(&Key::new(now), &disk)) {
@@ -2343,6 +2372,7 @@ mod tests {
             options,
             &Progress::silent(),
             &Cancellation::new(),
+            None,
         )
         .unwrap()
     }

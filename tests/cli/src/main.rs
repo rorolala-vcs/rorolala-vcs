@@ -3172,6 +3172,18 @@ fn entry_field(rola: &Rola, dir: &Path, path: &str, field: &str) -> Option<Strin
         .map(str::to_owned)
 }
 
+/// Whether a recorded operation of `command` is in the Workspace's journal.
+fn logged(dir: &Path, command: &str) -> bool {
+    let Ok(entries) = fs::read_dir(dir.join(".rola/cache/log")) else {
+        return false;
+    };
+    let needle = format!("\"command\": \"{command}\"");
+
+    entries.flatten().any(|entry| {
+        fs::read_to_string(entry.path()).is_ok_and(|text| text.contains(&needle))
+    })
+}
+
 /// Whether an entry of the Layout is recorded under `uuid`, at any path.
 fn entry_named(rola: &Rola, dir: &Path, uuid: &str) -> bool {
     let ran = rola.run(dir, &["layout", "entries", "--json"]);
@@ -3267,6 +3279,11 @@ fn tweaking(rola: &Rola, dir: &Path, checked: &mut Checked) {
 
     let ran = rola.run(dir, &["tweak", "a.psd", "--now"]);
     checked.exits("a plan is applied", &ran, 0);
+    checked.wants(
+        "the tweak is recorded in the journal",
+        logged(dir, "tweak"),
+        &said(&ran),
+    );
     checked.stdout_has("the run says what the chain came to", &ran, "Adjusted");
     checked.stdout_has(
         "the run says one version was rebuilt",
@@ -3454,6 +3471,11 @@ fn collapsing(rola: &Rola, dir: &Path, files: &Path, checked: &mut Checked) {
 
     let ran = rola.run(dir, &["collapse", "a.psd"]);
     checked.exits("the fold ends successfully", &ran, 0);
+    checked.wants(
+        "the collapse is recorded in the journal",
+        logged(dir, "collapse"),
+        &said(&ran),
+    );
     checked.stdout_has("the run says what the chain came to", &ran, "Collapsed");
     checked.wants(
         "the file keeps the top content",
@@ -3603,6 +3625,11 @@ fn cutting(rola: &Rola, dir: &Path, files: &Path, checked: &mut Checked) {
 
     let ran = rola.run(dir, &["cut", "a.psd"]);
     checked.exits("the cut ends successfully", &ran, 0);
+    checked.wants(
+        "the cut is recorded in the journal",
+        logged(dir, "cut"),
+        &said(&ran),
+    );
     checked.stdout_has("the run says what the chain came to", &ran, "Cut");
 
     let new_uuid = entry_field(rola, dir, "a.psd", "uuid").expect("the entry after the cut");

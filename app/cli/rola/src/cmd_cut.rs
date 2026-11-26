@@ -291,6 +291,7 @@ pub fn handle_cut(
         keep_uuid: state.keep_uuid,
         strip_join: state.strip_join,
     };
+    let mut journal = librorolala::write::Journal::open(held, "cut");
     let cancellation = crate::cancel::on_ctrl_c();
 
     for (file, path, id, chain) in targets {
@@ -302,6 +303,7 @@ pub fn handle_cut(
             &options,
             &reporting.progress(),
             cancellation,
+            &mut journal,
         );
         reporting.finish();
 
@@ -329,6 +331,13 @@ pub fn handle_cut(
             }
             Err(refusal) => return refused(&file, &chain, refusal),
         }
+    }
+
+    if let Err(error) = journal.finish() {
+        return failed(
+            &state.files.first().cloned().unwrap_or_default(),
+            error.to_string(),
+        );
     }
 
     ().into()

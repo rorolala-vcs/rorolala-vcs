@@ -59,6 +59,15 @@ pub const WORKSPACE_TWEAKING_PATH: &str = "./.rola/TWEAKING.md";
 #[lazyffi(export = ROLA_WORKSPACE_CACHE_DIR)]
 pub const WORKSPACE_CACHE_DIR: &str = "./.rola/cache/";
 
+/// Path, inside the Workspace's cache, where the operations a run performed are recorded
+///
+/// One file per run, named by the time and a `Uuid`, so the newest is the last by name. The files
+/// are the stack `rola undo` reads, and nothing else reads them. They are cache: a Workspace that
+/// removes them keeps its work and loses the ability to undo what was recorded there.
+///
+/// Nothing here is exported to the C ABI: no C caller reads or writes the journal.
+pub const WORKSPACE_LOG_DIR: &str = "./.rola/cache/log/";
+
 /// The file, inside a tree's `.rola-tree` directory, that names the Layout entry it is recorded at
 ///
 /// A tree is a directory, and a directory that is moved outside Rorolala takes its `.rola-tree`

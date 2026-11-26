@@ -290,12 +290,20 @@ pub fn handle_collapse(
         keep: state.keep.clone(),
         keep_join: state.keep_join,
     };
+    let mut journal = librorolala::write::Journal::open(held, "collapse");
     let cancellation = crate::cancel::on_ctrl_c();
 
     for (file, path, id, chain) in targets {
         let reporting = Reporting::start(*progress);
-        let outcome =
-            collapse::collapse(&request, id, &path, &options, &reporting.progress(), cancellation);
+        let outcome = collapse::collapse(
+            &request,
+            id,
+            &path,
+            &options,
+            &reporting.progress(),
+            cancellation,
+            &mut journal,
+        );
         reporting.finish();
 
         match outcome {
@@ -312,6 +320,13 @@ pub fn handle_collapse(
             ),
             Err(refusal) => return refused(&file, &chain, refusal),
         }
+    }
+
+    if let Err(error) = journal.finish() {
+        return failed(
+            &state.files.first().cloned().unwrap_or_default(),
+            error.to_string(),
+        );
     }
 
     ().into()

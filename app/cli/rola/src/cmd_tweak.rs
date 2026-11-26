@@ -584,18 +584,25 @@ fn applied(
 
     let reporting = Reporting::start(*progress);
     let cancellation = crate::cancel::on_ctrl_c();
-    let outcome = tweak::apply(
+    let mut journal = librorolala::write::Journal::open(workspace, "tweak");
+    let outcome = tweak::apply_with(
         &request,
         id,
         path,
         sheet,
+        &tweak::ApplyOptions::default(),
         &reporting.progress(),
         cancellation,
+        Some(&mut journal),
     );
     reporting.finish();
 
     match outcome {
         Ok(outcome) => {
+            if let Err(error) = journal.finish() {
+                return failed(&state.file, error.to_string());
+            }
+
             println!(
                 "{}",
                 trd!(t!(

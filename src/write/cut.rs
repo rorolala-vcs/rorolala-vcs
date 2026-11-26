@@ -17,6 +17,7 @@ use rorolala_version_search::TargetMiss;
 use uuid::Uuid;
 
 use crate::status::upstream_version;
+use crate::write::journal::{Effect, EntryState, Journal};
 use crate::write::layout::switch_entry;
 use crate::write::tweak::{self, ApplyOptions, Request, Row, Sheet, TweakRefusal};
 use crate::write::{Cancellation, WriteError};
@@ -131,6 +132,7 @@ pub fn cut(
     options: &CutOptions,
     progress: &Progress,
     cancellation: &Cancellation,
+    journal: &mut Journal,
 ) -> Result<CutOutcome, CutRefusal> {
     let Some(index) = request.index else {
         return Err(WriteError::NoIndex.into());
@@ -169,6 +171,7 @@ pub fn cut(
         },
         progress,
         cancellation,
+        Some(journal),
     )?;
 
     let kept = top - point + 1;
@@ -191,6 +194,13 @@ pub fn cut(
         .digest();
     let entry = request.layout.entry(id).ok_or(CutRefusal::NotRecorded)?;
     let data = entry.renewed(entry.owner().map(str::to_owned), version);
+    journal.record(Effect::Uuid {
+        from: id,
+        to: new_id,
+        path: Some(path.as_str().to_owned()),
+        before: EntryState::of(&entry),
+        after: EntryState::of(&data),
+    });
     switch_entry(request.layout, path, new_id, data)?;
 
     Ok(CutOutcome {
@@ -218,6 +228,7 @@ mod tests {
 
     use super::{CutOptions, CutOutcome, cut};
     use crate::write::Cancellation;
+    use crate::write::Journal;
     use crate::write::tweak::{Chain, Request};
     use crate::write::track::{TrackOptions, track_file};
 
@@ -323,6 +334,7 @@ mod tests {
             options,
             &Progress::silent(),
             &Cancellation::new(),
+            &mut Journal::open(workspace, "cut"),
         )
     }
 
