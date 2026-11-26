@@ -68,3 +68,6 @@ __*
 # `modules/chunking/corpus/.gitignore` is where that line is drawn. The synthetic chain set is
 # generated here rather than there, so it is ignored whole. See `dev/chunker-harness/README.md`.
 /modules/chunking/corpus/synthetic/
+
+# Profiling output from instrumented builds (cargo and .NET both write here)
+*.profraw
