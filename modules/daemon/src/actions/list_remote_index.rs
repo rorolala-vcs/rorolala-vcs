@@ -182,3 +182,61 @@ mod tests {
         assert!(ActionListRemoteIndex::process(input, ctx).await.is_err());
     }
 }
+
+#[cfg(test)]
+mod exchange_tests {
+    use rorolala_auth::{Account, Member};
+    use rorolala_protocol::{Action as _, ActionContext, OnlyWorkspace};
+    use rorolala_utils_constants::VAULT_INDEX_DIR;
+    use rorolala_utils_location::Locate as _;
+    use rorolala_vault::Vault;
+    use rorolala_vcs::{VCSIndex, VCSIndexObject, Version};
+    use rorolala_workspace::Workspace;
+
+    use crate::test_support::{run, scratch, session};
+
+    use super::{ActionListRemoteIndex, ListRemoteIndexRequest};
+
+    /// What the Vault's index holds is what the Workspace is answered with.
+    #[test]
+    fn a_listing_of_versions_answers_with_the_vaults_own() {
+        let dir = scratch("list-remote-index");
+        let workspace_root = dir.join("workspace");
+        Workspace::create(&workspace_root).unwrap();
+        let workspace = Workspace::locate(&workspace_root).unwrap();
+        let vault_root = dir.join("vault");
+        Vault::create(&vault_root).unwrap();
+        let vault = Vault::locate(&vault_root).unwrap();
+
+        let index = VCSIndex::create(vault_root.join(VAULT_INDEX_DIR));
+        let written = run(index.write(VCSIndexObject::Version(Version::root()))).unwrap();
+
+        let (client, server) = session();
+        let workspace_ctx = ActionContext::new_workspace_ctx(Account::default())
+            .with_current_workspace(&workspace)
+            .with_channel(client);
+        let vault_ctx = ActionContext::new_vault_ctx(Member::default())
+            .with_current_vault(&vault)
+            .with_channel(server);
+
+        let (here, there) = run(async {
+            tokio::join!(
+                ActionListRemoteIndex::process(
+                    OnlyWorkspace::from(Some(ListRemoteIndexRequest {
+                        which: "versions".to_owned(),
+                    })),
+                    workspace_ctx
+                ),
+                ActionListRemoteIndex::process(
+                    OnlyWorkspace::<ListRemoteIndexRequest>::from(None),
+                    vault_ctx
+                ),
+            )
+        });
+
+        assert_eq!(here.unwrap(), written.hex());
+        assert_eq!(there.unwrap(), written.hex());
+
+        let _ = std::fs::remove_dir_all(dir);
+    }
+}

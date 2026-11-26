@@ -1894,3 +1894,480 @@ mod cross_tests {
         assert_eq!(messages.written, "written");
     }
 }
+
+/// Checks of the carrying half that do not reach a Vault.
+#[cfg(test)]
+mod carry_tests {
+    use std::path::PathBuf;
+    use std::str::FromStr as _;
+
+    use rorolala_layout::{Layout, LayoutPath, MutableData};
+    use rorolala_protocol::VaultAddress;
+    use rorolala_storage::Key;
+    use rorolala_tree::{FileMode, TreeEntry, TreeStructure};
+    use rorolala_utils_location::Locate as _;
+    use rorolala_utils_progress::Progress;
+    use rorolala_vcs::VCSIndex;
+    use rorolala_workspace::Workspace;
+    use uuid::Uuid;
+
+    use crate::auth::Account;
+    use crate::daemon::EntryWrite;
+    use crate::write::checkout::Checkout;
+    use crate::write::sync::{Entry, Kind, Plan};
+    use crate::write::{Cancellation, WriteError};
+
+    use super::{
+        Carry, GivenEntry, GivenPlan, Messages, Options, Skip, apply, content_of, count, name_of,
+        plan_entries, receive, record, remove_stale, same_plan, sync_at, write_fetched_copy,
+        write_reason,
+    };
+
+    /// A Workspace of its own, in a directory emptied first.
+    fn workspace(label: &str) -> (PathBuf, Workspace) {
+        let dir = std::env::temp_dir().join(format!(
+            "rola-cov-sync-carry-{}-{label}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        Workspace::create(&dir).unwrap();
+        let workspace = Workspace::locate(&dir).unwrap();
+
+        (dir, workspace)
+    }
+
+    /// The parts every carry is made of, kept together so each test only builds the entry it
+    /// checks.
+    struct Fixture {
+        dir: PathBuf,
+        workspace: Workspace,
+        layout: Layout,
+        index: VCSIndex,
+        account: Account,
+        target: VaultAddress,
+        messages: Messages,
+        runtime: tokio::runtime::Runtime,
+    }
+
+    impl Fixture {
+        fn new(label: &str) -> Self {
+            let (dir, workspace) = workspace(label);
+            let layout = workspace.layout().unwrap();
+            let index = VCSIndex::locate(&dir).unwrap();
+
+            Self {
+                dir,
+                workspace,
+                layout,
+                index,
+                account: Account::from_key_path("alice", "alice.pem"),
+                target: VaultAddress::from_str("rola://127.0.0.1/").unwrap(),
+                messages: Messages::default(),
+                runtime: tokio::runtime::Runtime::new().unwrap(),
+            }
+        }
+
+        fn carry(&self) -> Carry<'_> {
+            Carry {
+                workspace: &self.workspace,
+                account: &self.account,
+                target: &self.target,
+                layout: &self.layout,
+                index: &self.index,
+                store: None,
+                candidates: &[],
+                messages: &self.messages,
+                runtime: &self.runtime,
+            }
+        }
+
+        fn skipped() -> Options {
+            Options {
+                forced: false,
+                concurrency: 1,
+                skip: Skip {
+                    index: true,
+                    storage: true,
+                    layout: true,
+                },
+            }
+        }
+    }
+
+    impl Drop for Fixture {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.dir);
+        }
+    }
+
+    /// One entry, with everything a run does not move left empty.
+    fn entry(uuid: u128, kind: Kind) -> Entry {
+        Entry {
+            uuid: Uuid::from_u128(uuid).to_string(),
+            local_path: None,
+            remote_path: None,
+            planned_path: None,
+            local_version: None,
+            remote_version: None,
+            owner: None,
+            deprecated: false,
+            item_kind: Some("file"),
+            modified: false,
+            kind,
+        }
+    }
+
+    /// A run with no plan that moves no side reads the index and writes nothing.
+    #[test]
+    fn a_run_with_no_plan_and_no_side_moving_answers_nothing() {
+        let fixture = Fixture::new("no-plan");
+        let carry = fixture.carry();
+
+        let applied = apply(
+            &Progress::silent(),
+            None,
+            Fixture::skipped(),
+            &carry,
+            "vault",
+            "alice",
+            &Cancellation::new(),
+        )
+        .unwrap();
+
+        assert_eq!(applied.applied, 0);
+        assert_eq!(applied.received, 0);
+        assert_eq!(applied.failed.len(), 0);
+        assert!(
+            applied.missing_layout,
+            "a run with no plan reads no Vault Layout"
+        );
+    }
+
+    #[test]
+    fn a_cancelled_carry_writes_nothing() {
+        let fixture = Fixture::new("cancelled");
+        let carry = fixture.carry();
+        let stopped = Cancellation::new();
+        stopped.cancel();
+
+        let error = apply(
+            &Progress::silent(),
+            None,
+            Fixture::skipped(),
+            &carry,
+            "vault",
+            "alice",
+            &stopped,
+        )
+        .unwrap_err();
+
+        assert!(matches!(error, WriteError::Cancelled));
+    }
+
+    /// An entry the run may not write is named in the answer rather than reached for.
+    #[test]
+    fn an_entry_that_may_not_move_is_reported() {
+        let fixture = Fixture::new("refused-plan");
+        let carry = fixture.carry();
+        let plan = Plan {
+            layout: "main".to_owned(),
+            vault: "vault".to_owned(),
+            forced: false,
+            entries: vec![
+                entry(1, Kind::Refused),
+                entry(2, Kind::Mismatched),
+                entry(3, Kind::Diverged),
+            ],
+            up_to_date: 0,
+        };
+
+        let applied = apply(
+            &Progress::silent(),
+            Some(&plan),
+            Fixture::skipped(),
+            &carry,
+            "vault",
+            "alice",
+            &Cancellation::new(),
+        )
+        .unwrap();
+
+        assert_eq!(applied.applied, 0);
+        assert_eq!(applied.failed.len(), 3);
+    }
+
+    /// Content is named only for entries that move, and only when the index holds the version.
+    #[test]
+    fn only_a_moving_entry_names_content() {
+        let fixture = Fixture::new("content");
+        let carry = fixture.carry();
+        let still = entry(1, Kind::Refused);
+        let broken = entry(2, Kind::Create);
+        let unheld = Entry {
+            local_version: Some(Key::new([9_u8; 32]).hex()),
+            ..entry(3, Kind::Create)
+        };
+        let pulling = Entry {
+            remote_version: Some(Key::new([8_u8; 32]).hex()),
+            ..entry(4, Kind::Receive)
+        };
+        let entries: Vec<&Entry> = vec![&still, &broken, &unheld, &pulling];
+
+        let (receive, send) =
+            content_of(&entries, Fixture::skipped(), &carry, &Cancellation::new()).unwrap();
+        assert_eq!(receive.len(), 0);
+        assert_eq!(send.len(), 0);
+
+        let stopped = Cancellation::new();
+        stopped.cancel();
+        let error = content_of(&entries, Fixture::skipped(), &carry, &stopped).unwrap_err();
+        assert!(matches!(error, WriteError::Cancelled));
+    }
+
+    /// The counts, the names and the plan comparison read what the entry says about itself.
+    #[test]
+    fn the_plan_words_read_what_an_entry_says() {
+        let receipt = Entry {
+            local_path: Some("a.psd".to_owned()),
+            remote_path: Some("b.psd".to_owned()),
+            ..entry(1, Kind::Receive)
+        };
+        let remote = Entry {
+            remote_path: Some("c.psd".to_owned()),
+            ..entry(2, Kind::Send)
+        };
+        let planned = Entry {
+            planned_path: Some("d.psd".to_owned()),
+            ..entry(3, Kind::Create)
+        };
+        let bare = entry(4, Kind::UpToDate);
+
+        assert_eq!(name_of(&receipt), "a.psd");
+        assert_eq!(name_of(&remote), "c.psd");
+        assert_eq!(name_of(&planned), "d.psd");
+        assert_eq!(name_of(&bare), "");
+
+        let entries: Vec<&Entry> = vec![&receipt, &remote, &bare];
+        assert_eq!(count(&entries, true), 1);
+        assert_eq!(count(&entries, false), 2);
+        assert_eq!(plan_entries(None).len(), 0);
+
+        let plan = Plan {
+            layout: "main".to_owned(),
+            vault: "vault".to_owned(),
+            forced: false,
+            entries: vec![bare, planned],
+            up_to_date: 1,
+        };
+        assert_eq!(plan_entries(Some(&plan)).len(), 1);
+
+        let given = GivenPlan {
+            entries: plan
+                .entries
+                .iter()
+                .map(|entry| GivenEntry {
+                    uuid: entry.uuid.clone(),
+                    local_path: entry.local_path.clone(),
+                    remote_path: entry.remote_path.clone(),
+                    planned_path: entry.planned_path.clone(),
+                    local_version: entry.local_version.clone(),
+                    remote_version: entry.remote_version.clone(),
+                    kind: entry.kind,
+                })
+                .collect(),
+        };
+        assert!(same_plan(&plan, &given));
+
+        let changed = GivenPlan {
+            entries: vec![GivenEntry {
+                kind: Kind::Send,
+                ..given.entries.into_iter().next().unwrap()
+            }],
+        };
+        assert!(!same_plan(&plan, &changed));
+    }
+
+    /// Every answer a write exchange gives has its own words, and a written one is counted.
+    #[test]
+    fn every_write_answer_has_its_own_words() {
+        let messages = Messages::default();
+        let entry = entry(1, Kind::Create);
+        let mut applied = 0;
+        let mut written = Vec::new();
+        let mut failed = Vec::new();
+
+        record(
+            &entry,
+            EntryWrite::Written,
+            &mut written,
+            &mut applied,
+            &mut failed,
+            &messages,
+        );
+        assert_eq!(applied, 1);
+        assert_eq!(written.len(), 1);
+
+        record(
+            &entry,
+            EntryWrite::Exists,
+            &mut written,
+            &mut applied,
+            &mut failed,
+            &messages,
+        );
+        assert_eq!(failed.len(), 1);
+
+        for (outcome, word) in [
+            (EntryWrite::Written, "written"),
+            (EntryWrite::Exists, "already exists"),
+            (EntryWrite::Taken, "another account holds it"),
+            (EntryWrite::Missing, "the entry is missing"),
+            (EntryWrite::Refused, "another account holds the entry"),
+            (EntryWrite::Malformed, "the entry does not read"),
+        ] {
+            assert_eq!(write_reason(outcome, &messages), word);
+        }
+    }
+
+    /// A pulled entry that does not read is named, and one the Layout does not hold is missing.
+    #[test]
+    fn a_received_entry_that_does_not_read_is_refused() {
+        let fixture = Fixture::new("receive");
+        let carry = fixture.carry();
+        let held = Uuid::from_u128(77);
+        let mut seed = fixture.layout.batch();
+        seed.create_file(
+            held,
+            MutableData::new(Some("alice".to_owned()), [3_u8; 32], String::new()),
+            &LayoutPath::new("held.psd").unwrap(),
+        )
+        .unwrap();
+        seed.commit().unwrap();
+
+        // The batch is made after the Layout holds the entry: it reads the Layout as it is, so an
+        // update to the entry is one the batch knows.
+        let mut checkout = Checkout::open(&fixture.layout, fixture.workspace.get_root());
+        let mut batch = fixture.layout.batch();
+        let mut failed = Vec::new();
+
+        let unread = entry(1, Kind::Receive);
+        assert!(!receive(&unread, &carry, &mut checkout, &mut batch, &mut failed).unwrap());
+
+        let malformed = Entry {
+            remote_version: Some("not a version".to_owned()),
+            ..entry(2, Kind::Receive)
+        };
+        assert!(!receive(&malformed, &carry, &mut checkout, &mut batch, &mut failed).unwrap());
+
+        let no_content = Entry {
+            local_path: Some("here.psd".to_owned()),
+            remote_version: Some(Key::new([4_u8; 32]).hex()),
+            ..entry(3, Kind::Receive)
+        };
+        assert!(!receive(&no_content, &carry, &mut checkout, &mut batch, &mut failed).unwrap());
+
+        let absent = Entry {
+            remote_version: Some(Key::new([4_u8; 32]).hex()),
+            ..entry(4, Kind::Receive)
+        };
+        assert!(!receive(&absent, &carry, &mut checkout, &mut batch, &mut failed).unwrap());
+
+        let settled = Entry {
+            uuid: held.to_string(),
+            remote_version: Some(Key::new([4_u8; 32]).hex()),
+            ..entry(5, Kind::Receive)
+        };
+        assert!(receive(&settled, &carry, &mut checkout, &mut batch, &mut failed).unwrap());
+
+        assert_eq!(failed.len(), 4);
+    }
+
+    /// A path a tree no longer names is taken away, a file first and then the directory it left
+    /// empty.
+    #[test]
+    fn stale_paths_are_taken_away() {
+        let dir = std::env::temp_dir().join(format!("rola-cov-sync-stale-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("a")).unwrap();
+        std::fs::write(dir.join("a/f.txt"), b"old").unwrap();
+        std::fs::write(dir.join("b.txt"), b"old").unwrap();
+
+        let previous = TreeStructure::build(
+            None,
+            [
+                TreeEntry::directory("a"),
+                TreeEntry::file("a/f.txt", FileMode::Regular, Key::new([1_u8; 32])),
+                TreeEntry::file("b.txt", FileMode::Regular, Key::new([2_u8; 32])),
+            ],
+        )
+        .unwrap();
+
+        remove_stale(&dir, &previous, &TreeStructure::empty());
+
+        assert!(!dir.join("a/f.txt").exists());
+        assert!(!dir.join("b.txt").exists());
+        assert!(
+            !dir.join("a").exists(),
+            "the directory left empty is taken away"
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A run that leaves a side alone is answered with nothing, and a run told an unknown direction
+    /// or address is refused.
+    #[test]
+    fn a_one_shot_run_refuses_what_it_cannot_read() {
+        let (dir, _workspace) = workspace("one-shot");
+        let address = "rola://127.0.0.1/";
+
+        let error = sync_at(
+            &dir, "vault", "alice", "a.pem", address, "sideways", false, false, false, false,
+        )
+        .unwrap_err();
+        assert!(matches!(error, WriteError::Internal { .. }));
+
+        let error = sync_at(
+            &dir,
+            "vault",
+            "alice",
+            "a.pem",
+            "nothing here",
+            "both",
+            false,
+            false,
+            false,
+            false,
+        )
+        .unwrap_err();
+        assert!(matches!(error, WriteError::InvalidPath { .. }));
+
+        let error = sync_at(
+            &dir, "vault", "alice", "a.pem", address, "both", false, false, false, true,
+        )
+        .unwrap_err();
+        assert!(matches!(error, WriteError::NotCached));
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A fetched-copy write with nothing to write, and one with no copy here, changes nothing.
+    #[test]
+    fn a_fetched_copy_write_with_nowhere_to_write_it_changes_nothing() {
+        let fixture = Fixture::new("fetched-copy");
+        let carry = fixture.carry();
+        let mut failed = Vec::new();
+
+        write_fetched_copy(&[], &carry, "vault", "alice", &mut failed);
+        assert_eq!(failed.len(), 0);
+
+        let written = entry(1, Kind::Create);
+        write_fetched_copy(&[&written], &carry, "vault", "alice", &mut failed);
+        assert_eq!(
+            failed.len(),
+            0,
+            "a Workspace with no fetched copy has nowhere to write"
+        );
+    }
+}

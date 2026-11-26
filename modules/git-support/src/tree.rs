@@ -382,10 +382,16 @@ fn copy_link(from: &Path, to: &Path) -> io::Result<()> {
 mod tests {
     use std::fs;
 
+    use rola_define_format::ContentHash;
     use rorolala_storage::Key;
     use rorolala_tree::{FileMode, TreeEntry, TreeStructure};
+    use rorolala_utils_mapped::Bytes;
 
-    use super::{Difference, DifferenceKind, differences, move_directory};
+    use super::{
+        Difference, DifferenceKind, copy_directory, differences, move_directory, replace, structure,
+    };
+    use crate::content::ContentSource;
+    use crate::error::Error;
 
     /// A directory of its own, emptied first so a rerun starts clean.
     fn scratch(label: &str) -> std::path::PathBuf {
@@ -469,6 +475,171 @@ mod tests {
         assert!(!from.exists());
         assert!(to.join("a").is_file());
         assert!(!to.join("stale").exists());
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// A source that answers every content with the bytes it holds, in one piece or in two.
+    struct Held {
+        bytes: Vec<u8>,
+        split: bool,
+    }
+
+    impl ContentSource for Held {
+        fn write(&self, _content: ContentHash, path: &std::path::Path) -> Result<(), Error> {
+            if let Some(parent) = path.parent() {
+                fs::create_dir_all(parent).map_err(Error::Io)?;
+            }
+
+            fs::write(path, &self.bytes).map_err(Error::Io)
+        }
+
+        fn read(&self, _content: ContentHash) -> Result<Bytes, Error> {
+            if !self.split {
+                return Ok(Bytes::from_vec(self.bytes.clone()));
+            }
+
+            let mut run = Bytes::from_vec(self.bytes[..1].to_vec());
+            run.push(Bytes::from_vec(self.bytes[1..].to_vec()));
+
+            Ok(run)
+        }
+    }
+
+    #[test]
+    fn a_structure_is_read_from_one_piece_and_refused_from_more() {
+        let structure = TreeStructure::build(None, [TreeEntry::directory("assets")]).unwrap();
+        let encoded = structure.encode();
+
+        let one = Held {
+            bytes: encoded.clone(),
+            split: false,
+        };
+        let read = structure_of(&one);
+
+        assert_eq!(read.unwrap().entries().len(), 1);
+
+        let many = Held {
+            bytes: encoded,
+            split: true,
+        };
+
+        assert!(matches!(structure_of(&many), Err(Error::Structure { .. })));
+
+        let rubbish = Held {
+            bytes: b"not a structure".to_vec(),
+            split: false,
+        };
+
+        assert!(matches!(
+            structure_of(&rubbish),
+            Err(Error::Structure { .. })
+        ));
+    }
+
+    /// The content a source holds, read as the structure it is meant to be.
+    fn structure_of(source: &Held) -> Result<TreeStructure, Error> {
+        structure(
+            source,
+            ContentHash::from_digest(*blake3::hash(&source.bytes).as_bytes()),
+        )
+    }
+
+    #[test]
+    fn replacing_writes_the_root_and_refuses_a_directory_where_a_file_goes() {
+        let dir = scratch("replace");
+        let source = Held {
+            bytes: b"content".to_vec(),
+            split: false,
+        };
+        let key = key(b"content");
+        let structure = TreeStructure::build(
+            None,
+            [
+                TreeEntry::directory("assets"),
+                TreeEntry::file("assets/hero.psd", FileMode::Regular, key),
+            ],
+        )
+        .unwrap();
+
+        let fresh = dir.join("fresh");
+        replace(&source, &structure, &fresh).unwrap();
+
+        assert_eq!(fs::read(fresh.join("assets/hero.psd")).unwrap(), b"content");
+
+        let blocked = dir.join("blocked");
+        fs::create_dir_all(blocked.join("assets/hero.psd")).unwrap();
+
+        assert!(matches!(
+            replace(&source, &structure, &blocked),
+            Err(Error::Taken { .. })
+        ));
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_directory_moved_over_a_file_takes_the_file_away_first() {
+        let dir = scratch("over-file");
+        let from = dir.join("from");
+        let to = dir.join("to");
+        fs::create_dir_all(&from).unwrap();
+        fs::write(from.join("a"), b"a").unwrap();
+        fs::write(&to, b"in the way").unwrap();
+
+        move_directory(&from, &to).unwrap();
+
+        assert!(to.join("a").is_file());
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_directory_is_copied_with_its_files_and_subdirectories() {
+        let dir = scratch("copy");
+        let from = dir.join("from");
+        let to = dir.join("to");
+        fs::create_dir_all(from.join("sub")).unwrap();
+        fs::write(from.join("a"), b"a").unwrap();
+        fs::write(from.join("sub/b"), b"b").unwrap();
+
+        copy_directory(&from, &to).unwrap();
+
+        assert_eq!(fs::read(to.join("a")).unwrap(), b"a");
+        assert_eq!(fs::read(to.join("sub/b")).unwrap(), b"b");
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_link_the_structure_names_is_missing_or_modified_when_it_is_not_one() {
+        let dir = scratch("links");
+        fs::write(dir.join("a-file"), b"a file, not a link").unwrap();
+
+        let structure = TreeStructure::build(
+            None,
+            [
+                TreeEntry::symlink("missing", "target"),
+                TreeEntry::symlink("a-file", "target"),
+            ],
+        )
+        .unwrap();
+
+        let found = differences(&dir, &structure).unwrap();
+
+        assert_eq!(
+            found,
+            [
+                Difference {
+                    at: "a-file".to_owned(),
+                    kind: DifferenceKind::Modified,
+                },
+                Difference {
+                    at: "missing".to_owned(),
+                    kind: DifferenceKind::Missing,
+                },
+            ]
+        );
 
         let _ = fs::remove_dir_all(&dir);
     }

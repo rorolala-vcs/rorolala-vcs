@@ -557,11 +557,14 @@ impl Drop for SshSocket {
 mod tests {
     use std::io;
 
+    use rorolala_protocol::ActionError;
+    use tokio::sync::watch;
+
     use crate::exit;
 
     use super::{
-        ConnectError, NOT_FOUND, SSH_FAILURE, UNKNOWN_COMMAND, ended_message, shell_quote,
-        ssh_arguments,
+        ConnectError, Ended, ExitWatch, NOT_FOUND, SSH_FAILURE, UNKNOWN_COMMAND, ended_message,
+        explain, shell_quote, ssh_arguments, ssh_program, unstarted,
     };
 
     #[test]
@@ -689,5 +692,127 @@ mod tests {
             message: "the SSH program could not be started".to_owned(),
         };
         assert_eq!(ssh.to_string(), "the SSH program could not be started");
+    }
+
+    /// The program a session is started with is the machine's, unless this run names one.
+    #[test]
+    fn the_session_program_is_read_from_the_environment() {
+        let named = std::env::var(super::SSH_ENV_VAR)
+            .ok()
+            .filter(|program| !program.is_empty());
+
+        assert_eq!(
+            ssh_program(),
+            named.unwrap_or_else(|| super::SSH_PROGRAM.to_owned())
+        );
+    }
+
+    /// A program that could not be started at all is named in the sentence about it.
+    #[test]
+    fn a_program_that_could_not_be_started_is_named() {
+        let said = unstarted(
+            "ssh",
+            &io::Error::new(io::ErrorKind::NotFound, "no such file"),
+        );
+
+        assert!(said.contains("ssh"), "{said}");
+        assert!(said.contains("no such file"), "{said}");
+    }
+
+    /// A program's ending is the only thing that says why a session is over, once it is over.
+    #[tokio::test]
+    async fn an_ending_is_read_when_it_arrives_and_answered_as_nothing_when_it_does_not() {
+        let (sender, receiver) = watch::channel(Some(Ended { code: Some(3) }));
+        let watch = ExitWatch(receiver);
+        assert_eq!(watch.ended().await.map(|ended| ended.code), Some(Some(3)));
+        drop(sender);
+
+        // A watcher whose program was never reported has nothing to say about the failure.
+        let (sender, receiver) = watch::channel(None);
+        drop(sender);
+        assert!(ExitWatch(receiver).ended().await.is_none());
+    }
+
+    /// What a session program said decides what a caller is told, and a channel failure is told
+    /// apart from every one of those.
+    #[tokio::test]
+    async fn an_ending_is_read_as_the_reason_it_names() {
+        // A daemon link has no program to ask, so the exchange's own words are the whole story.
+        assert!(matches!(
+            explain(ActionError::MissingValue, None).await,
+            ActionError::MissingValue
+        ));
+
+        // What already names the leg that failed is not asked about a program.
+        let (_sender, receiver) = watch::channel(Some(Ended { code: Some(3) }));
+        let exit = ExitWatch(receiver);
+        assert!(matches!(
+            explain(ActionError::Transport("leg".to_owned()), Some(&exit)).await,
+            ActionError::Transport(message) if message == "leg"
+        ));
+
+        // A program that ended well ended after doing what it was asked: a session that still
+        // failed before its first exchange is one where nothing spoke the protocol at all.
+        let (_sender, receiver) = watch::channel(Some(Ended { code: Some(0) }));
+        let exit = ExitWatch(receiver);
+        let said = explain(
+            ActionError::Auth(rorolala_auth::Error::Malformed),
+            Some(&exit),
+        )
+        .await;
+        assert!(
+            matches!(said, ActionError::Transport(message) if message.contains("before the protocol did"))
+        );
+
+        let (_sender, receiver) = watch::channel(Some(Ended { code: Some(0) }));
+        let exit = ExitWatch(receiver);
+        assert!(matches!(
+            explain(ActionError::Store("full".to_owned()), Some(&exit)).await,
+            ActionError::Store(message) if message == "full"
+        ));
+
+        // A program that ended with a code is read as that code's reason.
+        let (_sender, receiver) = watch::channel(Some(Ended {
+            code: Some(i32::from(exit::NO_VAULT)),
+        }));
+        let exit = ExitWatch(receiver);
+        assert!(
+            matches!(explain(ActionError::MissingValue, Some(&exit)).await, ActionError::Transport(message) if message.contains("not a Vault"))
+        );
+
+        // A program ended by a signal said nothing about why.
+        let (_sender, receiver) = watch::channel(Some(Ended { code: None }));
+        let exit = ExitWatch(receiver);
+        assert!(
+            matches!(explain(ActionError::MissingValue, Some(&exit)).await, ActionError::Transport(message) if message.contains("stopped before"))
+        );
+    }
+
+    /// A program that ends on its own is reported with what it ended with.
+    #[tokio::test]
+    async fn a_program_that_ends_is_reported_with_its_code() {
+        #[cfg(windows)]
+        let mut command = tokio::process::Command::new("cmd");
+        #[cfg(windows)]
+        command.args(["/C", "exit 3"]);
+        #[cfg(unix)]
+        let mut command = tokio::process::Command::new("sh");
+        #[cfg(unix)]
+        command.args(["-c", "exit 3"]);
+
+        let child = command.spawn().unwrap();
+        let (sender, mut exit) = watch::channel(None);
+        let (_stop, stopped) = tokio::sync::oneshot::channel();
+
+        super::watch(child, stopped, sender).await;
+
+        let ended = *exit.wait_for(Option::is_some).await.unwrap();
+        assert_eq!(ended.expect("a program that ran has ended").code, Some(3));
+    }
+
+    /// A pipe's disposition is set aside for a session and given back when it goes.
+    #[test]
+    fn a_sigpipe_disposition_is_set_aside_and_given_back() {
+        let _guard = super::SigpipeGuard::set_aside();
     }
 }

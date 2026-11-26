@@ -1283,13 +1283,34 @@ mod tests {
     use std::fs;
 
     use super::{
-        LayoutOp, apply, apply_ops, civil_from_days, set_version, soft_deletable,
-        soft_delete_target,
+        LayoutOp, apply, apply_ops, civil_from_days, create_path, create_path_at, move_path,
+        move_path_at, remove_entry_at, remove_path, remove_path_at, set_all_at, set_description_at,
+        set_owner_at, set_preference_at, set_version, set_version_at, soft_deletable,
+        soft_delete_path_at, soft_delete_target, switch_entry, switch_entry_at, write_entry_at,
     };
     use crate::write::WriteError;
     use rorolala_layout::{EntryKind, LayoutPath, MutableData};
     use rorolala_utils_location::Locate as _;
     use uuid::Uuid;
+
+    /// A Workspace of its own, its directory gone before use so a rerun starts clean.
+    fn scratch(label: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "rola-cov-layout-{label}-{}-{}",
+            std::process::id(),
+            Uuid::new_v4()
+        ));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        rorolala_workspace::Workspace::create(&dir).unwrap();
+
+        dir
+    }
+
+    /// A version key a request writes as sixty four hex digits.
+    fn version() -> String {
+        "a".repeat(64)
+    }
 
     #[test]
     fn a_version_change_keeps_a_tree_a_tree() {
@@ -1440,6 +1461,174 @@ mod tests {
         ));
         assert!(soft_deletable(&LayoutPath::new("@/new/a.psd").unwrap()));
         assert!(soft_deletable(&LayoutPath::new("art/a.psd").unwrap()));
+    }
+
+    #[test]
+    fn a_batch_applies_every_kind_of_change() {
+        let dir = scratch("batch");
+        let workspace = rorolala_workspace::Workspace::locate(&dir).unwrap();
+        let layout = workspace.layout().unwrap();
+        let first = Uuid::from_u128(10);
+        let second = Uuid::from_u128(11);
+        let third = Uuid::from_u128(12);
+        let one = LayoutPath::new("one").unwrap();
+        let two = LayoutPath::new("two").unwrap();
+        let three = LayoutPath::new("three").unwrap();
+
+        apply(
+            &layout,
+            &[
+                LayoutOp::CreateEntry {
+                    id: first,
+                    path: Some(one),
+                    data: MutableData::new(None, [1; 32], "first".to_owned()),
+                },
+                // An entry with no path takes the branch that places nothing.
+                LayoutOp::CreateEntry {
+                    id: second,
+                    path: None,
+                    data: MutableData::new(None, [2; 32], "second".to_owned()),
+                },
+                LayoutOp::UpdateEntry {
+                    id: first,
+                    data: MutableData::new(Some("bob".to_owned()), [3; 32], "third".to_owned()),
+                },
+                LayoutOp::CreatePath {
+                    path: two.clone(),
+                    id: first,
+                },
+                LayoutOp::MovePath {
+                    from: two,
+                    to: three.clone(),
+                },
+                LayoutOp::RemovePath { path: three },
+                LayoutOp::ChangeOwnership {
+                    id: first,
+                    owner: Some("carol".to_owned()),
+                },
+                LayoutOp::ChangeUuid {
+                    from: first,
+                    to: third,
+                },
+                LayoutOp::RemoveEntry { id: third },
+            ],
+        )
+        .unwrap();
+
+        let read = workspace.layout().unwrap();
+        assert!(read.entry(first).is_none());
+        assert!(read.entry(third).is_none());
+        assert_eq!(read.entry(second).unwrap().description(), "second");
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn every_at_helper_writes_the_workspace() {
+        let dir = scratch("helpers");
+        let id = Uuid::from_u128(20);
+        let other = Uuid::from_u128(21);
+        let version = version();
+        let text = id.to_string();
+
+        write_entry_at(&dir, "", &text, &version, "alice", "first", false).unwrap();
+        create_path_at(&dir, "", "a.psd", &text).unwrap();
+        set_owner_at(&dir, "", &text, "bob").unwrap();
+        set_description_at(&dir, "", &text, "second").unwrap();
+        set_preference_at(&dir, "", &text, "chunky").unwrap();
+        set_version_at(&dir, "", &text, &version).unwrap();
+        set_all_at(&dir, "", &text, &version, "carol", "third", "smooth").unwrap();
+        move_path_at(&dir, "", "a.psd", "b.psd").unwrap();
+        switch_entry_at(
+            &dir,
+            "",
+            "b.psd",
+            &other.to_string(),
+            &version,
+            "dave",
+            "fourth",
+            "chunky",
+        )
+        .unwrap();
+        create_path_at(&dir, "", "c.psd", &other.to_string()).unwrap();
+        remove_path_at(&dir, "", "c.psd").unwrap();
+        create_path_at(&dir, "", "d.psd", &other.to_string()).unwrap();
+        soft_delete_path_at(&dir, "", "d.psd").unwrap();
+        remove_entry_at(&dir, "", &other.to_string()).unwrap();
+
+        let workspace = rorolala_workspace::Workspace::locate(&dir).unwrap();
+        let read = workspace.layout().unwrap();
+        assert!(read.entry(other).is_none());
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_direct_helpers_move_bind_and_switch() {
+        let dir = scratch("direct");
+        let workspace = rorolala_workspace::Workspace::locate(&dir).unwrap();
+        let layout = workspace.layout().unwrap();
+        let old = Uuid::from_u128(30);
+        let present = Uuid::from_u128(31);
+        let absent = Uuid::from_u128(32);
+        let x = LayoutPath::new("x").unwrap();
+        let y = LayoutPath::new("y").unwrap();
+        let z = LayoutPath::new("z").unwrap();
+
+        apply(
+            &layout,
+            &[LayoutOp::CreateEntry {
+                id: old,
+                path: Some(x.clone()),
+                data: MutableData::new(None, [1; 32], "first".to_owned()),
+            }],
+        )
+        .unwrap();
+
+        // Without a Workspace the move stops after the Layout's own record.
+        move_path(&layout, None, &x, &y).unwrap();
+        // With one it also follows a waiting merge, which there is not here.
+        move_path(&layout, Some(&workspace), &y, &z).unwrap();
+        assert_eq!(workspace.layout().unwrap().id_of(&z), Some(old));
+
+        // A path binds only onto an entry the Layout holds.
+        layout
+            .create_entry(present, MutableData::new(None, [2; 32], "two".to_owned()))
+            .unwrap();
+        let w = LayoutPath::new("w").unwrap();
+        create_path(&layout, &w, present).unwrap();
+        remove_path(&layout, &w).unwrap();
+
+        // A tree's path takes the tree's one entry with it.
+        let tree = Uuid::from_u128(33);
+        let grove = LayoutPath::new("grove").unwrap();
+        let mut batch = layout.batch();
+        batch
+            .create_file(
+                tree,
+                MutableData::new(None, [3; 32], String::new()).with_kind(EntryKind::Tree),
+                &grove,
+            )
+            .unwrap();
+        batch.commit().unwrap();
+        remove_path(&layout, &grove).unwrap();
+        assert!(workspace.layout().unwrap().entry(tree).is_none());
+
+        // Renaming an entry's `Uuid` is a no-op when it already has that one.
+        let path = LayoutPath::new("s.psd").unwrap();
+        create_path(&workspace.layout().unwrap(), &path, old).unwrap();
+        let data = || MutableData::new(None, [5; 32], "five".to_owned());
+        switch_entry(&workspace.layout().unwrap(), &path, old, data()).unwrap();
+
+        // A `Uuid` the Layout already holds is updated in place.
+        switch_entry(&workspace.layout().unwrap(), &path, present, data()).unwrap();
+        assert_eq!(workspace.layout().unwrap().id_of(&path), Some(present));
+
+        // A `Uuid` it does not hold makes a fresh entry at the path.
+        switch_entry(&workspace.layout().unwrap(), &path, absent, data()).unwrap();
+        assert_eq!(workspace.layout().unwrap().id_of(&path), Some(absent));
+
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]

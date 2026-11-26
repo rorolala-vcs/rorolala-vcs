@@ -2020,12 +2020,19 @@ pub(super) fn write_worktree(
 #[cfg(test)]
 mod tests {
     use rorolala_layout::LayoutPath;
+    use rorolala_utils_location::Locate as _;
+    use rorolala_utils_progress::Progress;
+    use rorolala_vcs::VCSIndex;
+    use rorolala_workspace::Workspace;
 
     use super::{
-        BringInput, BringRequest, BringVariantRequest, Destination, Item, Outcome, Refusal,
-        VariantRefusal, VariantReport, WriteBring, bring_at, is_pattern, landing, matching, parent,
-        pattern_base, placeable, rooted, under,
+        BringInput, BringRequest, BringVariantRequest, Destination, Item, Messages, Outcome,
+        Refusal, VariantRefusal, VariantReport, WriteBring, bring_at, bring_in, is_pattern,
+        landing, matching, parent, pattern_base, placeable, resolve, rooted, under,
     };
+    use crate::fetch::Sources;
+    use crate::write::request::Common;
+    use crate::write::track::{TrackOptions, track_file};
     use crate::write::{Cancellation, WriteError, WriteProgress};
 
     /// A path a Layout would name.
@@ -2468,6 +2475,346 @@ mod tests {
             .expect_err("the run was asked to stop");
 
         assert!(matches!(error, WriteError::Cancelled));
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A Workspace with one file recorded at `a.txt`, and a second one empty beside it.
+    fn two_workspaces(tag: &str) -> (std::path::PathBuf, std::path::PathBuf) {
+        let held =
+            std::env::temp_dir().join(format!("rola-cov-bring-{tag}-held-{}", std::process::id()));
+        let here =
+            std::env::temp_dir().join(format!("rola-cov-bring-{tag}-here-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&held);
+        let _ = std::fs::remove_dir_all(&here);
+        std::fs::create_dir_all(&held).unwrap();
+        std::fs::create_dir_all(&here).unwrap();
+        Workspace::create(&held).unwrap();
+        Workspace::create(&here).unwrap();
+        let workspace = Workspace::locate(&held).unwrap();
+        std::fs::write(held.join("a.txt"), b"one").unwrap();
+        track_file(
+            &workspace,
+            &held,
+            "a.txt",
+            "alice",
+            "first",
+            TrackOptions::default(),
+        )
+        .unwrap();
+        std::fs::write(held.join("b.txt"), b"two").unwrap();
+        track_file(
+            &workspace,
+            &held,
+            "b.txt",
+            "alice",
+            "second",
+            TrackOptions::default(),
+        )
+        .unwrap();
+        std::fs::create_dir_all(held.join("art")).unwrap();
+        std::fs::write(held.join("art/c.txt"), b"three").unwrap();
+        track_file(
+            &workspace,
+            &held,
+            "art/c.txt",
+            "alice",
+            "third",
+            TrackOptions::default(),
+        )
+        .unwrap();
+
+        (held, here)
+    }
+
+    /// A reference lands where the destination says: at the name the Vault gives, at a whole name,
+    /// or under a directory, and a folder named brings in what is under it.
+    #[test]
+    fn a_reference_lands_where_the_destination_says() {
+        let (held, here) = two_workspaces("landing");
+        let remote = Workspace::locate(&held).unwrap().layout().unwrap();
+        let local = Workspace::locate(&here).unwrap().layout().unwrap();
+        let id = remote
+            .id_of(&LayoutPath::new("a.txt").unwrap())
+            .expect("the path is named");
+
+        let wanted = resolve(&remote, &local, &here, &["a.txt".to_owned()], None, false)
+            .expect("the path resolves");
+        assert_eq!(wanted.len(), 1);
+        assert_eq!(wanted[0].path.as_str(), "a.txt");
+        assert_eq!(wanted[0].id, id);
+
+        let wanted = resolve(&remote, &local, &here, &[id.to_string()], None, true)
+            .expect("the uuid resolves");
+        assert_eq!(wanted[0].path.as_str(), "a.txt");
+
+        let wanted = resolve(&remote, &local, &here, &["*.txt".to_owned()], None, false)
+            .expect("the glob resolves");
+        assert_eq!(wanted.len(), 2);
+
+        // A folder is one reference and brings what stands under it in with it.
+        let wanted = resolve(&remote, &local, &here, &["art".to_owned()], None, false)
+            .expect("the folder resolves");
+        assert_eq!(wanted.len(), 1);
+        assert_eq!(wanted[0].path.as_str(), "art/c.txt");
+
+        std::fs::create_dir_all(here.join("landed")).unwrap();
+        // A destination is read where the run was made, so a test names it absolutely.
+        let landed = here.join("landed").display().to_string();
+        let wanted = resolve(
+            &remote,
+            &local,
+            &here,
+            &["art/c.txt".to_owned()],
+            Some(&landed),
+            false,
+        )
+        .expect("the path lands under the directory");
+        assert_eq!(wanted[0].path.as_str(), "landed/art/c.txt");
+
+        let wanted = resolve(
+            &remote,
+            &local,
+            &here,
+            &["art/*".to_owned()],
+            Some(&landed),
+            false,
+        )
+        .expect("the glob lands under the directory");
+        assert_eq!(wanted[0].path.as_str(), "landed/c.txt");
+
+        let _ = std::fs::remove_dir_all(&held);
+        let _ = std::fs::remove_dir_all(&here);
+    }
+
+    /// A reference that names nothing, one this Layout already holds, one whose landing is taken,
+    /// and a whole-name destination given more than it can take are all refused.
+    #[test]
+    fn a_reference_that_cannot_land_is_refused() {
+        let (held, here) = two_workspaces("refused");
+        let remote = Workspace::locate(&held).unwrap().layout().unwrap();
+        let local = Workspace::locate(&here).unwrap().layout().unwrap();
+
+        assert!(matches!(
+            resolve(&remote, &local, &here, &["missing".to_owned()], None, false),
+            Err(Refusal::Unknown(_))
+        ));
+        assert!(matches!(
+            resolve(&remote, &remote, &here, &["a.txt".to_owned()], None, false),
+            Err(Refusal::Known(_))
+        ));
+        assert!(matches!(
+            resolve(
+                &remote,
+                &local,
+                &here,
+                &["a.txt".to_owned(), "b.txt".to_owned()],
+                Some("one.txt"),
+                false,
+            ),
+            Err(Refusal::Argument)
+        ));
+        assert!(matches!(
+            resolve(
+                &remote,
+                &local,
+                &here,
+                &["*.txt".to_owned()],
+                Some("one.txt"),
+                false,
+            ),
+            Err(Refusal::Argument)
+        ));
+
+        std::fs::write(here.join("a.txt"), b"in the way").unwrap();
+        assert!(matches!(
+            resolve(&remote, &local, &here, &["a.txt".to_owned()], None, false),
+            Err(Refusal::Taken(_))
+        ));
+
+        let _ = std::fs::remove_dir_all(&held);
+        let _ = std::fs::remove_dir_all(&here);
+    }
+
+    /// What a reference and a destination read as is put at its path, out of the store the version's
+    /// content is in, and the Layout here names it afterwards.
+    #[test]
+    fn entries_are_brought_in_from_the_other_layout() {
+        let (held, here) = two_workspaces("entries");
+        let remote = Workspace::locate(&held).unwrap().layout().unwrap();
+        let target = Workspace::locate(&here).unwrap();
+        let local = target.layout().unwrap();
+        let index = VCSIndex::locate(&held).unwrap();
+        let store = Workspace::locate(&held).unwrap().storage_set().unwrap();
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+
+        std::fs::create_dir_all(here.join(".rola/auth")).unwrap();
+        std::fs::write(
+            here.join(".rola/auth/alice.pem"),
+            b"a key this test never signs with",
+        )
+        .unwrap();
+        let account = Common {
+            workspace: here.clone(),
+            account: "alice".to_owned(),
+            ..Common::default()
+        }
+        .account(&target)
+        .expect("the account is here");
+        let sources = Sources::new(&target, &account, Vec::new(), true).unwrap();
+
+        let wanted = resolve(&remote, &local, &here, &["a.txt".to_owned()], None, false)
+            .expect("the path resolves");
+        let outcome = bring_in(
+            &target,
+            &local,
+            &remote,
+            &index,
+            Some(&store),
+            &runtime,
+            wanted,
+            &sources,
+            &Messages::default(),
+            &Cancellation::new(),
+        )
+        .expect("the entry comes in");
+
+        assert_eq!(outcome.entries.len(), 1);
+        assert_eq!(outcome.entries[0].local_path, "a.txt");
+        assert_eq!(outcome.entries[0].remote_path.as_deref(), Some("a.txt"));
+        assert_eq!(outcome.failed.len(), 0);
+        assert_eq!(std::fs::read(here.join("a.txt")).unwrap(), b"one");
+        assert!(
+            target
+                .layout()
+                .unwrap()
+                .id_of(&LayoutPath::new("a.txt").unwrap())
+                .is_some()
+        );
+
+        let _ = std::fs::remove_dir_all(&held);
+        let _ = std::fs::remove_dir_all(&here);
+    }
+
+    /// A variant the index holds is written beside the file it is to be joined into, the merge
+    /// records say it waits, and a second bring of the same file is refused.
+    #[test]
+    fn a_variant_is_brought_in_beside_its_file() {
+        let dir =
+            std::env::temp_dir().join(format!("rola-cov-bring-variant-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        Workspace::create(&dir).unwrap();
+        let workspace = Workspace::locate(&dir).unwrap();
+        std::fs::write(dir.join("a.txt"), b"one").unwrap();
+        track_file(
+            &workspace,
+            &dir,
+            "a.txt",
+            "alice",
+            "first",
+            TrackOptions::default(),
+        )
+        .unwrap();
+        std::fs::write(dir.join("a.txt"), b"two").unwrap();
+        let second = track_file(
+            &workspace,
+            &dir,
+            "a.txt",
+            "alice",
+            "second",
+            TrackOptions::default(),
+        )
+        .unwrap();
+
+        let request = BringVariantRequest::new(
+            Common {
+                workspace: dir.clone(),
+                offline: true,
+                ..Common::default()
+            },
+            second.variant.hex(),
+            "a.txt".to_owned(),
+            None,
+            false,
+        );
+        let report = request
+            .variant(&Progress::silent(), &Cancellation::new())
+            .expect("the variant comes in");
+        assert_eq!(report.target, "a.txt");
+        assert!(dir.join(&report.path).is_file());
+
+        assert!(matches!(
+            request.variant(&Progress::silent(), &Cancellation::new()),
+            Err(VariantRefusal::AlreadyMerging)
+        ));
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A variant word the index cannot name is refused, and so is a run the caller stopped.
+    #[test]
+    fn a_variant_the_index_cannot_name_is_refused() {
+        let dir = std::env::temp_dir().join(format!(
+            "rola-cov-bring-variant-miss-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        Workspace::create(&dir).unwrap();
+        std::fs::write(dir.join("a.txt"), b"one").unwrap();
+
+        let request = BringVariantRequest::new(
+            Common {
+                workspace: dir.clone(),
+                offline: true,
+                ..Common::default()
+            },
+            "0f0f".to_owned(),
+            "a.txt".to_owned(),
+            None,
+            false,
+        );
+        assert!(matches!(
+            request.variant(&Progress::silent(), &Cancellation::new()),
+            Err(VariantRefusal::NotAVariantHash { .. })
+        ));
+
+        let cancellation = Cancellation::new();
+        cancellation.cancel();
+        assert!(matches!(
+            request.variant(&Progress::silent(), &cancellation),
+            Err(VariantRefusal::Failed(WriteError::Cancelled))
+        ));
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A bring through the ABI needs an account to speak as, and says so rather than reaching a
+    /// Vault it could not name itself to.
+    #[test]
+    fn a_bring_needs_an_account_to_speak_as() {
+        let dir =
+            std::env::temp_dir().join(format!("rola-cov-bring-account-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        Workspace::create(&dir).unwrap();
+
+        // A name no scope holds is what makes the account missing: a name another test or a
+        // developer machine happens to keep would resolve here.
+        let missing = format!("nobody-{}", std::process::id());
+        let request = BringInput {
+            common: super::super::request::WriteCommon {
+                workspace: dir.display().to_string(),
+                account: missing,
+                ..Default::default()
+            },
+            refs: vec!["a".to_owned()].into(),
+            ..Default::default()
+        };
+        let error = bring_at(&request, &WriteProgress::new(), &Cancellation::new())
+            .expect_err("no account by that name is here");
+        assert!(matches!(error, WriteError::NoAccount));
 
         let _ = std::fs::remove_dir_all(&dir);
     }

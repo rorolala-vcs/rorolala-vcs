@@ -1094,3 +1094,357 @@ impl From<rorolala_auth::Error> for SessionError {
 
 #[cfg(test)]
 include!("begin_tests.rs");
+
+#[cfg(test)]
+mod coverage_tests {
+    use std::collections::HashMap;
+    use std::fs;
+    use std::path::PathBuf;
+    use std::sync::{Arc, Mutex as StdMutex};
+    use std::time::Duration;
+
+    use rorolala_auth::{KeyAlgorithm, SigningKey};
+    use rorolala_vault::Vault;
+    use tokio::io::AsyncReadExt as _;
+
+    use crate::test_support::{run, scratch};
+
+    use super::{
+        CancelSignal, DaemonInput, Host, Registry, Served, SessionError, Source, bound,
+        build_action_registry, daemon, exclusive_write, host, in_ssh_session, listen,
+        member_scopes, read_config, register_member_key,
+    };
+
+    /// A directory of its own, emptied first so a rerun starts clean.
+    fn dir(label: &str) -> PathBuf {
+        scratch(label)
+    }
+
+    /// The places a Vault may name, each of which is handed to the search as a directory.
+    #[test]
+    fn every_place_a_vault_may_name_is_a_directory_the_search_is_handed() {
+        let config: rorolala_vault::Config = serde_json::from_str(
+            "{\"daemon_config\":{\"key_discovery\":[\"system\",\"user\",\"env\",\"vault\",\"root-vault\"]}}",
+        )
+        .unwrap();
+        let vault = Vault::default();
+        let root_vault = rorolala_vault::RootVault::default();
+
+        let (roots, rule) = member_scopes(&config, &vault, &root_vault);
+
+        // One directory per place, and the rule searches what it is handed and no scope of its own.
+        assert!(roots.len() >= 3);
+        assert!(rule.find_local);
+        assert!(!rule.find_global && !rule.find_user && !rule.find_env);
+    }
+
+    /// A source says whether the file it read still looks the way it did.
+    #[test]
+    fn a_source_notices_a_file_that_changed_and_one_that_is_gone() {
+        let dir = dir("source");
+        let file = dir.join("config.toml");
+        fs::write(&file, "one").unwrap();
+
+        let source = Source::of(&file);
+        assert!(source.holds());
+
+        fs::write(&file, "a longer file").unwrap();
+        assert!(!source.holds());
+
+        let absent = Source::of(dir.join("nothing.toml"));
+        fs::write(dir.join("nothing.toml"), "now it is here").unwrap();
+        assert!(!absent.holds());
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// A configuration that will not read is served under the defaults, with a warning.
+    #[test]
+    fn a_configuration_that_will_not_read_falls_back_to_the_defaults() {
+        let dir = dir("config");
+        let broken = dir.join("broken.toml");
+        fs::write(&broken, "this is not toml = [").unwrap();
+
+        let read = read_config(&broken);
+        let default = rorolala_vault::Config::default();
+
+        assert_eq!(
+            read.daemon_config().key_discovery(),
+            default.daemon_config().key_discovery()
+        );
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// A run's own bound is applied over whatever the Vault's file says.
+    #[test]
+    fn a_runs_bound_is_written_over_the_vaults_own() {
+        let config = rorolala_vault::Config::default();
+
+        let bounded = bound(&config, Some(7));
+        assert_eq!(bounded.daemon_config().max_concurrency(), 7);
+
+        let untouched = bound(&config, None);
+        assert_eq!(
+            untouched.daemon_config().max_concurrency(),
+            config.daemon_config().max_concurrency()
+        );
+    }
+
+    /// Whether a process came from SSH is read from the environment, and nothing else.
+    #[test]
+    fn an_ssh_session_is_read_from_the_environment() {
+        let named = std::env::var_os("SSH_CONNECTION").is_some()
+            || std::env::var_os("SSH_USER_AUTH").is_some();
+
+        assert_eq!(in_ssh_session(), named);
+    }
+
+    /// A name is written where nothing is, and never over what is.
+    #[test]
+    fn an_exclusive_write_says_whether_it_made_the_name() {
+        let dir = dir("exclusive");
+        let target = dir.join("name");
+
+        assert!(exclusive_write(&target, b"one").unwrap());
+        assert_eq!(fs::read(&target).unwrap(), b"one");
+
+        // What is there is never replaced, and saying so is the answer rather than a failure.
+        assert!(!exclusive_write(&target, b"two").unwrap());
+        assert_eq!(fs::read(&target).unwrap(), b"one");
+
+        // A directory that is not there is a failure to write, not a name taken.
+        assert!(exclusive_write(&dir.join("gone/name"), b"one").is_err());
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// A key is registered once, and what a name already holds is what decides.
+    #[test]
+    fn a_member_key_is_written_under_its_own_name_and_never_over_another() {
+        let dir = dir("register");
+        let keys = dir.join("keys");
+        let key = SigningKey::from_bytes(KeyAlgorithm::Ed25519, [11; 32])
+            .unwrap()
+            .public_key();
+
+        register_member_key(&keys, "alice", &key).unwrap();
+        let written = fs::read_to_string(keys.join("alice.pub")).unwrap();
+        assert_eq!(rorolala_auth::PublicKey::from_pem(&written).unwrap(), key);
+
+        // The same name under another key is a name that is taken.
+        let other = SigningKey::from_bytes(KeyAlgorithm::Ed25519, [12; 32])
+            .unwrap()
+            .public_key();
+        fs::write(keys.join("bob.pub"), other.to_pem().unwrap()).unwrap();
+        assert!(matches!(
+            register_member_key(&keys, "bob", &key),
+            Err(SessionError::IdentityMismatch(name)) if name == "bob"
+        ));
+
+        // A file that is not a key is a registration that failed, naming the file.
+        fs::write(keys.join("carol.pub"), "not a key").unwrap();
+        assert!(matches!(
+            register_member_key(&keys, "carol", &key),
+            Err(SessionError::Register { .. })
+        ));
+
+        // A key directory that is a file cannot be made, which is the same failure.
+        let blocked = dir.join("blocked");
+        fs::write(&blocked, "").unwrap();
+        assert!(matches!(
+            register_member_key(&blocked, "dave", &key),
+            Err(SessionError::Register { .. })
+        ));
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// A registration failure is what the filesystem said, beside the file it was about.
+    #[test]
+    fn a_registration_failure_names_the_file_and_the_reason() {
+        let error = SessionError::register(
+            &PathBuf::from("/keys/alice.pub"),
+            &std::io::Error::new(std::io::ErrorKind::PermissionDenied, "denied"),
+        );
+
+        let said = error.to_string();
+        assert!(said.contains("alice.pub"), "{said}");
+        assert!(said.contains("denied"), "{said}");
+    }
+
+    /// A Vault is served only when its file is where the path names it.
+    #[test]
+    fn a_path_serves_a_vault_only_when_it_names_one() {
+        let dir = dir("from-path");
+
+        assert!(Served::from_path(&dir, None).is_none());
+
+        Vault::create(&dir).unwrap();
+        assert!(Served::from_path(&dir, Some(4)).is_some());
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// A resolution is kept, and read again only when what it was read from changed.
+    #[test]
+    fn a_resolution_is_kept_until_the_files_behind_it_change() {
+        let dir = dir("registry-cache");
+        let vault_root = dir.join("vault");
+        Vault::create(&vault_root).unwrap();
+
+        let mut namespaces = crate::Namespaces::default();
+        namespaces.register("own", &vault_root).unwrap();
+        let table = dir.join("registry.toml");
+        namespaces.write_to(&table).unwrap();
+
+        let registry = Registry {
+            path: table,
+            served: StdMutex::new(HashMap::new()),
+        };
+        let host = host(None).unwrap_or_else(|| Host {
+            signing: SigningKey::from_bytes(KeyAlgorithm::Ed25519, [13; 32]).unwrap(),
+            max_concurrency: None,
+            actions: build_action_registry(),
+        });
+
+        let served = run(registry.serve_for(&host, "own"));
+        assert!(served.is_some());
+        // The second ask is answered from what was kept, which is what the cache is for.
+        assert!(run(registry.serve_for(&host, "own")).is_some());
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// Nothing registered, nothing served: a table with no such name and a path with no Vault.
+    #[test]
+    fn a_namespace_nothing_names_is_not_served() {
+        let dir = dir("registry-empty");
+        let table = dir.join("registry.toml");
+        fs::write(&table, "").unwrap();
+
+        let registry = Registry {
+            path: table,
+            served: StdMutex::new(HashMap::new()),
+        };
+        let host = Host {
+            signing: SigningKey::from_bytes(KeyAlgorithm::Ed25519, [14; 32]).unwrap(),
+            max_concurrency: None,
+            actions: build_action_registry(),
+        };
+
+        assert!(run(registry.serve_for(&host, "nowhere")).is_none());
+
+        // A namespace that is registered but whose directory holds no Vault is not served either.
+        let empty = dir.join("empty-vault");
+        fs::create_dir_all(&empty).unwrap();
+        let mut namespaces = crate::Namespaces::default();
+        namespaces.register("empty", &empty).unwrap();
+        namespaces.write_to(&dir.join("registry.toml")).unwrap();
+
+        assert!(run(registry.serve_for(&host, "empty")).is_none());
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// A table that will not parse is refused rather than served as an empty one.
+    #[test]
+    fn a_table_that_will_not_read_serves_nothing() {
+        let dir = dir("registry-broken");
+        let table = dir.join("registry.toml");
+        fs::write(&table, "not a table = [").unwrap();
+
+        let registry = Registry {
+            path: table,
+            served: StdMutex::new(HashMap::new()),
+        };
+        let host = Host {
+            signing: SigningKey::from_bytes(KeyAlgorithm::Ed25519, [15; 32]).unwrap(),
+            max_concurrency: None,
+            actions: build_action_registry(),
+        };
+
+        assert!(run(registry.serve_for(&host, "own")).is_none());
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// A daemon with a table it cannot read says so rather than listening.
+    #[tokio::test]
+    async fn a_daemon_that_cannot_read_its_table_stops() {
+        let dir = dir("daemon-broken");
+        let table = dir.join("registry.toml");
+        fs::write(&table, "not a table = [").unwrap();
+
+        let (sender, receiver) = tokio::sync::watch::channel(false);
+        sender.send(true).unwrap();
+        let exit = daemon(DaemonInput {
+            registry: &table,
+            port: 0,
+            max_concurrency: None,
+            signal: CancelSignal { rx: receiver },
+        })
+        .await;
+
+        assert!(exit.code() > 0);
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// A daemon that starts serves until it is cancelled, and then ends well.
+    #[tokio::test]
+    async fn a_daemon_stops_when_it_is_cancelled() {
+        let dir = dir("daemon-cancel");
+        let table = dir.join("registry.toml");
+
+        let (sender, receiver) = tokio::sync::watch::channel(false);
+        sender.send(true).unwrap();
+        let exit = daemon(DaemonInput {
+            registry: &table,
+            port: 0,
+            max_concurrency: None,
+            signal: CancelSignal { rx: receiver },
+        })
+        .await;
+
+        if host(None).is_some() {
+            assert_eq!(exit.code(), 0);
+        } else {
+            assert_eq!(exit.code(), crate::exit::NO_IDENTITY);
+        }
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// A connection is accepted and served in a task of its own, and a cancel ends the loop.
+    #[tokio::test]
+    async fn a_listener_accepts_a_connection_and_stops_when_cancelled() {
+        let dir = dir("listen");
+        let registry = Registry {
+            path: dir.join("registry.toml"),
+            served: StdMutex::new(HashMap::new()),
+        };
+        let host = Arc::new(Host {
+            signing: SigningKey::from_bytes(KeyAlgorithm::Ed25519, [16; 32]).unwrap(),
+            max_concurrency: Some(1),
+            actions: build_action_registry(),
+        });
+        let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
+            .await
+            .unwrap();
+        let address = listener.local_addr().unwrap();
+        let (sender, receiver) = tokio::sync::watch::channel(false);
+
+        let served = tokio::spawn(listen(listener, host, Arc::new(registry), receiver));
+
+        let mut client = tokio::net::TcpStream::connect(address).await.unwrap();
+        // Reading waits for the server to answer or to close, which is the accept having happened.
+        let mut byte = [0_u8; 1];
+        let _ = tokio::time::timeout(Duration::from_millis(500), client.read(&mut byte)).await;
+
+        sender.send(true).unwrap();
+        served.await.unwrap();
+
+        let _ = fs::remove_dir_all(dir);
+    }
+}

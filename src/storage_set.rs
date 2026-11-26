@@ -406,7 +406,10 @@ mod tests {
     use rorolala_vault::{Config as VaultConfig, Vault};
     use rorolala_workspace::{Config, Workspace};
 
-    use super::{create_store_at, for_directory, workspace_bind_storage};
+    use super::{
+        connected, create_store_at, for_directory, vault_bind_storage, workspace_bind_storage,
+    };
+    use crate::write::WriteError;
 
     /// A directory of its own, emptied first so a rerun starts clean.
     fn scratch(label: &str) -> PathBuf {
@@ -502,6 +505,117 @@ mod tests {
         assert!(for_directory(&dir).is_err());
 
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_store_is_bound_to_a_vault_and_answers_what_it_recorded() {
+        let dir = scratch("vault-bind");
+        let vault_root = dir.join("vault");
+        Vault::create(&vault_root).unwrap();
+        let store = dir.join("shared");
+        create_store_at(&store).unwrap();
+
+        let answer = vault_bind_storage(&vault_root, &store).unwrap();
+        assert!(answer.bound_vault());
+        assert!(!answer.bound_workspace());
+        assert!(answer.reverse_recorded());
+        assert!(!answer.read_only());
+        assert_eq!(answer.warning_count(), 0);
+        assert_eq!(answer.warning_at(0), "");
+
+        let record = connected(&store).unwrap();
+        assert_eq!(record.vault_count(), 1);
+        assert_eq!(record.workspace_count(), 0);
+        assert_ne!(record.vault_at(0), "");
+        assert_eq!(record.vault_at(1), "");
+        assert_eq!(record.workspace_at(0), "");
+
+        // A second binding finds the store already recorded and still answers.
+        let again = vault_bind_storage(&vault_root, &store).unwrap();
+        assert!(again.bound_vault());
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_store_is_refused_where_a_workspace_or_a_file_is() {
+        let dir = scratch("refuse");
+        Workspace::create(&dir).unwrap();
+
+        assert!(matches!(
+            create_store_at(&dir),
+            Err(WriteError::Precondition { .. })
+        ));
+
+        let file = dir.join("a-file");
+        fs::write(&file, b"x").unwrap();
+        assert!(matches!(
+            create_store_at(&file),
+            Err(WriteError::InvalidPath { .. })
+        ));
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_binding_refuses_a_path_it_cannot_bind() {
+        let dir = scratch("bind-refuse");
+        Workspace::create(&dir).unwrap();
+
+        let inside = dir.join(".rola").join("elsewhere");
+        fs::create_dir_all(&inside).unwrap();
+        assert!(matches!(
+            workspace_bind_storage(&dir, &inside),
+            Err(WriteError::Precondition { .. })
+        ));
+
+        let plain = dir.join("plain");
+        fs::create_dir_all(&plain).unwrap();
+        assert!(matches!(
+            workspace_bind_storage(&dir, &plain),
+            Err(WriteError::Precondition { .. })
+        ));
+
+        let missing = dir.join("missing");
+        assert!(matches!(
+            workspace_bind_storage(&dir, &missing),
+            Err(WriteError::InvalidPath { .. })
+        ));
+
+        let vault_root = dir.join("vault");
+        Vault::create(&vault_root).unwrap();
+        let nested = vault_root.join("nested");
+        fs::create_dir_all(&nested).unwrap();
+        assert!(matches!(
+            vault_bind_storage(&vault_root, &nested),
+            Err(WriteError::Precondition { .. })
+        ));
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_workspace_deeper_than_a_vault_answers_for_itself() {
+        let parent = scratch("deeper-workspace");
+        let vault_root = parent.join("vault");
+        Vault::create(&vault_root).unwrap();
+        let workspace_root = vault_root.join("work");
+        Workspace::create(&workspace_root).unwrap();
+        let shared = parent.join("shared");
+        let _ = RorolalaStorage::create(&shared);
+
+        let workspace = Workspace::locate(&workspace_root).unwrap();
+        let mut config = Config::read_from(&workspace.config_path()).unwrap();
+        config
+            .default_config_mut()
+            .add_storage(shared.to_string_lossy());
+        config.write_to(&workspace.config_path()).unwrap();
+
+        let set = for_directory(&workspace_root).unwrap().unwrap();
+
+        assert_eq!(set.write_target().get_root(), shared.as_path());
+
+        let _ = fs::remove_dir_all(&parent);
     }
 
     #[test]

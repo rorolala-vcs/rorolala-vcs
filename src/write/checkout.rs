@@ -387,7 +387,11 @@ mod tests {
     use rorolala_utils_location::Locate as _;
     use rorolala_workspace::Workspace;
 
-    use super::remember;
+    use super::{
+        Checkout, WriteRestore, forget_at, remember, remember_at, restore, restore_at,
+        restore_vault_at,
+    };
+    use crate::write::WriteError;
 
     #[test]
     fn a_written_path_is_remembered() {
@@ -399,6 +403,93 @@ mod tests {
         fs::write(dir.join("a.txt"), b"one").unwrap();
 
         remember(&workspace.layout().unwrap(), &dir, "a.txt").unwrap();
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_restore_answer_names_the_entry_and_the_version() {
+        let id = uuid::Uuid::from_u128(7);
+        let version = rorolala_storage::Key::new([9; 32]);
+        let answer = WriteRestore::of(id, &version);
+
+        assert_eq!(answer.id(), id.to_string());
+        assert_eq!(answer.version(), version.to_string());
+    }
+
+    #[test]
+    fn remembering_and_forgetting_change_only_what_the_readings_hold() {
+        let dir =
+            std::env::temp_dir().join(format!("rola-cov-checkout-cache-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        Workspace::create(&dir).unwrap();
+        let workspace = Workspace::locate(&dir).unwrap();
+        let layout = workspace.layout().unwrap();
+        fs::write(dir.join("a.txt"), b"one").unwrap();
+
+        let clean = Checkout::open(&layout, &dir);
+        clean.finish().unwrap();
+
+        let mut checkout = Checkout::open(&layout, &dir);
+        checkout.remember("a.txt").unwrap();
+        checkout.remember("missing.txt").unwrap();
+        checkout.finish().unwrap();
+
+        let mut written = Checkout::open(&layout, &dir);
+        written.forget("a.txt").unwrap();
+        written.finish().unwrap();
+
+        let mut refused = Checkout::open(&layout, &dir);
+        assert!(matches!(
+            refused.remember(""),
+            Err(WriteError::InvalidPath { .. })
+        ));
+        assert!(matches!(
+            refused.forget(""),
+            Err(WriteError::InvalidPath { .. })
+        ));
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_workspace_exports_remember_and_forget_a_path() {
+        let dir =
+            std::env::temp_dir().join(format!("rola-cov-checkout-exports-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        Workspace::create(&dir).unwrap();
+        fs::write(dir.join("a.txt"), b"one").unwrap();
+
+        assert_eq!(remember_at(&dir, "a.txt").unwrap(), "");
+        assert_eq!(forget_at(&dir, "a.txt").unwrap(), "");
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_restore_of_a_path_the_layout_does_not_name_is_refused() {
+        let dir =
+            std::env::temp_dir().join(format!("rola-cov-checkout-restore-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        Workspace::create(&dir).unwrap();
+        let workspace = Workspace::locate(&dir).unwrap();
+        let version = rorolala_storage::Key::new([1; 32]).to_string();
+
+        assert!(matches!(
+            restore(&workspace, &dir, "missing.psd", &version),
+            Err(WriteError::InvalidPath { .. })
+        ));
+        assert!(matches!(
+            restore_at(&dir, "missing.psd", &version),
+            Err(WriteError::InvalidPath { .. })
+        ));
+
+        let vault_root = dir.join("vault");
+        rorolala_vault::Vault::create(&vault_root).unwrap();
+        assert!(restore_vault_at(&vault_root, "missing.psd", &version).is_err());
 
         let _ = fs::remove_dir_all(&dir);
     }

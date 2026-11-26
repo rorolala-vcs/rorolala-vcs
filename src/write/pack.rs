@@ -246,7 +246,9 @@ mod tests {
     use rorolala_utils_location::Locate as _;
     use rorolala_workspace::Workspace;
 
-    use super::{WritePack, pack_at, pack_index_at, pack_vault_at, pack_workspace};
+    use super::{
+        WritePack, pack_at, pack_index_at, pack_storage_at, pack_vault_at, pack_workspace,
+    };
     use crate::write::WriteError;
     use crate::write::track::{TrackOptions, track_file};
 
@@ -297,6 +299,27 @@ mod tests {
             pack_vault_at(&dir, true, true),
             Err(WriteError::NoVault)
         ));
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_directory_packs_its_store_its_index_and_its_vault() {
+        let dir = std::env::temp_dir().join(format!("rola-cov-pack-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        Workspace::create(&dir).unwrap();
+        fs::write(dir.join("a.txt"), b"one").unwrap();
+
+        let packed = pack_at(&dir, true, true).unwrap();
+        let _ = packed.changed();
+
+        assert!(pack_storage_at(&dir).is_ok());
+        assert!(pack_index_at(&dir).is_ok());
+
+        let vault_root = dir.join("vault");
+        rorolala_vault::Vault::create(&vault_root).unwrap();
+        assert!(pack_vault_at(&vault_root, true, true).is_ok());
 
         let _ = fs::remove_dir_all(&dir);
     }

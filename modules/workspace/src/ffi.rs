@@ -180,4 +180,29 @@ mod tests {
         // SAFETY: as above.
         unsafe { rola_workspace_lock_release(ptr::null_mut()) };
     }
+
+    /// The exports are reached by the C symbols the header declares, and a lock is taken through one.
+    #[test]
+    fn every_export_is_reachable_as_the_c_symbol_it_is_declared_by() {
+        let dir = scratch("symbols");
+        let workspace = locate_workspace(&dir).unwrap();
+        let workspace = RolaWorkspace(workspace);
+        let is_locking: unsafe extern "C" fn(*const RolaWorkspace) -> bool =
+            rola_workspace_is_locking;
+        let acquire: unsafe extern "C" fn(*const RolaWorkspace) -> *mut RolaWorkspaceLocking =
+            rola_workspace_lock_acquire;
+        let release: unsafe extern "C" fn(*mut RolaWorkspaceLocking) = rola_workspace_lock_release;
+
+        // SAFETY: the handle is live for each call, and the guard is the one `acquire` handed out.
+        unsafe {
+            assert!(!is_locking(&raw const workspace));
+            let guard = acquire(&raw const workspace);
+            assert!(!guard.is_null());
+            assert!(is_locking(&raw const workspace));
+            release(guard);
+            assert!(!is_locking(&raw const workspace));
+        }
+
+        let _ = std::fs::remove_dir_all(dir);
+    }
 }

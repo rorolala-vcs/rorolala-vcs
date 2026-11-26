@@ -328,7 +328,7 @@ mod tests {
 
     use super::{
         EntryRemove, PathMove, fetched, follow_move, follow_remove, move_path_fetched,
-        remove_fetched_entry,
+        remove_fetched_entry, soft_delete_fetched,
     };
     use crate::write::WriteError;
 
@@ -444,6 +444,87 @@ mod tests {
         assert!(matches!(
             remove_fetched_entry(&dir, "truth@origin", "00000000-0000-0000-0000-000000000001"),
             Err(WriteError::NoWorkspace)
+        ));
+    }
+
+    /// Every refusal the Vault can answer is turned into the failure it names.
+    #[test]
+    fn a_followed_change_answers_each_refusal() {
+        let (dir, workspace) = fetched_workspace("refusals");
+        let a = LayoutPath::new("a.psd").expect("a path");
+        let b = LayoutPath::new("b.psd").expect("a path");
+
+        assert!(matches!(
+            follow_move(&workspace, "origin", &a, &b, &PathMove::Taken),
+            Err(WriteError::Precondition { .. })
+        ));
+        assert!(matches!(
+            follow_move(&workspace, "origin", &a, &b, &PathMove::Malformed),
+            Err(WriteError::InvalidPath { .. })
+        ));
+        assert!(matches!(
+            follow_remove(&workspace, "origin", &a, &EntryRemove::Missing),
+            Err(WriteError::NotFound { .. })
+        ));
+        assert!(matches!(
+            follow_remove(
+                &workspace,
+                "origin",
+                &a,
+                &EntryRemove::Refused { owner: None }
+            ),
+            Err(WriteError::Ownership { .. })
+        ));
+        assert!(matches!(
+            follow_remove(
+                &workspace,
+                "origin",
+                &a,
+                &EntryRemove::Refused {
+                    owner: Some("bob".to_owned())
+                }
+            ),
+            Err(WriteError::Ownership { .. })
+        ));
+        assert!(matches!(
+            follow_remove(&workspace, "origin", &a, &EntryRemove::Malformed),
+            Err(WriteError::InvalidPath { .. })
+        ));
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// A copy that is not here is left alone, and the answer is still a success.
+    #[test]
+    fn a_followed_change_with_no_copy_keeps_nothing() {
+        let dir = std::env::temp_dir().join(format!(
+            "rola-cov-layout-remote-nocopy-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).expect("a scratch directory");
+        Workspace::create(&dir).expect("a Workspace");
+        let workspace = Workspace::locate(&dir).expect("the Workspace is there");
+        let a = LayoutPath::new("a.psd").expect("a path");
+        let b = LayoutPath::new("b.psd").expect("a path");
+
+        follow_move(&workspace, "origin", &a, &b, &PathMove::Moved).expect("nothing to follow");
+        follow_remove(&workspace, "origin", &a, &EntryRemove::Removed).expect("nothing to follow");
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// A path already under the archive marker is not archived again.
+    #[test]
+    fn a_soft_delete_of_an_archived_path_is_refused() {
+        let dir = std::env::temp_dir().join(format!(
+            "rola-cov-layout-remote-soft-{}",
+            std::process::id()
+        ));
+
+        assert!(matches!(
+            soft_delete_fetched(&dir, "truth@origin", "@/removed/2020-01-01/a.psd"),
+            Err(WriteError::InvalidPath { .. })
         ));
     }
 }

@@ -197,7 +197,10 @@ mod tests {
     use std::process::Command;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
+    use rola_define_format::Lock;
+
     use super::Session;
+    use crate::content::LocalStore;
     use crate::error::Error;
     use crate::project::Project;
 
@@ -280,5 +283,34 @@ mod tests {
         assert!(matches!(Session::open(&dir), Err(Error::NoRepository)));
 
         let _ = fs::remove_dir_all(dir);
+    }
+
+    /// A session keeps the exclude block and the working tree in step with a lock that names nothing.
+    #[test]
+    fn a_session_keeps_the_exclusions_and_the_working_tree_in_step() {
+        let dir = scratch("settle");
+        git(&dir);
+        fs::write(
+            dir.join(Project::CONFIG_FILE),
+            "[features]\ngit_support = true\n",
+        )
+        .unwrap();
+
+        let session = Session::open(&dir).unwrap().unwrap();
+        let lock = Lock::new(Vec::new(), Vec::new()).unwrap();
+        let source = LocalStore::new(dir.join("store"));
+
+        session.exclude(&lock).unwrap();
+        let exclude = fs::read_to_string(dir.join(".git/info/exclude")).unwrap();
+        assert!(exclude.contains("/.rola/"), "{exclude:?}");
+
+        session.detach(&source).unwrap();
+        session.attach(&lock, &source).unwrap();
+        session.restore(&lock, &[], &source).unwrap();
+        session.settle(&lock, &source).unwrap();
+
+        assert!(dir.join(".rola/git/state.toml").is_file());
+
+        let _ = fs::remove_dir_all(&dir);
     }
 }

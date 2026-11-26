@@ -73,3 +73,66 @@ mod tests {
         assert!(ActionSetRemoteVersion::process(input, ctx).await.is_err());
     }
 }
+
+#[cfg(test)]
+mod exchange_tests {
+    use rorolala_auth::Account;
+    use rorolala_layout::MutableData;
+    use rorolala_protocol::{Action as _, ActionContext, OnlyWorkspace};
+    use rorolala_utils_location::Locate as _;
+    use rorolala_vault::Vault;
+    use uuid::Uuid;
+
+    use crate::test_support::{member, run, scratch, session};
+
+    use super::ActionSetRemoteVersion;
+    use crate::EntryWriteKind;
+
+    /// The holder of an entry sets its version, and the answer says the write was made.
+    #[test]
+    fn a_version_is_set_on_the_vault_by_the_account_that_holds_the_entry() {
+        let dir = scratch("set-remote-version");
+        let vault_root = dir.join("vault");
+        Vault::create(&vault_root).unwrap();
+        let vault = Vault::locate(&vault_root).unwrap();
+        let layout = vault.layout().unwrap();
+        let id = Uuid::from_u128(1);
+        layout
+            .create_entry(
+                id,
+                MutableData::new(Some("alice".to_owned()), [1; 32], String::new()),
+            )
+            .unwrap();
+
+        let version = "11".repeat(32);
+        let input = (id.to_string(), version);
+        let (client, server) = session();
+
+        let workspace_ctx =
+            ActionContext::new_workspace_ctx(Account::default()).with_channel(client);
+        let vault_ctx = ActionContext::new_vault_ctx(member(
+            &vault_root.join(rorolala_vault::KEYS_DIR),
+            "alice",
+        ))
+        .with_current_vault(&vault)
+        .with_channel(server);
+
+        let (here, there) = run(async {
+            tokio::join!(
+                ActionSetRemoteVersion::process(
+                    OnlyWorkspace::from(Some(input.clone())),
+                    workspace_ctx
+                ),
+                ActionSetRemoteVersion::process(
+                    OnlyWorkspace::<(String, String)>::from(None),
+                    vault_ctx
+                ),
+            )
+        });
+
+        assert_eq!(here.unwrap().kind(), EntryWriteKind::Written);
+        assert_eq!(there.unwrap().kind(), EntryWriteKind::Written);
+
+        let _ = std::fs::remove_dir_all(dir);
+    }
+}

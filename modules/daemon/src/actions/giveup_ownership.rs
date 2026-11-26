@@ -95,7 +95,17 @@ impl Action for ActionGiveupOwnership {
 
 #[cfg(test)]
 mod tests {
-    use super::{GiveupOwnershipRequest, OwnershipChange};
+    use rorolala_auth::Account;
+    use rorolala_layout::MutableData;
+    use rorolala_protocol::{Action as _, ActionContext, OnlyWorkspace};
+    use rorolala_utils_location::Locate as _;
+    use rorolala_vault::Vault;
+    use uuid::Uuid;
+
+    use crate::test_support::{member, run, scratch, session};
+
+    use super::{ActionGiveupOwnership, GiveupOwnershipRequest, OwnershipChange};
+    use crate::{Ownership, OwnershipKind};
 
     #[test]
     fn a_request_becomes_the_change_the_exchange_carries() {
@@ -106,5 +116,55 @@ mod tests {
 
         assert_eq!(change.name, "note");
         assert_eq!(change.uuids, ["a", "b"]);
+    }
+
+    /// The holder lets go of an entry, and both ends read the answer that names nobody.
+    #[test]
+    fn an_entry_the_caller_holds_is_let_go_of_over_a_session() {
+        let dir = scratch("giveup-ownership");
+        let vault_root = dir.join("vault");
+        Vault::create(&vault_root).unwrap();
+        let vault = Vault::locate(&vault_root).unwrap();
+        let layout = vault.layout().unwrap();
+        let id = Uuid::from_u128(2);
+        layout
+            .create_entry(
+                id,
+                MutableData::new(Some("alice".to_owned()), [2; 32], String::new()),
+            )
+            .unwrap();
+
+        let request = GiveupOwnershipRequest::new("note".to_owned(), vec![id.to_string()]);
+        let (client, server) = session();
+        let workspace_ctx =
+            ActionContext::new_workspace_ctx(Account::default()).with_channel(client);
+        let vault_ctx = ActionContext::new_vault_ctx(member(
+            &vault_root.join(rorolala_vault::KEYS_DIR),
+            "alice",
+        ))
+        .with_current_vault(&vault)
+        .with_channel(server);
+
+        let (here, there) = run(async {
+            tokio::join!(
+                ActionGiveupOwnership::process(
+                    OnlyWorkspace::from(Some(OwnershipChange::from(request))),
+                    workspace_ctx
+                ),
+                ActionGiveupOwnership::process(
+                    OnlyWorkspace::<OwnershipChange>::from(None),
+                    vault_ctx
+                ),
+            )
+        });
+
+        let there = there.unwrap();
+        let here = here.unwrap();
+
+        assert_eq!(here.outcomes(), [Ownership::Owner(None)]);
+        assert_eq!(there.outcomes(), [Ownership::Owner(None)]);
+        assert_eq!(here.at(0).unwrap().kind(), OwnershipKind::Owner);
+
+        let _ = std::fs::remove_dir_all(dir);
     }
 }

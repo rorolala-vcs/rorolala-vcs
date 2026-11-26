@@ -179,7 +179,10 @@ impl WriteWorkspaceCache {
 mod tests {
     use std::fs;
 
-    use super::{WriteWorkspaceCache, clear_track, rebuild_tree_cache, set_track};
+    use super::{
+        WriteWorkspaceCache, clear_track, clear_track_at, rebuild_tree_cache,
+        rebuild_tree_cache_at, set_track, set_track_at,
+    };
     use rorolala_utils_location::Locate as _;
     use rorolala_workspace::Workspace;
 
@@ -222,6 +225,24 @@ mod tests {
 
         set_track(&workspace, "alice").unwrap();
         clear_track(&workspace).unwrap();
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_directory_exports_track_clear_and_rebuild() {
+        let dir = std::env::temp_dir().join(format!("rola-cov-cache-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        Workspace::create(&dir).unwrap();
+        fs::write(dir.join("one.txt"), b"one").unwrap();
+
+        let answer = rebuild_tree_cache_at(&dir).unwrap();
+        assert_ne!(answer.paths(), 0);
+        assert_ne!(answer.bytes(), 0);
+
+        set_track_at(&dir, "alice").unwrap();
+        clear_track_at(&dir).unwrap();
 
         let _ = fs::remove_dir_all(&dir);
     }

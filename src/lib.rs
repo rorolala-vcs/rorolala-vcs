@@ -376,6 +376,7 @@ mod tests {
     use rorolala_tree::{FileMode, TreeEntry as RawEntry, TreeStructure};
 
     use super::TreeEntries;
+    use super::{account_find, member_find};
 
     fn hex(bytes: &[u8]) -> String {
         use std::fmt::Write as _;
@@ -433,6 +434,14 @@ mod tests {
         assert_eq!(link.kind(), "symlink");
         assert_eq!(link.mode(), "");
         assert_eq!(link.target(), "a.txt");
+    }
+
+    #[test]
+    fn a_name_nothing_holds_is_not_found_beside_the_current_directory() {
+        let rule = rorolala_auth::KeyLocateRule::new();
+
+        assert!(account_find("rola-cov-nobody", &rule).is_none());
+        assert!(member_find("rola-cov-nobody", &rule).is_none());
     }
 
     #[test]

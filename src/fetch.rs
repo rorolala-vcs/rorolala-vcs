@@ -559,4 +559,117 @@ mod tests {
 
         let _ = std::fs::remove_dir_all(&dir);
     }
+
+    /// A source keeps the concurrency it is given, floors it at one, and reports what was brought.
+    #[test]
+    fn a_source_keeps_its_settings_and_reports_what_it_brought() {
+        let dir =
+            std::env::temp_dir().join(format!("rola-cov-fetch-settings-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        Workspace::create(&dir).unwrap();
+        let workspace = Workspace::locate(&dir).unwrap();
+        let account = Account::default();
+        let address: VaultAddress = "127.0.0.1:1".parse().unwrap();
+
+        let sources = Sources::new(
+            &workspace,
+            &account,
+            vec![("alpha".to_owned(), address)],
+            false,
+        )
+        .unwrap()
+        .with_concurrency(0)
+        .reporting(Progress::silent());
+
+        assert!(sources.can_ask());
+        assert_eq!(sources.concurrency, 1);
+        assert_eq!(sources.took().len(), 0);
+
+        sources.asked.borrow_mut()[0].brought = 3;
+        assert_eq!(sources.took(), vec![("alpha".to_owned(), 3)]);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Nothing crosses when there is no Vault to send to or no key to send.
+    #[test]
+    fn a_send_with_no_candidate_or_no_key_crosses_nothing() {
+        let dir = std::env::temp_dir().join(format!("rola-cov-fetch-send-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        Workspace::create(&dir).unwrap();
+        let workspace = Workspace::locate(&dir).unwrap();
+        let account = Account::default();
+        let address: VaultAddress = "127.0.0.1:1".parse().unwrap();
+
+        let nowhere = Sources::new(&workspace, &account, Vec::new(), false).unwrap();
+        assert_eq!(nowhere.send(None, &[key(1)]).unwrap(), 0);
+
+        let named = Sources::new(
+            &workspace,
+            &account,
+            vec![("alpha".to_owned(), address)],
+            false,
+        )
+        .unwrap();
+        assert_eq!(named.send(None, &[]).unwrap(), 0);
+
+        let store = StorageSet::sole(workspace.get_current_rola_storage().unwrap());
+        assert!(named.send(Some(&store), &[key(1), key(2)]).is_err());
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A listing names one key per line, and the lines that are not keys are left out.
+    #[test]
+    fn a_listing_names_the_keys_it_carries() {
+        assert_eq!(keys_of("").len(), 0);
+        assert_eq!(keys_of("\n\n").len(), 0);
+        assert_eq!(keys_of("not a key").len(), 0);
+
+        let one = key(7).to_string();
+        let listing = format!("{one}\n\nbad\n{one}");
+        assert_eq!(keys_of(&listing).len(), 2);
+    }
+
+    /// A candidate that was never asked covers nothing, and asking and carrying mark it.
+    #[test]
+    fn a_candidate_that_is_asked_covers_what_it_answered() {
+        let dir = std::env::temp_dir().join(format!("rola-cov-fetch-asked-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        Workspace::create(&dir).unwrap();
+        let workspace = Workspace::locate(&dir).unwrap();
+        let account = Account::default();
+        let address: VaultAddress = "127.0.0.1:1".parse().unwrap();
+
+        let sources = Sources::new(
+            &workspace,
+            &account,
+            vec![("alpha".to_owned(), address)],
+            false,
+        )
+        .unwrap();
+
+        assert!(!sources.covered(&[key(1)]));
+        assert_eq!(
+            sources
+                .bring(
+                    &StorageSet::sole(workspace.get_current_rola_storage().unwrap()),
+                    &[]
+                )
+                .len(),
+            0
+        );
+
+        sources.ask(0);
+        assert!(sources.asked.borrow()[0].held.is_some());
+        sources.ask(0);
+
+        sources.carry(0, &[key(1)]);
+        assert!(sources.asked.borrow()[0].used);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

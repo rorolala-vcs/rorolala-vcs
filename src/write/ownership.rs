@@ -1250,13 +1250,20 @@ mod tests {
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
-    use rorolala_layout::LayoutPath;
+    use rorolala_layout::{EntryKind, Layout, LayoutPath, MutableData};
     use rorolala_tree::Staging;
     use rorolala_utils_location::Locate as _;
+    use rorolala_utils_progress::Progress;
     use rorolala_workspace::Workspace;
+    use rorolala_workspace_analyze::TreeDiff;
     use uuid::Uuid;
 
-    use super::{Wanted, WantedView, expand, same_entries};
+    use super::{
+        Kind, Named, Options, OwnershipKind, OwnershipRequest, Refusal, Wanted, WantedView, apply,
+        expand, plan, resolve, same_entries, under,
+    };
+    use crate::write::request::Common;
+    use crate::write::{Cancellation, WriteError};
 
     static NEXT: AtomicUsize = AtomicUsize::new(0);
 
@@ -1270,6 +1277,446 @@ mod tests {
         fs::create_dir_all(&dir).expect("a scratch directory");
 
         dir
+    }
+
+    /// A Layout holding one entry at `path`, held by `owner` when one is named.
+    fn lay(
+        layout: &Layout,
+        id: Uuid,
+        path: &str,
+        version: [u8; 32],
+        owner: Option<&str>,
+        kind: EntryKind,
+    ) {
+        layout
+            .create_entry(
+                id,
+                MutableData::new(owner.map(str::to_owned), version, String::new()).with_kind(kind),
+            )
+            .unwrap();
+        layout
+            .create_path(&LayoutPath::new(path).unwrap(), id)
+            .unwrap();
+    }
+
+    /// The path `text` names.
+    fn at(text: &str) -> LayoutPath {
+        LayoutPath::new(text).unwrap()
+    }
+
+    /// The names a run is given, each with whether it named the path outright.
+    fn naming(words: &[(&str, bool)]) -> Vec<Named> {
+        words
+            .iter()
+            .map(|(word, direct)| Named {
+                path: at(word),
+                direct: *direct,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_hold_reads_every_gate_before_it_moves_anything() {
+        let root = scratch("hold");
+        Workspace::create(&root).unwrap();
+        let workspace = Workspace::locate(&root).unwrap();
+        let layout = Layout::open(root.join("layout")).unwrap();
+        let copy = Layout::open(root.join("copy")).unwrap();
+        lay(
+            &layout,
+            Uuid::from_u128(101),
+            "a.psd",
+            [1; 32],
+            None,
+            EntryKind::File,
+        );
+        lay(
+            &layout,
+            Uuid::from_u128(102),
+            "b.psd",
+            [2; 32],
+            None,
+            EntryKind::File,
+        );
+        lay(
+            &layout,
+            Uuid::from_u128(104),
+            "d.psd",
+            [4; 32],
+            None,
+            EntryKind::File,
+        );
+        lay(
+            &layout,
+            Uuid::from_u128(105),
+            "e.psd",
+            [5; 32],
+            None,
+            EntryKind::File,
+        );
+        lay(
+            &copy,
+            Uuid::from_u128(101),
+            "a.psd",
+            [1; 32],
+            None,
+            EntryKind::File,
+        );
+        // The copy names another version than the one that is here.
+        lay(
+            &copy,
+            Uuid::from_u128(102),
+            "b.psd",
+            [20; 32],
+            None,
+            EntryKind::File,
+        );
+        lay(
+            &copy,
+            Uuid::from_u128(105),
+            "e.psd",
+            [5; 32],
+            Some("bob"),
+            EntryKind::File,
+        );
+        let named = naming(&[
+            ("a.psd", true),
+            ("b.psd", true),
+            ("missing.psd", true),
+            ("plain", false),
+            ("d.psd", true),
+            ("e.psd", true),
+        ]);
+
+        let (wanted, refused, skipped) = plan(
+            Kind::Hold,
+            Options::default(),
+            &workspace,
+            &layout,
+            &copy,
+            "me",
+            &named,
+            Some(&TreeDiff::default()),
+            &rorolala_ignore::IgnoreRuleSet::empty(),
+            &Cancellation::new(),
+        )
+        .unwrap();
+
+        assert_eq!(wanted.len(), 1);
+        assert_eq!(wanted[0].path.as_str(), "a.psd");
+        assert_eq!(skipped, 1);
+        assert!(refused.iter().any(|r| matches!(r, Refusal::Version(_))));
+        assert!(refused.iter().any(|r| matches!(r, Refusal::Path(_))));
+        assert!(refused.iter().any(|r| matches!(r, Refusal::Upstream(_))));
+        assert!(refused.iter().any(|r| matches!(r, Refusal::Taken { .. })));
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_giveup_reads_the_tree_and_who_holds_it() {
+        let root = scratch("giveup");
+        Workspace::create(&root).unwrap();
+        let workspace = Workspace::locate(&root).unwrap();
+        let layout = Layout::open(root.join("layout")).unwrap();
+        let copy = Layout::open(root.join("copy")).unwrap();
+        lay(
+            &layout,
+            Uuid::from_u128(201),
+            "f.psd",
+            [6; 32],
+            Some("me"),
+            EntryKind::File,
+        );
+        lay(
+            &layout,
+            Uuid::from_u128(202),
+            "g.psd",
+            [7; 32],
+            Some("bob"),
+            EntryKind::File,
+        );
+        lay(
+            &layout,
+            Uuid::from_u128(203),
+            "h.psd",
+            [8; 32],
+            Some("me"),
+            EntryKind::File,
+        );
+        lay(
+            &copy,
+            Uuid::from_u128(201),
+            "f.psd",
+            [6; 32],
+            Some("me"),
+            EntryKind::File,
+        );
+        lay(
+            &copy,
+            Uuid::from_u128(202),
+            "g.psd",
+            [7; 32],
+            Some("bob"),
+            EntryKind::File,
+        );
+        lay(
+            &copy,
+            Uuid::from_u128(203),
+            "h.psd",
+            [8; 32],
+            Some("me"),
+            EntryKind::File,
+        );
+        // A tree on disk with no baseline: the tree reading cannot say it is unchanged.
+        lay(
+            &layout,
+            Uuid::from_u128(204),
+            "grove",
+            [9; 32],
+            Some("me"),
+            EntryKind::Tree,
+        );
+        lay(
+            &copy,
+            Uuid::from_u128(204),
+            "grove",
+            [9; 32],
+            Some("me"),
+            EntryKind::Tree,
+        );
+        fs::create_dir_all(root.join("grove")).unwrap();
+        Staging::new(&root.join("grove")).ensure_store().unwrap();
+        let mut diff = TreeDiff::default();
+        diff.modified.push(at("h.psd"));
+        let named = naming(&[
+            ("f.psd", true),
+            ("g.psd", true),
+            ("h.psd", true),
+            ("grove", true),
+        ]);
+
+        let (wanted, refused, _) = plan(
+            Kind::Giveup,
+            Options::default(),
+            &workspace,
+            &layout,
+            &copy,
+            "me",
+            &named,
+            Some(&diff),
+            &rorolala_ignore::IgnoreRuleSet::empty(),
+            &Cancellation::new(),
+        )
+        .unwrap();
+
+        assert!(wanted.iter().any(|item| item.path.as_str() == "f.psd"));
+        assert!(refused.iter().any(|r| matches!(r, Refusal::Changed(_))));
+        assert!(refused.iter().any(|r| matches!(r, Refusal::NotHeld { .. })));
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_forced_run_past_a_missing_version_still_reads_the_holder() {
+        let root = scratch("force");
+        Workspace::create(&root).unwrap();
+        let workspace = Workspace::locate(&root).unwrap();
+        let layout = Layout::open(root.join("layout")).unwrap();
+        let copy = Layout::open(root.join("copy")).unwrap();
+        lay(
+            &layout,
+            Uuid::from_u128(301),
+            "a.psd",
+            [1; 32],
+            None,
+            EntryKind::File,
+        );
+        lay(
+            &copy,
+            Uuid::from_u128(301),
+            "a.psd",
+            [2; 32],
+            None,
+            EntryKind::File,
+        );
+        let named = vec![Named {
+            path: at("a.psd"),
+            direct: true,
+        }];
+
+        let (wanted, refused, _) = plan(
+            Kind::Hold,
+            Options { force: true },
+            &workspace,
+            &layout,
+            &copy,
+            "me",
+            &named,
+            None,
+            &rorolala_ignore::IgnoreRuleSet::empty(),
+            &Cancellation::new(),
+        )
+        .unwrap();
+
+        assert_eq!(wanted.len(), 1);
+        assert_eq!(refused.len(), 0);
+
+        let cancellation = Cancellation::new();
+        cancellation.cancel();
+        assert!(matches!(
+            plan(
+                Kind::Hold,
+                Options::default(),
+                &workspace,
+                &layout,
+                &copy,
+                "me",
+                &named,
+                None,
+                &rorolala_ignore::IgnoreRuleSet::empty(),
+                &cancellation,
+            ),
+            Err(crate::write::WriteError::Cancelled)
+        ));
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_directory_name_brings_in_every_file_under_it() {
+        let root = scratch("dir");
+        Workspace::create(&root).unwrap();
+        let workspace = Workspace::locate(&root).unwrap();
+        fs::create_dir_all(root.join("plain/sub")).unwrap();
+        fs::write(root.join("plain/sub/one.psd"), b"x").unwrap();
+
+        let named = expand(&workspace, &root, &["plain".to_owned()]).unwrap();
+        let found = named
+            .iter()
+            .find(|named| named.path.as_str() == "plain/sub/one.psd")
+            .expect("the file under the directory");
+
+        assert!(!found.direct);
+
+        // The root itself is every file under the Workspace.
+        let all = expand(&workspace, &root, &[String::new()]).unwrap();
+        assert_ne!(all.len(), 0);
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_name_reads_against_the_run_and_only_under_its_prefix() {
+        let cwd = std::path::Path::new("base");
+        let absolute = std::env::temp_dir();
+
+        assert_eq!(resolve(cwd, "a"), cwd.join("a"));
+        assert_eq!(resolve(cwd, absolute.to_str().unwrap()), absolute);
+        assert!(under("", &at("any/where")));
+        assert!(under("a", &at("a/b")));
+        assert!(!under("a", &at("a")));
+        assert!(!under("a", &at("ab")));
+        assert!(!under("a/b", &at("a")));
+    }
+
+    #[test]
+    fn a_request_that_may_not_reach_a_vault_plans_nothing() {
+        let offline = OwnershipRequest {
+            common: Common {
+                offline: true,
+                ..Default::default()
+            },
+            kind: OwnershipKind::Hold,
+            paths: Vec::new(),
+            allow_partial: false,
+        };
+
+        assert!(matches!(
+            offline.request_plan(&Progress::silent(), &Cancellation::new()),
+            Err(WriteError::Offline)
+        ));
+        assert!(matches!(
+            offline.request_apply(None, &Progress::silent(), &Cancellation::new()),
+            Err(WriteError::Offline)
+        ));
+
+        let cancellation = Cancellation::new();
+        cancellation.cancel();
+        let stopped = OwnershipRequest {
+            common: Common::default(),
+            kind: OwnershipKind::Giveup,
+            paths: Vec::new(),
+            allow_partial: false,
+        };
+        assert!(matches!(
+            stopped.request_plan(&Progress::silent(), &cancellation),
+            Err(WriteError::Cancelled)
+        ));
+    }
+
+    #[test]
+    fn a_name_outside_or_missing_is_refused() {
+        let root = scratch("outside");
+        Workspace::create(&root).unwrap();
+        let workspace = Workspace::locate(&root).unwrap();
+        let outside = std::env::temp_dir().join(format!("rola-cov-outside-{}.psd", Uuid::new_v4()));
+        fs::write(&outside, b"x").unwrap();
+
+        assert!(expand(&workspace, &root, &[outside.to_str().unwrap().to_owned()]).is_err());
+        let missing = root.join("missing.psd");
+        assert!(expand(&workspace, &root, &[missing.to_str().unwrap().to_owned()]).is_err());
+
+        let _ = fs::remove_file(&outside);
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn an_apply_with_nothing_to_move_or_one_that_stopped_moves_nothing() {
+        let root = scratch("apply");
+        Workspace::create(&root).unwrap();
+        let workspace = Workspace::locate(&root).unwrap();
+        let copy = Layout::open(root.join("copy")).unwrap();
+        let account = rorolala_auth::Account::from_key_path("me", root.join("key.pem"));
+        let target =
+            rorolala_protocol::VaultAddress::from(std::net::SocketAddr::from(([127, 0, 0, 1], 1)));
+        let progress = Progress::silent();
+
+        let none = apply(
+            Kind::Hold,
+            Vec::new(),
+            &workspace,
+            &copy,
+            &account,
+            &target,
+            "an apply",
+            &progress,
+            &Cancellation::new(),
+        )
+        .unwrap();
+        assert_eq!(none.entries.len(), 0);
+
+        let cancellation = Cancellation::new();
+        cancellation.cancel();
+        assert!(matches!(
+            apply(
+                Kind::Giveup,
+                vec![Wanted {
+                    path: at("a.psd"),
+                    id: Uuid::from_u128(1),
+                }],
+                &workspace,
+                &copy,
+                &account,
+                &target,
+                "an apply",
+                &progress,
+                &cancellation,
+            ),
+            Err(WriteError::Cancelled)
+        ));
+
+        let _ = fs::remove_dir_all(&root);
     }
 
     /// Naming a tree or anything under it names the tree's one Layout entry.

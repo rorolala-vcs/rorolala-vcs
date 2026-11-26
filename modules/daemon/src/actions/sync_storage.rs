@@ -1948,3 +1948,257 @@ mod frame_tests {
         assert!(split_u32(&[0, 0, 0]).is_none());
     }
 }
+
+#[cfg(test)]
+mod exchange_tests {
+    use std::fs;
+
+    use rorolala_auth::{Account, Member};
+    use rorolala_protocol::{ActionContext, ActionError, Both, OnlyVault, OnlyWorkspace};
+    use rorolala_storage::{
+        Chunking, Codec, Error as StoreError, Key, RorolalaStorage, StorageSet, store_file,
+    };
+    use rorolala_utils_location::Locate as _;
+    use rorolala_vault::Vault;
+    use rorolala_workspace::Workspace;
+
+    use crate::test_support::{run, scratch, session};
+
+    use super::{
+        Side, Unit, UnitKind, carry_frame, carry_frame_into, store_failed, sync_storage, sync_units,
+    };
+
+    /// The two stores a sync runs between, with a Workspace and a Vault beside them.
+    fn pair(label: &str) -> (std::path::PathBuf, Workspace, Vault, StorageSet, StorageSet) {
+        let dir = scratch(label);
+        let workspace_root = dir.join("workspace");
+        Workspace::create(&workspace_root).unwrap();
+        let workspace = Workspace::locate(&workspace_root).unwrap();
+        let vault_root = dir.join("vault");
+        Vault::create(&vault_root).unwrap();
+        let vault = Vault::locate(&vault_root).unwrap();
+
+        let workspace_set = StorageSet::sole(RorolalaStorage::create(dir.join("workspace-store")));
+        let vault_set = StorageSet::sole(RorolalaStorage::create(dir.join("vault-store")));
+
+        (dir, workspace, vault, workspace_set, vault_set)
+    }
+
+    /// What one side hands in: its own store, and the other side's empty wrapper.
+    struct Sides {
+        /// The Workspace's store, empty on the Vault.
+        here: OnlyWorkspace<StorageSet>,
+        /// The Vault's store, empty on the Workspace.
+        there: OnlyVault<StorageSet>,
+    }
+
+    /// The two stores a side hands in: its own, and the other side's empty wrapper.
+    fn sides(ctx: &ActionContext<'_>, workspace_set: &StorageSet, vault_set: &StorageSet) -> Sides {
+        Sides {
+            here: OnlyWorkspace::new(ctx, || workspace_set.clone()),
+            there: OnlyVault::new(ctx, || vault_set.clone()),
+        }
+    }
+
+    /// What only one side holds is on both by the time the two return, whichever way it went.
+    #[test]
+    fn a_sync_carries_each_direction() {
+        let (dir, workspace, vault, workspace_set, vault_set) = pair("sync-both");
+
+        let from_workspace =
+            run(workspace_set.write_object(b"from the workspace", Codec::Raw)).unwrap();
+        let from_vault = run(vault_set.write_object(b"from the vault", Codec::Raw)).unwrap();
+
+        let (client, server) = session();
+        let mut workspace_ctx = ActionContext::new_workspace_ctx(Account::default())
+            .with_current_workspace(&workspace)
+            .with_channel(client);
+        let mut vault_ctx = ActionContext::new_vault_ctx(Member::default())
+            .with_current_vault(&vault)
+            .with_channel(server);
+
+        let up = Both::new(vec![from_workspace, from_vault]);
+        let down = Both::new(vec![from_workspace, from_vault]);
+        let workspace_side = sides(&workspace_ctx, &workspace_set, &vault_set);
+        let vault_side = sides(&vault_ctx, &workspace_set, &vault_set);
+        let (here, there) = run(async {
+            tokio::join!(
+                sync_storage(
+                    &mut workspace_ctx,
+                    workspace_side.here,
+                    workspace_side.there,
+                    up,
+                    2,
+                ),
+                sync_storage(&mut vault_ctx, vault_side.here, vault_side.there, down, 2),
+            )
+        });
+
+        here.unwrap();
+        there.unwrap();
+
+        for set in [&workspace_set, &vault_set] {
+            let held = run(set.contains_keys(&[from_workspace, from_vault])).unwrap();
+            assert!(held.held(0) && held.held(1), "both stores hold both keys");
+        }
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// Every way a unit can be carried is one more shape of the same direction.
+    #[test]
+    fn a_unit_of_each_kind_is_carried_the_way_it_is_named() {
+        let (dir, workspace, vault, workspace_set, vault_set) = pair("sync-kinds");
+
+        // A cut content: the manifest and the chunks it names are units of their own.
+        let cut = workspace_set
+            .write_target()
+            .clone()
+            .with_forced_cut(Chunking::Fixed { size: 64 });
+        let content: Vec<u8> = (0..200_u32).map(|value| (value % 251) as u8).collect();
+        let file = dir.join("content.bin");
+        fs::write(&file, &content).unwrap();
+        let manifest_key = run(store_file(&cut, &file)).unwrap();
+        let manifest = run(workspace_set.manifest_of(&manifest_key))
+            .unwrap()
+            .expect("a cut content has a manifest");
+        let chunk = manifest.chunks()[0].key();
+
+        // And one content kept whole, which a caller may ask about without knowing which it is.
+        let whole = run(workspace_set.write_object(b"a whole object", Codec::Raw)).unwrap();
+
+        let units = vec![
+            Unit {
+                key: manifest_key,
+                kind: UnitKind::Manifest,
+            },
+            Unit {
+                key: chunk,
+                kind: UnitKind::Object,
+            },
+            Unit {
+                key: whole,
+                kind: UnitKind::Discover,
+            },
+            Unit::whole(manifest_key),
+        ];
+
+        let (client, server) = session();
+        let mut workspace_ctx = ActionContext::new_workspace_ctx(Account::default())
+            .with_current_workspace(&workspace)
+            .with_channel(client);
+        let mut vault_ctx = ActionContext::new_vault_ctx(Member::default())
+            .with_current_vault(&vault)
+            .with_channel(server);
+
+        let workspace_side = sides(&workspace_ctx, &workspace_set, &vault_set);
+        let vault_side = sides(&vault_ctx, &workspace_set, &vault_set);
+        let (here, there) = run(async {
+            tokio::join!(
+                sync_units(
+                    &mut workspace_ctx,
+                    workspace_side.here,
+                    workspace_side.there,
+                    Both::new(units.clone()),
+                    2,
+                ),
+                sync_units(
+                    &mut vault_ctx,
+                    vault_side.here,
+                    vault_side.there,
+                    Both::new(units),
+                    2
+                ),
+            )
+        });
+
+        here.unwrap();
+        there.unwrap();
+
+        assert!(run(vault_set.holds_manifest(&manifest_key)).unwrap());
+        let held = run(vault_set.contains_keys(&[chunk, whole])).unwrap();
+        assert!(held.held(0) && held.held(1));
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// A key neither side holds has nowhere to come from, and both ends are told so.
+    #[test]
+    fn a_key_neither_side_holds_is_refused() {
+        let (dir, workspace, vault, workspace_set, vault_set) = pair("sync-missing");
+        let absent = Key::new([7; 32]);
+
+        let (client, server) = session();
+        let mut workspace_ctx = ActionContext::new_workspace_ctx(Account::default())
+            .with_current_workspace(&workspace)
+            .with_channel(client);
+        let mut vault_ctx = ActionContext::new_vault_ctx(Member::default())
+            .with_current_vault(&vault)
+            .with_channel(server);
+
+        let workspace_side = sides(&workspace_ctx, &workspace_set, &vault_set);
+        let vault_side = sides(&vault_ctx, &workspace_set, &vault_set);
+        let (here, there) = run(async {
+            tokio::join!(
+                sync_storage(
+                    &mut workspace_ctx,
+                    workspace_side.here,
+                    workspace_side.there,
+                    Both::new(vec![absent]),
+                    1,
+                ),
+                sync_storage(
+                    &mut vault_ctx,
+                    vault_side.here,
+                    vault_side.there,
+                    Both::new(vec![absent]),
+                    1,
+                ),
+            )
+        });
+
+        assert!(matches!(here, Err(ActionError::MissingObject)));
+        assert!(matches!(there, Err(ActionError::MissingObject)));
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// A run of bytes handed in the direction it is not sent to is a mistake in this side.
+    #[test]
+    fn a_frame_that_contradicts_its_direction_is_refused() {
+        let mut ctx = ActionContext::new_workspace_ctx(Account::default());
+
+        assert!(matches!(
+            run(carry_frame(&mut ctx, Side::Workspace, Some(b"x"))),
+            Err(ActionError::MissingValue)
+        ));
+
+        let mut into = Vec::new();
+        assert!(matches!(
+            run(carry_frame_into(
+                &mut ctx,
+                Side::Workspace,
+                Some(b"x"),
+                &mut into
+            )),
+            Err(ActionError::MissingValue)
+        ));
+    }
+
+    /// What a store failure becomes is the failure a caller acts on.
+    #[test]
+    fn a_store_failure_is_reported_as_the_kind_it_is() {
+        assert!(matches!(
+            store_failed(StoreError::NotFound(Key::new([1; 32]))),
+            ActionError::MissingObject
+        ));
+        assert!(matches!(
+            store_failed(StoreError::Malformed),
+            ActionError::Store(_)
+        ));
+        assert!(matches!(
+            store_failed(StoreError::Io(std::io::Error::other("gone"))),
+            ActionError::LocalFile(_)
+        ));
+    }
+}

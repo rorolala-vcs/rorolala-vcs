@@ -405,7 +405,8 @@ mod tests {
     use rorolala_utils_location::Locate as _;
     use rorolala_workspace::Workspace;
 
-    use super::{Common, Target};
+    use super::{Common, Target, WriteLabels, WriteTarget};
+    use crate::write::{Labels, WriteError};
 
     /// A Workspace that bound no Vault and tracks none has nothing to reach for.
     #[test]
@@ -423,6 +424,102 @@ mod tests {
         };
 
         assert!(common.vault(&workspace).is_err());
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_write_target_becomes_the_request_target() {
+        assert_eq!(Target::from(WriteTarget::Tracked), Target::Tracked);
+        assert_eq!(
+            Target::from(WriteTarget::Named {
+                name: "studio".to_owned()
+            }),
+            Target::Named {
+                name: "studio".to_owned()
+            }
+        );
+        assert_eq!(
+            Target::from(WriteTarget::Address {
+                address: "127.0.0.1:1".to_owned()
+            }),
+            Target::Address {
+                address: "127.0.0.1:1".to_owned()
+            }
+        );
+    }
+
+    #[test]
+    fn labels_left_empty_keep_the_native_words() {
+        let labels: Labels = WriteLabels {
+            reading: "Reading the tree".to_owned(),
+            ..WriteLabels::default()
+        }
+        .into();
+        let default = Labels::default();
+
+        assert_eq!(labels.reading, "Reading the tree");
+        assert_eq!(labels.writing, default.writing);
+        assert_eq!(labels.applying, default.applying);
+    }
+
+    #[test]
+    fn an_address_target_is_parsed_or_refused() {
+        let dir = std::env::temp_dir().join(format!("rola-cov-request-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).expect("a scratch directory");
+        Workspace::create(&dir).expect("a Workspace");
+        let workspace = Workspace::locate(&dir).expect("the Workspace is there");
+
+        let bad = Common {
+            workspace: dir.clone(),
+            target: Target::Address {
+                address: "not an address".to_owned(),
+            },
+            ..Common::default()
+        };
+        assert!(matches!(
+            bad.vault(&workspace),
+            Err(WriteError::Precondition { .. })
+        ));
+        assert!(bad.layout(&workspace).is_ok());
+
+        let good = Common {
+            workspace: dir.clone(),
+            target: Target::Address {
+                address: "127.0.0.1:1".to_owned(),
+            },
+            ..Common::default()
+        };
+        let reached = good.vault(&workspace).expect("an address answers");
+        assert_eq!(reached.name, "");
+        assert_ne!(reached.address.to_string(), "");
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_configuration_that_does_not_read_is_refused() {
+        let dir =
+            std::env::temp_dir().join(format!("rola-cov-request-config-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).expect("a scratch directory");
+        Workspace::create(&dir).expect("a Workspace");
+        let workspace = Workspace::locate(&dir).expect("the Workspace is there");
+        fs::write(workspace.config_path(), "not toml").expect("a broken configuration");
+
+        let common = Common {
+            workspace: dir.clone(),
+            target: Target::Named {
+                name: "studio".to_owned(),
+            },
+            ..Common::default()
+        };
+        assert!(matches!(
+            common.vault(&workspace),
+            Err(WriteError::Precondition { .. })
+        ));
+        assert!(common.candidates(&workspace).is_err());
 
         let _ = fs::remove_dir_all(&dir);
     }

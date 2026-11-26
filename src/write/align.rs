@@ -2655,11 +2655,15 @@ mod tests {
 
     use super::{
         AlignMode, AlignRequest, Carry, Did, Item, Messages, Mode, MoveKind, Options, Outcome,
-        Refusal, Settled, WriteAlign, align_entry, align_vault_entry, settle,
+        Refusal, Settled, WriteAlign, align_entry, align_entry_at, align_vault_at,
+        align_vault_entry, settle,
     };
-    use crate::write::Cancellation;
     use crate::write::request::Common;
-    use crate::write::track::{TrackOptions, track_file, track_vault_file};
+    use crate::write::track::batch::{TrackAgreed, TrackInput, TrackMessage};
+    use crate::write::track::{
+        TrackOptions, track_apply_at, track_file, track_plan_at, track_vault_file,
+    };
+    use crate::write::{Cancellation, WriteError, WriteProgress};
 
     #[test]
     fn a_path_is_aligned_to_a_version_and_a_description() {
@@ -3018,6 +3022,552 @@ mod tests {
         let refusal = answer.refusal().expect("the refusal is there");
         assert_eq!(refusal.kind(), "move");
         assert_eq!(refusal.move_kind(), "tracked");
+    }
+
+    /// A Workspace holding one tree at `tree`, with `one` in `a.txt`, and a key file that lets a
+    /// recording act as `alice` without signing anything.
+    fn tree_workspace(tag: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!("rola-cov-align-{tag}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(dir.join("tree/.rola-tree")).unwrap();
+        fs::write(dir.join("tree/a.txt"), b"one").unwrap();
+        Workspace::create(&dir).unwrap();
+        fs::create_dir_all(dir.join(".rola/auth")).unwrap();
+        fs::write(
+            dir.join(".rola/auth/alice.pem"),
+            b"a key this test never signs with",
+        )
+        .unwrap();
+
+        dir
+    }
+
+    /// Records the tree `name` as its work stands.
+    fn record_tree(dir: &std::path::Path, name: &str) {
+        let workspace = Workspace::locate(dir).expect("the Workspace is there");
+        crate::write::tree::stage_paths(
+            &workspace,
+            &dir.join(name),
+            "",
+            &["a.txt".to_owned()],
+            false,
+        )
+        .expect("the work stages");
+
+        let request = TrackInput {
+            common: crate::write::request::WriteCommon {
+                workspace: dir.display().to_string(),
+                account: "alice".to_owned(),
+                ..Default::default()
+            },
+            files: vec![name.to_owned()].into(),
+            replace: false,
+            policy: String::new(),
+            include_ignored: false,
+        };
+        let progress = WriteProgress::new();
+        let cancellation = Cancellation::new();
+        let planned = track_plan_at(&request, &progress, &cancellation).expect("the tree plans");
+        let subject = planned.subject_at(0).expect("the tree is a subject");
+        let agreed = vec![TrackAgreed {
+            path: subject.path(),
+            digest: subject.digest(),
+        }];
+        let messages = vec![TrackMessage {
+            path: subject.path(),
+            text: "recorded".to_owned(),
+        }];
+        track_apply_at(&request, &agreed, &messages, &progress, &cancellation)
+            .expect("the tree records");
+    }
+
+    /// A changed file is put back to the version the Layout names, whichever way the run asked for
+    /// it, and the path is written down as agreeing again.
+    #[test]
+    fn a_changed_file_is_put_back_to_its_version() {
+        let dir =
+            std::env::temp_dir().join(format!("rola-cov-align-modified-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        Workspace::create(&dir).unwrap();
+        let workspace = Workspace::locate(&dir).unwrap();
+        fs::write(dir.join("a.txt"), b"one").unwrap();
+        track_file(
+            &workspace,
+            &dir,
+            "a.txt",
+            "alice",
+            "first",
+            TrackOptions::default(),
+        )
+        .unwrap();
+        fs::write(dir.join("a.txt"), b"two").unwrap();
+        track_file(
+            &workspace,
+            &dir,
+            "a.txt",
+            "alice",
+            "second",
+            TrackOptions::default(),
+        )
+        .unwrap();
+        fs::write(dir.join("a.txt"), b"three").unwrap();
+
+        match settled(&dir, "a.txt", &Mode::Restore, Options::default())
+            .outcome
+            .expect("the run settles")
+        {
+            Outcome::Paths(items) => assert_eq!(items[0].did, Did::RestoredModify),
+            other => panic!("{other:?}"),
+        }
+        assert_eq!(fs::read(dir.join("a.txt")).unwrap(), b"two");
+
+        fs::write(dir.join("a.txt"), b"four").unwrap();
+        match settled(&dir, "a.txt", &Mode::RestoreModify, Options::default())
+            .outcome
+            .expect("the run settles")
+        {
+            Outcome::Paths(items) => assert_eq!(items[0].what, "a.txt"),
+            other => panic!("{other:?}"),
+        }
+        assert_eq!(fs::read(dir.join("a.txt")).unwrap(), b"two");
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// A file that did not change is not a change to put back, and a path outside the Workspace is
+    /// not one a run may act on at all.
+    #[test]
+    fn a_path_with_nothing_to_put_back_is_refused() {
+        let dir =
+            std::env::temp_dir().join(format!("rola-cov-align-refused-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        Workspace::create(&dir).unwrap();
+        let workspace = Workspace::locate(&dir).unwrap();
+        fs::write(dir.join("a.txt"), b"one").unwrap();
+        track_file(
+            &workspace,
+            &dir,
+            "a.txt",
+            "alice",
+            "first",
+            TrackOptions::default(),
+        )
+        .unwrap();
+
+        assert!(matches!(
+            settled(&dir, "a.txt", &Mode::RestoreModify, Options::default()).outcome,
+            Ok(Outcome::Refused(Refusal::NotModified { .. }))
+        ));
+        assert!(matches!(
+            settled(&dir, "../outside.txt", &Mode::Restore, Options::default()).outcome,
+            Ok(Outcome::Refused(Refusal::Argument))
+        ));
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// A deleted file is put back out of the store, and one that is there again is something to be
+    /// told about rather than written over.
+    #[test]
+    fn a_deleted_file_is_not_written_over() {
+        let dir =
+            std::env::temp_dir().join(format!("rola-cov-align-deleted-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        Workspace::create(&dir).unwrap();
+        let workspace = Workspace::locate(&dir).unwrap();
+        fs::write(dir.join("a.txt"), b"one").unwrap();
+        track_file(
+            &workspace,
+            &dir,
+            "a.txt",
+            "alice",
+            "first",
+            TrackOptions::default(),
+        )
+        .unwrap();
+        fs::remove_file(dir.join("a.txt")).unwrap();
+
+        assert!(matches!(
+            settled(&dir, "a.txt", &Mode::RestoreDelete, Options::default()).outcome,
+            Ok(Outcome::Paths(_))
+        ));
+        assert_eq!(fs::read(dir.join("a.txt")).unwrap(), b"one");
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// A run the caller stopped before it began settles nothing at all.
+    #[test]
+    fn a_cancelled_run_settles_nothing() {
+        let dir =
+            std::env::temp_dir().join(format!("rola-cov-align-cancelled-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        Workspace::create(&dir).unwrap();
+        let workspace = Workspace::locate(&dir).unwrap();
+        let layout = workspace.layout().unwrap();
+        let rules = IgnoreRuleSet::empty();
+        let messages = Messages::default();
+        let progress = Progress::silent();
+        let index = VCSIndex::locate(&dir);
+        let storage = workspace.storage_set().ok();
+        let carry = Carry {
+            workspace: &workspace,
+            layout: &layout,
+            cwd: &dir,
+            rules: &rules,
+            storage: storage.as_ref(),
+            index: index.as_ref(),
+            account: None,
+            candidates: &[],
+            offline: true,
+            concurrency: 1,
+            progress: &progress,
+            messages: &messages,
+        };
+        let cancellation = Cancellation::new();
+        cancellation.cancel();
+
+        let settled = settle(
+            &carry,
+            "a.txt",
+            &Mode::Restore,
+            Options::default(),
+            &cancellation,
+        );
+        assert!(matches!(settled.outcome, Err(WriteError::Cancelled)));
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// A move the reading found is confirmed by writing the Layout's path, and taken back only when
+    /// the likeness is a guess rather than the two files holding the same bytes.
+    #[test]
+    fn a_move_is_confirmed_or_taken_back() {
+        let dir =
+            std::env::temp_dir().join(format!("rola-cov-align-rename-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        Workspace::create(&dir).unwrap();
+        let workspace = Workspace::locate(&dir).unwrap();
+        fs::write(dir.join("a.txt"), b"one").unwrap();
+        track_file(
+            &workspace,
+            &dir,
+            "a.txt",
+            "alice",
+            "first",
+            TrackOptions::default(),
+        )
+        .unwrap();
+        fs::rename(dir.join("a.txt"), dir.join("b.txt")).unwrap();
+
+        match settled(&dir, "a.txt", &Mode::Rename, Options::default())
+            .outcome
+            .expect("the move is confirmed")
+        {
+            Outcome::Paths(items) => {
+                assert_eq!(items[0].did, Did::Moved);
+                assert_eq!(items[0].what, "a.txt -> b.txt");
+            }
+            other => panic!("{other:?}"),
+        }
+        assert!(
+            workspace
+                .layout()
+                .unwrap()
+                .id_of(&LayoutPath::new("b.txt").unwrap())
+                .is_some()
+        );
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// A move of two files that hold the same bytes is a fact, and a run that guessed at one is
+    /// taken back leaving a loss and a gain.
+    #[test]
+    fn a_guessed_move_is_the_one_that_is_taken_back() {
+        let dir = std::env::temp_dir().join(format!("rola-cov-align-break-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        Workspace::create(&dir).unwrap();
+        let workspace = Workspace::locate(&dir).unwrap();
+        let prose = "one\ntwo\nthree\nfour\nfive\nsix\nseven\neight\n";
+        fs::write(dir.join("a.txt"), prose.as_bytes()).unwrap();
+        track_file(
+            &workspace,
+            &dir,
+            "a.txt",
+            "alice",
+            "first",
+            TrackOptions::default(),
+        )
+        .unwrap();
+        fs::rename(dir.join("a.txt"), dir.join("b.txt")).unwrap();
+        fs::write(dir.join("b.txt"), format!("{prose}nine\n").as_bytes()).unwrap();
+
+        match settled(&dir, "a.txt", &Mode::Break, Options::default())
+            .outcome
+            .expect("the guess is taken back")
+        {
+            Outcome::Paths(items) => {
+                assert_eq!(items[0].did, Did::Broke);
+                assert_eq!(items[0].what, "a.txt / b.txt");
+            }
+            other => panic!("{other:?}"),
+        }
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// A move the reading did not find is asserted for the next reading, which pairs the two paths
+    /// by what the lost path is written down as holding.
+    #[test]
+    fn a_move_the_reading_missed_is_asserted() {
+        let dir =
+            std::env::temp_dir().join(format!("rola-cov-align-assert-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        Workspace::create(&dir).unwrap();
+        let workspace = Workspace::locate(&dir).unwrap();
+        fs::write(dir.join("a.txt"), b"one").unwrap();
+        track_file(
+            &workspace,
+            &dir,
+            "a.txt",
+            "alice",
+            "first",
+            TrackOptions::default(),
+        )
+        .unwrap();
+        fs::rename(dir.join("a.txt"), dir.join("b.txt")).unwrap();
+        fs::write(
+            dir.join("b.txt"),
+            b"a wholly different sentence about nothing at all",
+        )
+        .unwrap();
+
+        match settled(
+            &dir,
+            "a.txt",
+            &Mode::Move("b.txt".to_owned()),
+            Options::default(),
+        )
+        .outcome
+        .expect("the move is asserted")
+        {
+            Outcome::Paths(items) => {
+                assert_eq!(items[0].did, Did::Asserted);
+                assert_eq!(items[0].what, "a.txt -> b.txt");
+            }
+            other => panic!("{other:?}"),
+        }
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// A directory named by a restore is every path under it, each put back by what it needs.
+    #[test]
+    fn a_directory_is_put_back_one_path_at_a_time() {
+        let dir =
+            std::env::temp_dir().join(format!("rola-cov-align-restore-all-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        Workspace::create(&dir).unwrap();
+        let workspace = Workspace::locate(&dir).unwrap();
+        for name in ["a.txt", "b.txt", "c.txt"] {
+            fs::write(dir.join(name), format!("{name} one")).unwrap();
+            track_file(
+                &workspace,
+                &dir,
+                name,
+                "alice",
+                "first",
+                TrackOptions::default(),
+            )
+            .unwrap();
+        }
+        // One changed, one gone, and one moved.
+        fs::write(dir.join("a.txt"), b"changed").unwrap();
+        fs::remove_file(dir.join("b.txt")).unwrap();
+        fs::rename(dir.join("c.txt"), dir.join("d.txt")).unwrap();
+
+        match settled(&dir, ".", &Mode::Restore, Options::default())
+            .outcome
+            .expect("the directory is put back")
+        {
+            Outcome::Paths(items) => assert_eq!(items.len(), 3),
+            other => panic!("{other:?}"),
+        }
+        assert_eq!(fs::read(dir.join("a.txt")).unwrap(), b"a.txt one");
+        assert_eq!(fs::read(dir.join("b.txt")).unwrap(), b"b.txt one");
+        assert_eq!(fs::read(dir.join("c.txt")).unwrap(), b"c.txt one");
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// The one-entry C call aligns a Workspace path and a Vault path to a version.
+    #[test]
+    fn a_one_entry_align_crosses_the_abi() {
+        let dir = std::env::temp_dir().join(format!("rola-cov-align-abi-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        Workspace::create(&dir).unwrap();
+        let workspace = Workspace::locate(&dir).unwrap();
+        fs::write(dir.join("a.txt"), b"one").unwrap();
+        let first = track_file(
+            &workspace,
+            &dir,
+            "a.txt",
+            "alice",
+            "first",
+            TrackOptions::default(),
+        )
+        .unwrap();
+        fs::write(dir.join("a.txt"), b"two").unwrap();
+        track_file(
+            &workspace,
+            &dir,
+            "a.txt",
+            "alice",
+            "second",
+            TrackOptions::default(),
+        )
+        .unwrap();
+
+        let aligned = align_entry_at(&dir, "a.txt", &first.version.hex(), "", "aligned", "")
+            .expect("the path is aligned");
+        assert_eq!(aligned.version(), first.version.to_string());
+        assert_eq!(fs::read(dir.join("a.txt")).unwrap(), b"one");
+
+        let vault_dir =
+            std::env::temp_dir().join(format!("rola-cov-align-abi-vault-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&vault_dir);
+        fs::create_dir_all(&vault_dir).unwrap();
+        Vault::create(&vault_dir).unwrap();
+        let vault = Vault::locate(&vault_dir).unwrap();
+        fs::write(vault_dir.join("a.txt"), b"one").unwrap();
+        let first = track_vault_file(
+            &vault,
+            &vault_dir,
+            "a.txt",
+            "alice",
+            "first",
+            TrackOptions::default(),
+        )
+        .unwrap();
+        fs::write(vault_dir.join("a.txt"), b"two").unwrap();
+        track_vault_file(
+            &vault,
+            &vault_dir,
+            "a.txt",
+            "alice",
+            "second",
+            TrackOptions::default(),
+        )
+        .unwrap();
+
+        let aligned = align_vault_at(&vault_dir, "a.txt", &first.version.hex(), "", "aligned", "")
+            .expect("the path is aligned");
+        assert_eq!(aligned.version(), first.version.to_string());
+
+        let _ = fs::remove_dir_all(&dir);
+        let _ = fs::remove_dir_all(&vault_dir);
+    }
+
+    /// A tree named by a restore is the whole of it: the version's structure over the work, and
+    /// what the tree never recorded taken out when the run was told to go completely.
+    #[test]
+    fn a_tree_is_put_back_whole() {
+        let dir = tree_workspace("tree-restore");
+        record_tree(&dir, "tree");
+        fs::write(dir.join("tree/a.txt"), b"two").unwrap();
+        fs::write(dir.join("tree/extra.txt"), b"extra").unwrap();
+
+        let settled = settled(
+            &dir,
+            "tree",
+            &Mode::Restore,
+            Options {
+                completely: true,
+                include_ignored: false,
+            },
+        );
+        assert!(matches!(
+            settled.outcome.expect("the tree is put back"),
+            Outcome::Tree { path } if path == "tree"
+        ));
+        assert_eq!(fs::read(dir.join("tree/a.txt")).unwrap(), b"one");
+        assert!(!dir.join("tree/extra.txt").exists());
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// A tree whose directory is gone is made again from the version the Layout records.
+    #[test]
+    fn a_deleted_tree_is_made_again() {
+        let dir = tree_workspace("tree-gone");
+        record_tree(&dir, "tree");
+        fs::remove_dir_all(dir.join("tree")).unwrap();
+
+        let settled = settled(&dir, "tree", &Mode::RestoreDelete, Options::default());
+        assert!(matches!(
+            settled.outcome.expect("the tree is made again"),
+            Outcome::Tree { .. }
+        ));
+        assert_eq!(fs::read(dir.join("tree/a.txt")).unwrap(), b"one");
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// A file inside a tree is put back from the version the tree records, and a tree with nothing
+    /// staged has nothing to put back from.
+    #[test]
+    fn a_file_inside_a_tree_is_put_back_from_its_record() {
+        let dir = tree_workspace("tree-file");
+        record_tree(&dir, "tree");
+        fs::write(dir.join("tree/a.txt"), b"two").unwrap();
+
+        let answer = settled(&dir, "tree/a.txt", &Mode::RestoreModify, Options::default());
+        assert!(matches!(
+            answer.outcome.expect("the file is put back"),
+            Outcome::TreeFile { staged: false, .. }
+        ));
+        assert_eq!(fs::read(dir.join("tree/a.txt")).unwrap(), b"one");
+
+        fs::write(dir.join("tree/a.txt"), b"three").unwrap();
+        assert!(matches!(
+            settled(&dir, "tree/a.txt", &Mode::RestoreStaged, Options::default()).outcome,
+            Ok(Outcome::Refused(Refusal::NotStaged { .. }))
+        ));
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// A lost tree under a directory a restore names is made again whole rather than written as a
+    /// structure object at its path.
+    #[test]
+    fn a_lost_tree_under_a_directory_is_made_again() {
+        let dir = tree_workspace("tree-all");
+        record_tree(&dir, "tree");
+        fs::remove_dir_all(dir.join("tree")).unwrap();
+
+        let settled = settled(&dir, ".", &Mode::Restore, Options::default());
+        match settled.outcome.expect("the directory is put back") {
+            Outcome::Paths(items) => {
+                assert_eq!(items.len(), 1);
+                assert_eq!(items[0].did, Did::RestoredDelete);
+                assert_eq!(items[0].what, "tree");
+            }
+            other => panic!("{other:?}"),
+        }
+        assert!(dir.join("tree").is_dir());
+        assert_eq!(fs::read(dir.join("tree/a.txt")).unwrap(), b"one");
+
+        let _ = fs::remove_dir_all(&dir);
     }
 }
 

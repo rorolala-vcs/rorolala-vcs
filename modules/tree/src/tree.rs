@@ -507,6 +507,11 @@ mod tests {
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
+    use rorolala_ignore::IgnoreRuleSet;
+    use rorolala_layout::MutableData;
+    use rorolala_storage::{Codec, RorolalaStorage};
+    use rorolala_vcs::{ComputeBlake3, Creator, Message, Version};
+
     use super::*;
 
     static NEXT: AtomicUsize = AtomicUsize::new(0);
@@ -608,5 +613,282 @@ mod tests {
         ));
 
         let _ = fs::remove_dir_all(&root);
+    }
+
+    /// A tree at the Workspace root and one below it each name the path the Layout records them at.
+    #[test]
+    fn a_tree_names_its_path_and_tells_control_files_from_work() {
+        let root = scratch("paths");
+        fs::create_dir_all(root.join(crate::consts::MARK)).expect("a mark");
+
+        let tree = Tree::open(&root, &root).expect("a tree");
+        assert_eq!(tree.root(), root.as_path());
+        assert_eq!(tree.workspace_root(), root.as_path());
+        assert_eq!(tree.layout_path().expect("a path"), LayoutPath::root());
+
+        let nested = root.join("art");
+        fs::create_dir_all(nested.join(crate::consts::MARK)).expect("a mark");
+        let inner = Tree::open(&root, &nested).expect("a tree");
+        assert_eq!(inner.layout_path().expect("a path").as_str(), "art");
+
+        // The Layout records a tree by its path, so the id is read only where it names one.
+        let layout = Layout::open(&root).expect("a layout");
+        assert_eq!(inner.recorded_id(&layout).expect("a reading"), None);
+        layout
+            .create_entry(
+                Uuid::from_u128(3),
+                MutableData::new(None, [1_u8; 32], "art".to_owned()).with_kind(EntryKind::Tree),
+            )
+            .expect("an entry");
+        layout
+            .create_path(&LayoutPath::new("art").expect("a path"), Uuid::from_u128(3))
+            .expect("a path");
+        assert_eq!(
+            inner.recorded_id(&layout).expect("a reading"),
+            Some(Uuid::from_u128(3))
+        );
+
+        assert!(marked(&root));
+        assert!(!marked(&root.join("absent")));
+
+        // The Workspace's own data and a conflict copy are the tree's, not the work's.
+        let conflicted = format!("art{}.psd", crate::consts::CONFLICT_MARK);
+        assert!(Tree::is_data_dir(Path::new(crate::consts::DATA)));
+        assert!(Tree::is_data_dir(Path::new(crate::consts::MARK)));
+        assert!(!Tree::is_data_dir(Path::new("art.psd")));
+        assert!(Tree::is_conflict_copy(Path::new(&conflicted)));
+        assert!(!Tree::is_conflict_copy(Path::new("art.psd")));
+        assert!(is_control_file(Path::new(&conflicted)));
+        assert!(is_control_file(Path::new(crate::consts::DATA)));
+        assert!(!is_control_file(Path::new("art.psd")));
+
+        let hex = Key::new([2_u8; 32]).hex();
+        assert_eq!(version_of(&hex).expect("a version"), [2_u8; 32]);
+        assert!(matches!(
+            version_of("not a hash"),
+            Err(TreeError::Layout(_))
+        ));
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    /// A tree recorded in the Layout, its structure stored and named by its version.
+    struct RecordedTree {
+        dir: PathBuf,
+        tree: Tree,
+        layout: Layout,
+        index: VCSIndex,
+        store: StorageSet,
+        runtime: tokio::runtime::Runtime,
+        structure: TreeStructure,
+        content: Key,
+        version: Version,
+    }
+
+    fn recorded_tree(label: &str) -> RecordedTree {
+        let dir = scratch(label);
+        let root = dir.join("art");
+        fs::create_dir_all(root.join(crate::consts::MARK)).expect("a mark");
+        let tree = Tree::open(&dir, &root).expect("a tree");
+
+        let layout = Layout::open(&dir).expect("a layout");
+        let index = VCSIndex::create(dir.join(".rola/index"));
+        let store = StorageSet::sole(RorolalaStorage::create(dir.join(".rola/storage")));
+        let runtime = tokio::runtime::Runtime::new().expect("a runtime");
+
+        let sentence = runtime
+            .block_on(store.write_object(b"what it says", Codec::Raw))
+            .expect("a description");
+        let structure = TreeStructure::build(Some(sentence), Vec::new()).expect("a structure");
+        let content = runtime
+            .block_on(store.write_object(&structure.encode(), Codec::Raw))
+            .expect("a structure object");
+
+        let creator = Creator::try_from("me").expect("a creator");
+        let message = Message::try_from("did").expect("a message");
+        runtime
+            .block_on(index.write(creator.clone()))
+            .expect("a creator");
+        runtime
+            .block_on(index.write(message.clone()))
+            .expect("a message");
+        let variant = Version::root().new_variant(
+            *content.digest(),
+            creator.compute_blake3(),
+            message.compute_blake3(),
+        );
+        runtime
+            .block_on(index.write(variant.clone()))
+            .expect("a variant");
+        let version = variant.new_version();
+        runtime
+            .block_on(index.write(version.clone()))
+            .expect("a version");
+
+        layout
+            .create_entry(
+                Uuid::from_u128(4),
+                MutableData::new(None, version.compute_blake3(), "art".to_owned())
+                    .with_kind(EntryKind::Tree),
+            )
+            .expect("an entry");
+        layout
+            .create_path(&LayoutPath::new("art").expect("a path"), Uuid::from_u128(4))
+            .expect("a path");
+
+        RecordedTree {
+            dir,
+            tree,
+            layout,
+            index,
+            store,
+            runtime,
+            structure,
+            content,
+            version,
+        }
+    }
+
+    #[test]
+    fn a_recorded_tree_reads_its_version_and_structure() {
+        let held = recorded_tree("recorded");
+        let hash = held.version.compute_blake3();
+
+        assert_eq!(
+            held.runtime
+                .block_on(read_storage(&held.index, &hash))
+                .unwrap(),
+            held.content
+        );
+        assert_eq!(
+            held.runtime
+                .block_on(read_structure(&held.index, &held.store, &hash))
+                .unwrap(),
+            held.structure
+        );
+
+        let recorded = held
+            .runtime
+            .block_on(held.tree.recorded(&held.layout, &held.index, &held.store))
+            .unwrap()
+            .expect("a recorded tree");
+        assert_eq!(recorded.version, hash);
+        assert_eq!(recorded.structure, held.structure);
+
+        assert_eq!(
+            held.runtime
+                .block_on(
+                    held.tree
+                        .recorded_structure(&held.layout, &held.index, &held.store)
+                )
+                .unwrap(),
+            held.structure
+        );
+
+        assert_eq!(
+            held.runtime
+                .block_on(read_description(&held.store, &held.structure))
+                .unwrap(),
+            Some("what it says".to_owned())
+        );
+        assert_eq!(
+            held.runtime
+                .block_on(read_description(&held.store, &TreeStructure::empty()))
+                .unwrap(),
+            None
+        );
+
+        // A description object that is not UTF-8 is malformed rather than missing.
+        let bytes = held
+            .runtime
+            .block_on(held.store.write_object(&[0xff], Codec::Raw))
+            .unwrap();
+        let broken = TreeStructure::empty().with_description(Some(bytes));
+        assert!(matches!(
+            held.runtime
+                .block_on(read_description(&held.store, &broken)),
+            Err(TreeError::Malformed)
+        ));
+
+        let _ = fs::remove_dir_all(&held.dir);
+    }
+
+    #[test]
+    fn a_tree_recorded_as_a_file_or_without_a_version_records_nothing() {
+        let held = recorded_tree("unrecorded");
+
+        assert!(
+            held.runtime
+                .block_on(held.tree.recorded_of(
+                    &held.layout,
+                    Uuid::from_u128(9),
+                    &held.index,
+                    &held.store
+                ))
+                .unwrap()
+                .is_none()
+        );
+
+        held.layout
+            .create_entry(
+                Uuid::from_u128(5),
+                MutableData::new(None, [1_u8; 32], "a file".to_owned()),
+            )
+            .unwrap();
+        assert!(matches!(
+            held.runtime.block_on(held.tree.recorded_of(
+                &held.layout,
+                Uuid::from_u128(5),
+                &held.index,
+                &held.store
+            )),
+            Err(TreeError::Layout(_))
+        ));
+
+        held.layout
+            .create_entry(
+                Uuid::from_u128(6),
+                MutableData::new(None, [0_u8; 32], "never recorded".to_owned())
+                    .with_kind(EntryKind::Tree),
+            )
+            .unwrap();
+        assert!(
+            held.runtime
+                .block_on(held.tree.recorded_of(
+                    &held.layout,
+                    Uuid::from_u128(6),
+                    &held.index,
+                    &held.store
+                ))
+                .unwrap()
+                .is_none()
+        );
+
+        // The rules are the tree's own unless the reading is asked for every path.
+        let status = held
+            .runtime
+            .block_on(held.tree.status(
+                &held.layout,
+                &held.index,
+                &held.store,
+                IgnoreRuleSet::empty(),
+                false,
+            ))
+            .unwrap();
+        assert_eq!(status.staged.len(), 0);
+
+        let all = held
+            .runtime
+            .block_on(held.tree.status(
+                &held.layout,
+                &held.index,
+                &held.store,
+                IgnoreRuleSet::empty(),
+                true,
+            ))
+            .unwrap();
+        assert_eq!(all.unstaged.len(), 0);
+
+        let _ = fs::remove_dir_all(&held.dir);
     }
 }

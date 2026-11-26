@@ -378,12 +378,16 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     use rorolala_storage::Key;
-    use rorolala_tree::{FileMode, TreeEntry, TreeStructure, conflict_copy};
+    use rorolala_tree::{FileMode, Tree, TreeEntry, TreeStructure, conflict_copy};
+    use rorolala_utils_lazyffi::StrSpan;
+    use rorolala_utils_location::Locate as _;
+    use rorolala_workspace::Workspace;
 
     use super::{
-        WriteTreeReset, entries_of, is_directory, put_back, remove_conflict, settle_conflicts,
-        targets, under,
+        WriteTreeReset, entries_of, is_directory, put_back, remove_conflict, reset, reset_at,
+        settle_conflicts, targets, under,
     };
+    use crate::write::WriteError;
 
     fn key(seed: u8) -> Key {
         Key::new([seed; 32])
@@ -594,5 +598,79 @@ mod tests {
         assert_eq!(answer.path_at(0), "a.psd");
         assert_eq!(answer.path_at(1), "renders");
         assert_eq!(answer.path_at(2), "");
+    }
+
+    /// A reset of a tree with no staging is the whole area, cleared.
+    #[test]
+    fn a_reset_with_no_paths_clears_the_whole_staging_area() {
+        let dir = scratch("whole");
+        std::fs::create_dir_all(dir.join("tree/.rola-tree")).unwrap();
+        std::fs::write(dir.join("tree/a.txt"), b"one").unwrap();
+        Workspace::create(&dir).unwrap();
+        let workspace = Workspace::locate(&dir).unwrap();
+
+        let answer = reset_at(&dir.join("tree"), "", StrSpan::default()).unwrap();
+        assert!(answer.whole());
+        assert_eq!(answer.path_count(), 0);
+
+        // The same tree named by a relative target reads from the run directory.
+        let named = reset(&workspace, &dir, "tree", &[]).unwrap();
+        assert!(named.whole);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Naming `.` on a tree with nothing staged answers the path without writing anything.
+    #[test]
+    fn a_reset_of_a_clean_tree_answers_the_path_it_was_given() {
+        let dir = scratch("clean");
+        std::fs::create_dir_all(dir.join("tree/.rola-tree")).unwrap();
+        std::fs::write(dir.join("tree/a.txt"), b"one").unwrap();
+        Workspace::create(&dir).unwrap();
+        let workspace = Workspace::locate(&dir).unwrap();
+
+        let answer = reset_at(&dir.join("tree"), "", StrSpan::from(vec![".".to_owned()])).unwrap();
+        assert!(!answer.whole());
+        assert_eq!(answer.path_at(0), ".");
+
+        // A directory that is not a tree is refused before any path is read.
+        assert!(matches!(
+            reset(&workspace, &dir, "plain", &[".".to_owned()],),
+            Err(WriteError::NotATree { .. } | WriteError::Tree { .. })
+        ));
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A reset puts a staged path back to what the recorded structure holds.
+    #[test]
+    fn a_reset_puts_a_named_path_back_to_the_recorded_structure() {
+        let dir = scratch("staged");
+        std::fs::create_dir_all(dir.join("tree/.rola-tree")).unwrap();
+        std::fs::write(dir.join("tree/a.txt"), b"one").unwrap();
+        Workspace::create(&dir).unwrap();
+        let workspace = Workspace::locate(&dir).unwrap();
+        let tree_root = dir.join("tree");
+        let tree = Tree::locate(workspace.get_root(), &tree_root).unwrap();
+        let structure = TreeStructure::build(None, [file("a.txt"), file("b.txt")]).unwrap();
+        tree.staging().write_structure(&structure).unwrap();
+
+        let answer = reset_at(&tree_root, "", StrSpan::from(vec!["a.txt".to_owned()])).unwrap();
+        assert!(!answer.whole());
+        assert_eq!(answer.path_at(0), "a.txt");
+
+        let staged = tree.staging().structure().unwrap().unwrap();
+        assert!(staged.entries().iter().all(|entry| entry.path() != "a.txt"));
+
+        assert!(matches!(
+            reset_at(
+                &tree_root,
+                "",
+                StrSpan::from(vec!["nothing.txt".to_owned()]),
+            ),
+            Err(WriteError::InvalidPath { .. })
+        ));
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

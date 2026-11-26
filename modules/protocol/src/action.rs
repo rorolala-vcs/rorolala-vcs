@@ -78,8 +78,10 @@ pub trait Action {
 mod tests {
     use std::future::Future;
 
+    use rorolala_auth::Account;
+
     use super::Action;
-    use crate::{ActionContext, ActionError, OnlyWorkspace};
+    use crate::{ActionContext, ActionError, Both, OnlyWorkspace};
 
     /// An action that only reports its id; enough to read the default `get_id`.
     struct Question;
@@ -101,5 +103,18 @@ mod tests {
     fn an_action_defaults_to_reporting_its_own_id() {
         assert_eq!(Question.get_id(), 42);
         assert_eq!(Question::ID, 42);
+    }
+
+    #[test]
+    fn an_action_runs_on_the_value_it_is_handed() {
+        let ctx = ActionContext::new_workspace_ctx(Account::default());
+        let input: OnlyWorkspace<u64> = Both::new(7_u64).only_workspace(&ctx);
+
+        let answer = tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(Question::process(input, ctx))
+            .unwrap();
+
+        assert_eq!(answer, 7);
     }
 }

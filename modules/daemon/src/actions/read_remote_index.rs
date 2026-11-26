@@ -221,3 +221,61 @@ mod tests {
         assert!(matches!(codec_failed("bad"), ActionError::Codec(_)));
     }
 }
+
+#[cfg(test)]
+mod exchange_tests {
+    use rorolala_auth::{Account, Member};
+    use rorolala_protocol::{Action as _, ActionContext, OnlyWorkspace};
+    use rorolala_utils_constants::VAULT_INDEX_DIR;
+    use rorolala_utils_location::Locate as _;
+    use rorolala_vault::Vault;
+    use rorolala_vcs::{VCSIndex, VCSIndexObject, Version};
+    use rorolala_workspace::Workspace;
+
+    use crate::test_support::{run, scratch, session};
+
+    use super::{ActionReadRemoteIndex, ReadRemoteIndexRequest};
+
+    /// A version is read from the Vault's index, with the number its chain traces to put back in.
+    #[test]
+    fn a_version_is_read_from_the_vaults_index() {
+        let dir = scratch("read-remote-index");
+        let workspace_root = dir.join("workspace");
+        Workspace::create(&workspace_root).unwrap();
+        let workspace = Workspace::locate(&workspace_root).unwrap();
+        let vault_root = dir.join("vault");
+        Vault::create(&vault_root).unwrap();
+        let vault = Vault::locate(&vault_root).unwrap();
+
+        let index = VCSIndex::create(vault_root.join(VAULT_INDEX_DIR));
+        let written = run(index.write(VCSIndexObject::Version(Version::root()))).unwrap();
+
+        let (client, server) = session();
+        let workspace_ctx = ActionContext::new_workspace_ctx(Account::default())
+            .with_current_workspace(&workspace)
+            .with_channel(client);
+        let vault_ctx = ActionContext::new_vault_ctx(Member::default())
+            .with_current_vault(&vault)
+            .with_channel(server);
+
+        let (here, there) = run(async {
+            tokio::join!(
+                ActionReadRemoteIndex::process(
+                    OnlyWorkspace::from(Some(ReadRemoteIndexRequest {
+                        hash: written.hex(),
+                    })),
+                    workspace_ctx
+                ),
+                ActionReadRemoteIndex::process(
+                    OnlyWorkspace::<ReadRemoteIndexRequest>::from(None),
+                    vault_ctx
+                ),
+            )
+        });
+
+        assert!(matches!(here.unwrap(), VCSIndexObject::Version(_)));
+        assert!(matches!(there.unwrap(), VCSIndexObject::Version(_)));
+
+        let _ = std::fs::remove_dir_all(dir);
+    }
+}

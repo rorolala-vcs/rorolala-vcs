@@ -1387,16 +1387,20 @@ pub fn sync_plan_at(
 mod tests {
     use std::str::FromStr as _;
 
+    use rorolala_layout::{EntryKind as LayoutEntryKind, Layout, MutableData};
+    use uuid::Uuid;
+
     use crate::layout::LayoutPath;
     use crate::storage::{Codec, Key, RorolalaStorage, StorageSet};
     use crate::tree::{FileMode, TreeEntry, TreeStructure};
     use crate::vcs::{VCSIndex, Variant, Version};
-    use crate::write::WriteError;
+    use crate::write::{Cancellation, WriteError};
+    use rorolala_utils_location::Locate as _;
     use rorolala_workspace::Workspace;
 
     use super::{
-        Direction, Kind, Relation, chain_store_keys, create_remote_path, decide, kept,
-        split_extension,
+        Direction, Kind, Relation, Relations, chain_store_keys, create_remote_path, decide, kept,
+        plan, split_extension, store_of, tree_internal_keys,
     };
 
     const UUID: &str = "1a2b3c4d-0000-0000-0000-000000000000";
@@ -1758,5 +1762,334 @@ mod tests {
         for any in [Kind::Create, Kind::Send, Kind::Receive, Kind::Diverged] {
             assert!(kept(any, Direction::Both), "{any:?}");
         }
+    }
+
+    #[test]
+    fn every_word_a_plan_reports_an_entry_by_is_read_back() {
+        for kind in [
+            Kind::Create,
+            Kind::Send,
+            Kind::Receive,
+            Kind::Diverged,
+            Kind::Refused,
+            Kind::Blocked,
+            Kind::RemoteOnly,
+            Kind::Mismatched,
+            Kind::UpToDate,
+        ] {
+            assert_eq!(Kind::from_word(kind.word()), Some(kind), "{kind:?}");
+        }
+
+        assert_eq!(Kind::from_word("none of these"), None);
+    }
+
+    #[test]
+    fn a_path_no_uuid_leaves_free_is_named_by_nothing() {
+        assert_eq!(
+            create_remote_path(&LayoutPath::new("hero.psd").unwrap(), UUID, |_| true),
+            None
+        );
+    }
+
+    /// The relations are read off the chain the index keeps: a version below another is behind it,
+    /// and two chains that only share the root have moved apart.
+    #[test]
+    fn the_relations_follow_the_chain_the_index_keeps() {
+        let index = index("relations");
+        let (one_hex, one) = record(
+            &index,
+            &Version::root().new_variant([1_u8; 32], [0; 32], [0; 32]),
+        );
+        let (two_hex, _) = record(&index, &one.new_variant([2_u8; 32], [0; 32], [0; 32]));
+        let (side_hex, _) = record(
+            &index,
+            &Version::root().new_variant([3_u8; 32], [0; 32], [0; 32]),
+        );
+        let first = digest(&one_hex);
+        let second = digest(&two_hex);
+        let sideways = digest(&side_hex);
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let live = Cancellation::new();
+        let mut relations = Relations::new(&index, &live);
+
+        assert!(matches!(
+            runtime
+                .block_on(relations.relation(&second, &first))
+                .unwrap(),
+            Relation::LocalAhead
+        ));
+        // The second read of the same pair comes out of what the first remembered.
+        assert!(matches!(
+            runtime
+                .block_on(relations.relation(&second, &first))
+                .unwrap(),
+            Relation::LocalAhead
+        ));
+        assert!(matches!(
+            runtime
+                .block_on(relations.relation(&first, &second))
+                .unwrap(),
+            Relation::RemoteAhead
+        ));
+        assert!(matches!(
+            runtime
+                .block_on(relations.relation(&first, &sideways))
+                .unwrap(),
+            Relation::Apart
+        ));
+
+        // A version the index does not hold is one this side never had.
+        assert!(matches!(
+            runtime
+                .block_on(relations.relation(&[9_u8; 32], &first))
+                .unwrap(),
+            Relation::Apart
+        ));
+        assert!(matches!(
+            runtime
+                .block_on(relations.relation(&first, &[9_u8; 32]))
+                .unwrap(),
+            Relation::RemoteAhead
+        ));
+
+        let stopped = Cancellation::new();
+        stopped.cancel();
+        let mut halted = Relations::new(&index, &stopped);
+        assert!(matches!(
+            runtime.block_on(halted.relation(&second, &first)),
+            Err(WriteError::Cancelled)
+        ));
+    }
+
+    /// A tree version names the content its structure holds, and a version with no structure, or
+    /// one whose structure does not read, names nothing.
+    #[test]
+    fn a_tree_version_names_what_its_structure_holds() {
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let store_dir =
+            std::env::temp_dir().join(format!("rola-cov-sync-tree-inside-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&store_dir);
+        let set = StorageSet::sole(RorolalaStorage::create(&store_dir));
+        let index = index("tree-inside");
+
+        assert_eq!(
+            runtime
+                .block_on(tree_internal_keys(&index, &set, &[9_u8; 32]))
+                .unwrap()
+                .len(),
+            0,
+            "a version the index does not hold names nothing"
+        );
+
+        let structure = TreeStructure::build(
+            None,
+            [TreeEntry::file(
+                "a.psd",
+                FileMode::Regular,
+                Key::new([5_u8; 32]),
+            )],
+        )
+        .unwrap();
+        let stored = runtime
+            .block_on(set.write_object(&structure.encode(), Codec::Raw))
+            .unwrap();
+        let (held_hex, _) = record(
+            &index,
+            &Version::root().new_variant(*stored.digest(), [0; 32], [0; 32]),
+        );
+        let held = digest(&held_hex);
+        let keys = runtime
+            .block_on(tree_internal_keys(&index, &set, &held))
+            .unwrap();
+        assert!(keys.contains(&Key::new([5_u8; 32])));
+
+        let junk = runtime
+            .block_on(set.write_object(b"not a structure", Codec::Raw))
+            .unwrap();
+        let (junk_hex, _) = record(
+            &index,
+            &Version::root().new_variant(*junk.digest(), [0; 32], [0; 32]),
+        );
+        assert_eq!(
+            runtime
+                .block_on(tree_internal_keys(&index, &set, &digest(&junk_hex)))
+                .unwrap()
+                .len(),
+            0,
+            "an object that is not a structure names nothing"
+        );
+
+        let _ = std::fs::remove_dir_all(&store_dir);
+    }
+
+    /// What a version stores is named only when the index holds the whole chain to it.
+    #[test]
+    fn a_store_key_is_answered_only_for_a_version_the_index_holds() {
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let index = index("store-of");
+
+        assert_eq!(
+            runtime.block_on(store_of(&index, &[9_u8; 32])).unwrap(),
+            None,
+            "a version the index does not hold names nothing"
+        );
+
+        // A variant with no version is no version at all.
+        let variant = Version::root().new_variant([7_u8; 32], [0; 32], [0; 32]);
+        let variant_hex = index.write_variant(&variant).unwrap();
+        assert_eq!(
+            runtime
+                .block_on(store_of(&index, &digest(&variant_hex)))
+                .unwrap(),
+            None,
+            "an object that is not a version names nothing"
+        );
+
+        // A version whose variant was never written names nothing either.
+        let alone = Version::root()
+            .new_variant([8_u8; 32], [0; 32], [0; 32])
+            .new_version();
+        let alone_hex = index.write_version(&alone).unwrap();
+        assert_eq!(
+            runtime
+                .block_on(store_of(&index, &digest(&alone_hex)))
+                .unwrap(),
+            None
+        );
+
+        let _ = std::fs::remove_dir_all(
+            std::env::temp_dir().join(format!("rola-sync-chain-{}-store-of", std::process::id())),
+        );
+    }
+
+    /// A plan names what each side holds: what only this side has is a creation, what the Vault is
+    /// behind on is a send, and what another account holds is refused.
+    #[test]
+    fn a_plan_names_what_each_side_holds() {
+        let dir =
+            std::env::temp_dir().join(format!("rola-cov-sync-plan-sides-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        Workspace::create(&dir).unwrap();
+        let workspace = Workspace::locate(&dir).unwrap();
+        let local = workspace.layout().unwrap();
+        let remote = Layout::open(dir.join("remote")).unwrap();
+        let index = index("plan-sides");
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let (behind_hex, behind_version) = record(
+            &index,
+            &Version::root().new_variant([11_u8; 32], [0; 32], [0; 32]),
+        );
+        let (ahead_hex, _) = record(
+            &index,
+            &behind_version.new_variant([12_u8; 32], [0; 32], [0; 32]),
+        );
+        let behind = digest(&behind_hex);
+        let ahead = digest(&ahead_hex);
+        let same = [21_u8; 32];
+
+        fill_sides(&local, &remote, &same, &behind, &ahead);
+
+        let plan = runtime
+            .block_on(plan(
+                &workspace,
+                &local,
+                &remote,
+                &index,
+                "alice",
+                Direction::Both,
+                false,
+                &Cancellation::new(),
+            ))
+            .unwrap();
+
+        assert_eq!(
+            plan.up_to_date, 1,
+            "the entry both sides hold at once is done"
+        );
+        let kind_of = |id: u128| {
+            plan.entries
+                .iter()
+                .find(|entry| entry.uuid == Uuid::from_u128(id).to_string())
+                .map(|entry| entry.kind)
+        };
+        assert!(matches!(kind_of(2), Some(Kind::Create)));
+        assert!(matches!(kind_of(3), Some(Kind::Send)));
+        assert!(matches!(kind_of(4), Some(Kind::Refused)));
+        assert!(matches!(kind_of(5), Some(Kind::Mismatched)));
+        assert!(matches!(kind_of(6), Some(Kind::RemoteOnly)));
+        assert!(matches!(kind_of(7), Some(Kind::Send)));
+        assert!(
+            plan.entries
+                .iter()
+                .any(|entry| entry.uuid == Uuid::from_u128(7).to_string() && entry.deprecated),
+            "a path the Vault removed is reported as deprecated"
+        );
+        assert!(
+            plan.entries
+                .iter()
+                .any(|entry| entry.uuid == Uuid::from_u128(2).to_string()
+                    && entry.planned_path.as_deref() == Some("new.psd")),
+            "a creation is planned at the path it is tracked at"
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Fills `local` and `remote` with the entries the plan test reads.
+    fn fill_sides(
+        local: &Layout,
+        remote: &Layout,
+        same: &[u8; 32],
+        behind: &[u8; 32],
+        ahead: &[u8; 32],
+    ) {
+        let data = |version: &[u8; 32], owner: &str| {
+            MutableData::new(Some(owner.to_owned()), *version, String::new())
+        };
+        let tree_data = MutableData::new(Some("alice".to_owned()), *same, String::new())
+            .with_kind(LayoutEntryKind::Tree);
+        let mut mine = local.batch();
+        for (id, version, owner, path) in [
+            (1_u128, same, "alice", "same.psd"),
+            (2, &[22_u8; 32], "alice", "new.psd"),
+            (3, ahead, "alice", "ahead.psd"),
+            (4, ahead, "alice", "refused.psd"),
+            (5, same, "alice", "shape.psd"),
+            (7, ahead, "alice", "old.psd"),
+        ] {
+            mine.create_file(
+                Uuid::from_u128(id),
+                data(version, owner),
+                &LayoutPath::new(path).unwrap(),
+            )
+            .unwrap();
+        }
+        mine.commit().unwrap();
+
+        let mut theirs = remote.batch();
+        for (id, version, owner, path) in [
+            (1_u128, same, "alice", "same.psd"),
+            (3, behind, "alice", "ahead.psd"),
+            (4, behind, "bob", "refused.psd"),
+            (6, behind, "alice", "theirs.psd"),
+            (7, behind, "alice", "@/removed/old.psd"),
+        ] {
+            theirs
+                .create_file(
+                    Uuid::from_u128(id),
+                    data(version, owner),
+                    &LayoutPath::new(path).unwrap(),
+                )
+                .unwrap();
+        }
+        theirs
+            .create_file(
+                Uuid::from_u128(5),
+                tree_data,
+                &LayoutPath::new("shape.psd").unwrap(),
+            )
+            .unwrap();
+        theirs.commit().unwrap();
     }
 }

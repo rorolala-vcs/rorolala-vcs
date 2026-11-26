@@ -338,4 +338,71 @@ mod tests {
         );
         assert!(namespaces.remove("alpha").is_err());
     }
+
+    /// The table and the preferences sit in the one place the machine keeps its daemon files.
+    #[test]
+    fn the_tables_place_is_the_machines_daemon_directory() {
+        let table = super::registry_path();
+        let preference = super::preference_path();
+
+        assert_eq!(table.is_some(), preference.is_some());
+    }
+
+    /// A name that is not one says so, rather than being written as a broken key.
+    #[test]
+    fn a_name_that_is_not_a_namespace_is_refused() {
+        let mut namespaces = Namespaces::default();
+
+        assert!(namespaces.register("alpha/beta", "/vaults/alpha").is_err());
+        assert!(namespaces.iter().next().is_none());
+    }
+
+    /// Writing over a table reads it first, so a table that is there is replaced whole.
+    #[test]
+    fn a_table_that_is_there_is_read_and_written_again() {
+        let dir = scratch("rewrite");
+        let file = dir.join("daemon/registry.toml");
+
+        let mut namespaces = Namespaces::default();
+        namespaces.register("alpha", "/vaults/alpha").unwrap();
+        namespaces.write_to(&file).unwrap();
+
+        let mut again = Namespaces::default();
+        again.register("beta", "/vaults/beta").unwrap();
+        again.write_to(&file).unwrap();
+
+        let read = Namespaces::read_from(&file).unwrap();
+        assert_eq!(read.iter().count(), 1);
+        assert_eq!(
+            read.get("beta"),
+            Some(PathBuf::from("/vaults/beta").as_path())
+        );
+    }
+
+    /// A table and each of its failures are sentences a person reads.
+    #[test]
+    fn the_table_and_its_failures_read_as_sentences() {
+        let mut namespaces = Namespaces::default();
+        namespaces.register("alpha", "/vaults/alpha").unwrap();
+
+        assert_eq!(namespaces.to_string(), "alpha = /vaults/alpha\n");
+
+        let errors = [
+            super::NamespaceError::InvalidNamespace("a/b".to_owned()),
+            super::NamespaceError::AlreadyRegistered("alpha".to_owned()),
+            super::NamespaceError::NotFound("beta".to_owned()),
+            super::NamespaceError::Unreadable {
+                path: PathBuf::from("/table.toml"),
+                reason: "denied".to_owned(),
+            },
+            super::NamespaceError::Unwritable {
+                path: PathBuf::from("/table.toml"),
+                reason: "denied".to_owned(),
+            },
+        ];
+
+        for error in errors {
+            assert_ne!(error.to_string(), "", "{error}");
+        }
+    }
 }

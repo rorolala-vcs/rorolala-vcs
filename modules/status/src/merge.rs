@@ -119,12 +119,23 @@ fn storage_of(
 mod tests {
     use std::path::PathBuf;
 
-    use rorolala_layout::{Layout, LayoutPath};
-    use rorolala_vcs::VCSIndex;
-    use rorolala_workspace::Merging;
+    use rorolala_layout::{Layout, LayoutPath, MutableData};
+    use rorolala_vcs::{VCSIndex, Variant};
+    use rorolala_workspace::{Merging, Pending};
+    use rorolala_workspace_analyze::entry_of;
+    use uuid::Uuid;
 
     use super::storage_of;
     use super::variant_moves;
+
+    /// A workspace-like directory with a Layout that names one file.
+    struct Held {
+        dir: PathBuf,
+        layout: Layout,
+        id: Uuid,
+        index: VCSIndex,
+        runtime: tokio::runtime::Runtime,
+    }
 
     fn scratch(label: &str) -> PathBuf {
         let dir =
@@ -133,6 +144,28 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
 
         dir
+    }
+
+    /// A Layout naming `art.psd` by `id`, with an index beside it.
+    fn held(label: &str) -> Held {
+        let dir = scratch(label);
+        let layout = Layout::open(&dir).unwrap();
+        let id = Uuid::from_u128(1);
+
+        layout
+            .create_entry(id, MutableData::new(None, [1_u8; 32], "art".to_owned()))
+            .unwrap();
+        layout
+            .create_path(&LayoutPath::new("art.psd").unwrap(), id)
+            .unwrap();
+
+        Held {
+            index: VCSIndex::create(dir.join(".rola/index")),
+            runtime: tokio::runtime::Runtime::new().unwrap(),
+            dir,
+            layout,
+            id,
+        }
     }
 
     #[test]
@@ -154,5 +187,85 @@ mod tests {
         assert!(storage_of(&index, &runtime, &[0; 32]).is_none());
 
         let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn a_variant_file_found_by_its_content_is_reported_as_a_move() {
+        let held = held("moved");
+        let content = held.dir.join("elsewhere.psd");
+        std::fs::write(&content, b"variant content").unwrap();
+
+        // The variant was brought in with the content that now lies elsewhere, so the digest the
+        // reading finds is the one the index holds for it.
+        let digest = entry_of(&content).unwrap().digest();
+        let variant =
+            Variant::new_bare_variant(digest, [0_u8; 32], None, [0_u8; 32], [0_u8; 32], 0);
+        let key = held.runtime.block_on(held.index.write(variant)).unwrap();
+
+        let mut merging = Merging::default();
+        merging.push(Pending::new(
+            held.id,
+            *key.digest(),
+            Some(PathBuf::from("gone.psd")),
+        ));
+        let untagged = [LayoutPath::new("elsewhere.psd").unwrap()];
+
+        let moves = variant_moves(
+            &merging,
+            &held.layout,
+            &held.dir,
+            Some(&held.index),
+            &held.runtime,
+            &untagged,
+        );
+
+        assert_eq!(moves.len(), 1);
+        assert_eq!(moves[0].target, held.id);
+        assert_eq!(moves[0].variant, *key.digest());
+        assert_eq!(moves[0].from.as_str(), "gone.psd");
+        assert_eq!(moves[0].to.as_str(), "elsewhere.psd");
+
+        let _ = std::fs::remove_dir_all(held.dir);
+    }
+
+    #[test]
+    fn a_record_that_cannot_be_matched_is_left_alone() {
+        let held = held("unmatched");
+
+        let mut merging = Merging::default();
+        // A target the Layout does not name.
+        merging.push(Pending::new(
+            Uuid::from_u128(2),
+            [4_u8; 32],
+            Some(PathBuf::from("gone.psd")),
+        ));
+        // A variant the index does not hold.
+        merging.push(Pending::new(
+            held.id,
+            [5_u8; 32],
+            Some(PathBuf::from("gone.psd")),
+        ));
+        // A variant the index holds whose content is not among the untagged paths.
+        let variant =
+            Variant::new_bare_variant([6_u8; 32], [0_u8; 32], None, [0_u8; 32], [0_u8; 32], 0);
+        let key = held.runtime.block_on(held.index.write(variant)).unwrap();
+        merging.push(Pending::new(
+            held.id,
+            *key.digest(),
+            Some(PathBuf::from("gone.psd")),
+        ));
+
+        let moves = variant_moves(
+            &merging,
+            &held.layout,
+            &held.dir,
+            Some(&held.index),
+            &held.runtime,
+            &[],
+        );
+
+        assert!(moves.is_empty());
+
+        let _ = std::fs::remove_dir_all(held.dir);
     }
 }

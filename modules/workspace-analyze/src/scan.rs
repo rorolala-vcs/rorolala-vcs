@@ -329,4 +329,37 @@ mod tests {
 
         fs::remove_dir_all(&root).unwrap();
     }
+
+    /// A directory that keeps a data directory is another Workspace's work, and a tree deeper in is
+    /// still this walk's to find.
+    #[test]
+    fn a_nested_workspace_is_left_out_and_a_tree_beside_it_is_found() {
+        let root = scratch("nested-workspace");
+        fs::create_dir_all(root.join(TREE_MARK)).unwrap();
+        fs::create_dir_all(root.join("other").join(".rola")).unwrap();
+        fs::create_dir_all(root.join("deep").join("inner").join(TREE_MARK)).unwrap();
+
+        let (found, failed) = walk(&root);
+        let paths: Vec<&str> = found.iter().map(|entry| entry.path.as_str()).collect();
+
+        assert_eq!(paths, ["", "deep/inner"]);
+        assert_eq!(failed.len(), 0);
+
+        fs::remove_dir_all(&root).unwrap();
+    }
+
+    /// A path that cannot be read is recorded rather than failing the whole walk.
+    #[test]
+    fn a_path_that_cannot_be_read_is_recorded_as_a_loss() {
+        let root = scratch("unreadable");
+        let file = root.join("a-file");
+        fs::write(&file, b"not a directory").unwrap();
+
+        let (found, failed) = walk(&file);
+
+        assert_eq!(found.len(), 0);
+        assert_eq!(failed.len(), 1);
+
+        fs::remove_dir_all(&root).unwrap();
+    }
 }

@@ -265,7 +265,10 @@ mod tests {
     use rorolala_utils_location::Locate as _;
     use rorolala_workspace::{Config as WorkspaceConfig, Workspace};
 
-    use super::{StorageBinding, StorageBindings};
+    use super::{
+        DaemonVault, DaemonVaults, StorageBinding, StorageBindings, vault_storages_new,
+        workspace_storages_new,
+    };
 
     /// A directory of its own, emptied first so a rerun starts clean.
     fn scratch(label: &str) -> PathBuf {
@@ -387,5 +390,57 @@ mod tests {
         assert!(bindings.at(0).is_some());
         assert!(bindings.at(1).is_none());
         assert_eq!(StorageBindings::default().count(), 0);
+    }
+
+    #[test]
+    fn a_place_lists_the_stores_it_works_on() {
+        let dir = scratch("storages");
+        Workspace::create(&dir).unwrap();
+        let workspace = Workspace::locate(&dir).unwrap();
+        let shared = dir.join("shared");
+        let _ = rorolala_storage::RorolalaStorage::create(&shared);
+        let mut config = WorkspaceConfig::read_from(&workspace.config_path()).unwrap();
+        config
+            .default_config_mut()
+            .add_storage(shared.to_string_lossy());
+        config.write_to(&workspace.config_path()).unwrap();
+
+        let bindings = workspace_storages_new(&dir).unwrap();
+        assert!(bindings.count() >= 1);
+        assert!(bindings.at(bindings.count()).is_none());
+        for index in 0..bindings.count() {
+            let binding = bindings.at(index).unwrap();
+            assert_ne!(binding.path(), "");
+            assert_ne!(binding.root(), "");
+            let _ = (
+                binding.own(),
+                binding.present(),
+                binding.writable(),
+                binding.reason(),
+            );
+        }
+
+        let vault_root = dir.join("vault");
+        rorolala_vault::Vault::create(&vault_root).unwrap();
+        let vault = vault_storages_new(&vault_root).unwrap();
+        assert!(vault.count() >= 1);
+        assert!(vault.at(0).is_some());
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_daemon_vault_answers_its_name_and_path() {
+        let one = DaemonVault {
+            name: "studio".to_owned(),
+            path: "/vault".to_owned(),
+        };
+        let vaults = DaemonVaults { vaults: vec![one] };
+
+        assert_eq!(vaults.count(), 1);
+        let vault = vaults.at(0).unwrap();
+        assert_eq!(vault.name(), "studio");
+        assert_eq!(vault.path(), "/vault");
+        assert!(vaults.at(1).is_none());
     }
 }

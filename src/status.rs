@@ -505,7 +505,7 @@ mod tests {
 
     use super::{
         RolaStatus, Status, TreeChange, TreeConflict, TreeStatus, TreeUntracked, free_rola_status,
-        is_tree, rola_status_locate, tree_mark,
+        is_tree, kind_word, rola_status_locate, tree_mark,
     };
 
     /// A directory of its own, emptied first so a rerun starts clean.
@@ -581,6 +581,15 @@ mod tests {
         unsafe { free_string(text) };
 
         read
+    }
+
+    #[test]
+    fn a_path_is_named_by_what_it_is() {
+        use rorolala_tree::EntryKind;
+
+        assert_eq!(kind_word(EntryKind::File), "file");
+        assert_eq!(kind_word(EntryKind::Directory), "directory");
+        assert_eq!(kind_word(EntryKind::Symlink), "symlink");
     }
 
     #[test]

@@ -108,7 +108,23 @@ pub mod maybe_hash {
 mod tests {
     use rorolala_storage::Blake3Hash;
 
+    use serde::{Deserialize, Serialize};
+
     use super::{from_hex, to_hex};
+
+    /// A hash written with the module under test.
+    #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+    struct Hashed {
+        #[serde(with = "crate::hex::hash")]
+        hash: Blake3Hash,
+    }
+
+    /// A hash that may be absent, written with the module under test.
+    #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+    struct MaybeHashed {
+        #[serde(with = "crate::hex::maybe_hash")]
+        hash: Option<Blake3Hash>,
+    }
 
     #[test]
     fn a_hash_is_written_as_sixty_four_lowercase_digits() {
@@ -132,5 +148,38 @@ mod tests {
         assert_eq!(from_hex("not hex"), None);
         assert_eq!(from_hex(&"a".repeat(63)), None);
         assert_eq!(from_hex(&"z".repeat(64)), None);
+    }
+
+    #[test]
+    fn a_hash_field_round_trips_through_json() {
+        let hash: Blake3Hash = [0x5a; 32];
+        let text = serde_json::to_string(&Hashed { hash }).unwrap();
+
+        assert_eq!(text, format!("{{\"hash\":\"{}\"}}", to_hex(&hash)));
+        assert_eq!(
+            serde_json::from_str::<Hashed>(&text).unwrap(),
+            Hashed { hash }
+        );
+        assert!(serde_json::from_str::<Hashed>("{\"hash\":\"short\"}").is_err());
+    }
+
+    #[test]
+    fn an_optional_hash_field_round_trips_through_json() {
+        let hash: Blake3Hash = [0x6b; 32];
+
+        let text = serde_json::to_string(&MaybeHashed { hash: Some(hash) }).unwrap();
+        assert_eq!(
+            serde_json::from_str::<MaybeHashed>(&text).unwrap(),
+            MaybeHashed { hash: Some(hash) }
+        );
+
+        let text = serde_json::to_string(&MaybeHashed { hash: None }).unwrap();
+        assert_eq!(text, "{\"hash\":null}");
+        assert_eq!(
+            serde_json::from_str::<MaybeHashed>(&text).unwrap(),
+            MaybeHashed { hash: None }
+        );
+
+        assert!(serde_json::from_str::<MaybeHashed>("{\"hash\":\"short\"}").is_err());
     }
 }

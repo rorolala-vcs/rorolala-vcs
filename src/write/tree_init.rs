@@ -306,6 +306,11 @@ mod tests {
 
     use super::{WriteTreeInit, init_at, plan, plan_at};
     use crate::write::WriteError;
+    use crate::write::index::write_file_version;
+    use rorolala_layout::{LayoutPath, MutableData};
+    use rorolala_storage::{Codec, RorolalaStorage};
+    use rorolala_vcs::{ROOT_VERSION, VCSIndex};
+    use uuid::Uuid;
 
     fn scratch(label: &str) -> PathBuf {
         static NEXT: AtomicUsize = AtomicUsize::new(0);
@@ -405,6 +410,66 @@ mod tests {
 
         assert_eq!(made.path(), "renders");
         assert!(!made.is_root());
+        assert!(dir.join("renders/.rola-tree").is_dir());
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn an_unforced_init_of_a_root_or_a_collapse_needs_confirmation() {
+        let dir = scratch("unforced");
+        Workspace::create(&dir).unwrap();
+
+        assert!(matches!(
+            init_at(&dir, "", false),
+            Err(WriteError::Precondition { .. })
+        ));
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_forced_init_takes_a_recorded_file_into_the_tree() {
+        let dir = scratch("collapse");
+        Workspace::create(&dir).unwrap();
+        let workspace = Workspace::locate(&dir).unwrap();
+        let layout = workspace.layout().unwrap();
+        let index = VCSIndex::locate(&dir).unwrap();
+        let store = RorolalaStorage::at(dir.join(".rola/storage")).unwrap();
+        let content = tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(store.write_object(b"one", Codec::Raw))
+            .unwrap();
+        let written = write_file_version(
+            &index,
+            &content,
+            &[0; 32],
+            ROOT_VERSION,
+            None,
+            "alice",
+            "first",
+        )
+        .unwrap();
+        layout
+            .create_entry(
+                Uuid::from_u128(1),
+                MutableData::new(None, *written.version.digest(), ""),
+            )
+            .unwrap();
+        layout
+            .create_path(
+                &LayoutPath::new("renders/a.psd").unwrap(),
+                Uuid::from_u128(1),
+            )
+            .unwrap();
+        fs::create_dir_all(dir.join("renders")).unwrap();
+        fs::write(dir.join("renders/a.psd"), b"one").unwrap();
+        fs::write(dir.join("renders/b.psd"), b"two").unwrap();
+
+        let made = init_at(&dir, "renders", true).unwrap();
+
+        assert_eq!(made.collapsed(), 1);
+        assert_eq!(made.path(), "renders");
         assert!(dir.join("renders/.rola-tree").is_dir());
 
         let _ = fs::remove_dir_all(&dir);

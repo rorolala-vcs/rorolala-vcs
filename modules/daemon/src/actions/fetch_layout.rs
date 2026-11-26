@@ -528,3 +528,65 @@ mod tests {
         assert!(check(&sent(&[("log-0", "x")])).is_ok());
     }
 }
+
+#[cfg(test)]
+mod exchange_tests {
+    use rorolala_auth::{Account, Member};
+    use rorolala_protocol::{Action as _, ActionContext, OnlyWorkspace};
+    use rorolala_utils_constants::VAULT_LAYOUT_NAME;
+    use rorolala_utils_location::Locate as _;
+    use rorolala_vault::Vault;
+    use rorolala_workspace::Workspace;
+
+    use crate::test_support::{run, scratch, session};
+
+    use super::{ActionFetchLayout, FetchLayoutRequest};
+
+    /// The Vault's Layout is written into the Workspace's cache, and a second fetch writes nothing
+    /// because what is there is already it.
+    #[test]
+    fn a_fetched_layout_lands_in_the_workspaces_cache() {
+        let dir = scratch("fetch-layout");
+        let workspace_root = dir.join("workspace");
+        Workspace::create(&workspace_root).unwrap();
+        let workspace = Workspace::locate(&workspace_root).unwrap();
+        let vault_root = dir.join("vault");
+        Vault::create(&vault_root).unwrap();
+        let vault = Vault::locate(&vault_root).unwrap();
+
+        for _ in 0..2 {
+            let (client, server) = session();
+            let workspace_ctx = ActionContext::new_workspace_ctx(Account::default())
+                .with_current_workspace(&workspace)
+                .with_channel(client);
+            let vault_ctx = ActionContext::new_vault_ctx(Member::default())
+                .with_current_vault(&vault)
+                .with_channel(server);
+
+            let (here, there) = run(async {
+                tokio::join!(
+                    ActionFetchLayout::process(
+                        OnlyWorkspace::from(Some(FetchLayoutRequest {
+                            name: "own".to_owned(),
+                        })),
+                        workspace_ctx
+                    ),
+                    ActionFetchLayout::process(
+                        OnlyWorkspace::<FetchLayoutRequest>::from(None),
+                        vault_ctx
+                    ),
+                )
+            });
+
+            here.unwrap();
+            there.unwrap();
+        }
+
+        let copy = workspace
+            .readonly_layout_copy("own", VAULT_LAYOUT_NAME)
+            .expect("the Workspace keeps the fetched Layout");
+        assert!(copy.is_dir());
+
+        let _ = std::fs::remove_dir_all(dir);
+    }
+}

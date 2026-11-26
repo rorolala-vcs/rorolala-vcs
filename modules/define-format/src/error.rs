@@ -195,3 +195,132 @@ impl fmt::Display for FormatErrorKind {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{FormatError, FormatErrorKind};
+
+    /// A refusal met while reading carries its line, and one built by a caller does not.
+    #[test]
+    fn a_refusal_says_what_was_refused_and_where() {
+        let on_line = FormatError::at(3, FormatErrorKind::MissingFormat);
+
+        assert_eq!(on_line.line(), Some(3));
+        assert_eq!(
+            on_line.to_string(),
+            "line 3: the lock names no format version"
+        );
+
+        let plain = FormatError::plain(FormatErrorKind::MalformedMaterial);
+
+        assert_eq!(plain.line(), None);
+        assert_eq!(
+            plain.to_string(),
+            "a material line is a path, a space, a content hash and a kind"
+        );
+
+        let moved = FormatError::plain(FormatErrorKind::RepeatedFormat).with_line(7);
+
+        assert_eq!(moved.line(), Some(7));
+        assert_eq!(moved.kind(), &FormatErrorKind::RepeatedFormat);
+        assert_eq!(
+            moved.to_string(),
+            "line 7: the lock names its format version twice"
+        );
+    }
+
+    /// Every kind of refusal says what a lock got wrong, so a reader is told more than that it failed.
+    #[test]
+    fn every_refusal_kind_says_what_is_wrong() {
+        let cases = [
+            (
+                FormatErrorKind::MissingFormat,
+                "the lock names no format version",
+            ),
+            (
+                FormatErrorKind::FormatNotFirst,
+                "the format version is not the lock's first value",
+            ),
+            (
+                FormatErrorKind::RepeatedFormat,
+                "the lock names its format version twice",
+            ),
+            (
+                FormatErrorKind::MalformedFormat {
+                    text: "v1".to_owned(),
+                },
+                "`v1` is not a format version",
+            ),
+            (
+                FormatErrorKind::UnsupportedFormat { version: 9 },
+                "9 is not a format version this build reads",
+            ),
+            (
+                FormatErrorKind::UnknownLine { first: '#' },
+                "a line of a lock cannot begin with `#`",
+            ),
+            (
+                FormatErrorKind::UnknownFact {
+                    name: "future".to_owned(),
+                },
+                "`future` is not a fact this build reads",
+            ),
+            (
+                FormatErrorKind::MalformedFact {
+                    name: "future".to_owned(),
+                },
+                "`? future` does not carry the words it needs",
+            ),
+            (
+                FormatErrorKind::MalformedMaterial,
+                "a material line is a path, a space, a content hash and a kind",
+            ),
+            (
+                FormatErrorKind::UnknownMaterialKind {
+                    text: "dir".to_owned(),
+                },
+                "`dir` is not a material kind this build reads",
+            ),
+            (
+                FormatErrorKind::MalformedHash {
+                    text: "deadbeef".to_owned(),
+                },
+                "`deadbeef` is not `blake3:` and 64 lowercase hexadecimal digits",
+            ),
+            (
+                FormatErrorKind::InvalidPath {
+                    text: "../x".to_owned(),
+                },
+                "`../x` is not a path a lock may name",
+            ),
+            (
+                FormatErrorKind::InvalidName {
+                    name: "a b".to_owned(),
+                },
+                "`a b` is not a name a lock may give a Vault",
+            ),
+            (
+                FormatErrorKind::InvalidAddress {
+                    address: "nowhere".to_owned(),
+                },
+                "`nowhere` is not an address a lock may write down",
+            ),
+            (
+                FormatErrorKind::DuplicateVault {
+                    name: "dup".to_owned(),
+                },
+                "more than one Vault is named `dup`",
+            ),
+            (
+                FormatErrorKind::DuplicatePath {
+                    path: "a.png".to_owned(),
+                },
+                "more than one material is placed at `a.png`",
+            ),
+        ];
+
+        for (kind, expected) in cases {
+            assert_eq!(kind.to_string(), expected);
+        }
+    }
+}

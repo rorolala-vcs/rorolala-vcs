@@ -2331,10 +2331,12 @@ mod tests {
     use rorolala_utils_progress::Progress;
     use rorolala_vcs::{VCSIndex, VCSWrite as _};
     use rorolala_workspace::Workspace;
+    use uuid::Uuid;
 
     use super::{
-        Adjustment, Chain, Change, Mark, Request, Sheet, TweakOutcome, adjust, apply, cancel,
-        operations, width,
+        Adjustment, Chain, Change, Mark, Operation, Request, Sheet, SheetError, TargetMiss,
+        TweakOutcome, TweakRefusal, adjust, apply, cancel, operations, plan_dir, read_plan,
+        remove_plan, resolve, width, write_plan,
     };
     use crate::write::Cancellation;
     use crate::write::track::{TrackOptions, track_file};
@@ -2594,6 +2596,282 @@ mod tests {
         assert_eq!(
             recorded_version(&workspace),
             *after.level(2).unwrap().version.hash().digest()
+        );
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn every_fault_is_written_as_a_sentence() {
+        assert_eq!(SheetError::new(2, "bad").to_string(), "line 2: bad");
+        assert_eq!(
+            TargetMiss::NoMatch {
+                target: "x".to_owned()
+            }
+            .to_string(),
+            "nothing matches x"
+        );
+        assert_eq!(
+            TargetMiss::Ambiguous {
+                target: "x".to_owned(),
+                candidates: vec![1]
+            }
+            .to_string(),
+            "x matches more than one"
+        );
+        assert_eq!(
+            TargetMiss::Elsewhere {
+                target: "x".to_owned()
+            }
+            .to_string(),
+            "x belongs to another chain"
+        );
+        assert_eq!(
+            TargetMiss::OutOfChain {
+                target: "x".to_owned()
+            }
+            .to_string(),
+            "x reaches past the first version"
+        );
+        assert_eq!(
+            TargetMiss::Removed {
+                version: "V1".to_owned()
+            }
+            .to_string(),
+            "V1 is being removed"
+        );
+
+        assert_eq!(
+            TweakRefusal::NotRecorded.to_string(),
+            "the Layout records no entry at the path"
+        );
+        assert_eq!(
+            TweakRefusal::Nothing.to_string(),
+            "the entry records no version"
+        );
+        assert_eq!(
+            TweakRefusal::NotAChain.to_string(),
+            "the version is not the top of a chain"
+        );
+        assert_eq!(
+            TweakRefusal::Merging {
+                variant: "ab".to_owned()
+            }
+            .to_string(),
+            "the variant ab is waiting to be joined"
+        );
+        assert_eq!(
+            TweakRefusal::Sheet {
+                reason: "bad".to_owned()
+            }
+            .to_string(),
+            "bad"
+        );
+        assert_eq!(
+            TweakRefusal::Target(TargetMiss::NoMatch {
+                target: "x".to_owned()
+            })
+            .to_string(),
+            "nothing matches x"
+        );
+        let from_sheet: TweakRefusal = SheetError::new(1, "bad").into();
+        assert!(matches!(from_sheet, TweakRefusal::Sheet { .. }));
+        let from_write: TweakRefusal = crate::write::WriteError::NoIndex.into();
+        assert!(matches!(from_write, TweakRefusal::Failed(_)));
+
+        for operation in [
+            Operation::Creator {
+                version: "V0".to_owned(),
+                text: "a".to_owned(),
+            },
+            Operation::Message {
+                version: "V0".to_owned(),
+                text: "a".to_owned(),
+            },
+            Operation::Content {
+                version: "V0".to_owned(),
+                hash: "a".to_owned(),
+            },
+            Operation::Join {
+                version: "V0".to_owned(),
+                variant: "a".to_owned(),
+            },
+            Operation::Unjoin {
+                version: "V0".to_owned(),
+                variant: "a".to_owned(),
+            },
+            Operation::Insert {
+                below: "V0".to_owned(),
+                above: "V1".to_owned(),
+            },
+            Operation::Remove {
+                version: "V0".to_owned(),
+            },
+        ] {
+            assert_ne!(operation.to_string(), "");
+        }
+    }
+
+    #[test]
+    fn a_sheet_that_does_not_read_is_refused() {
+        // A marker with nothing after it.
+        assert!(Sheet::parse(">>> \n").is_err());
+        // No version the entry records.
+        assert!(Sheet::parse("alice first abc\n>>> abcd\n").is_err());
+        // No oldest version.
+        assert!(Sheet::parse(">>> LOCAL\nalice first abc\n").is_err());
+        // An unclosed quote.
+        assert!(Sheet::parse(">>> LOCAL\n\"alice first abc\n>>> abcd\n").is_err());
+        // Too few fields.
+        assert!(Sheet::parse(">>> LOCAL\nalice first\n>>> abcd\n").is_err());
+        // A merge without the marker a merge is written with.
+        assert!(Sheet::parse(">>> LOCAL\nalice first abc dead\n>>> abcd\n").is_err());
+    }
+
+    #[test]
+    fn a_chain_resolves_a_name_by_number_hash_and_words() {
+        let (dir, workspace) = recorded("resolve", &[("one", "first"), ("two", "second")]);
+        let chain = chain_of(&workspace);
+        let top = chain.top().unwrap();
+
+        assert_eq!(resolve(&chain, None).unwrap(), top);
+        assert_eq!(resolve(&chain, Some("~0")).unwrap(), top);
+        assert_eq!(resolve(&chain, Some("~1")).unwrap(), 0);
+        assert!(matches!(
+            resolve(&chain, Some("~9")),
+            Err(TargetMiss::OutOfChain { .. })
+        ));
+        assert!(matches!(
+            resolve(&chain, Some("~x")),
+            Err(TargetMiss::NoMatch { .. })
+        ));
+
+        let head = chain.short(0).unwrap();
+        assert_eq!(resolve(&chain, Some(&head)).unwrap(), 0);
+        let variant = super::short(chain.level(1).unwrap().variant.hash().digest());
+        assert_eq!(resolve(&chain, Some(&variant)).unwrap(), 1);
+
+        assert_eq!(resolve(&chain, Some("second")).unwrap(), 1);
+        assert!(matches!(
+            resolve(&chain, Some("alice")),
+            Err(TargetMiss::Ambiguous { .. })
+        ));
+        assert!(matches!(
+            resolve(&chain, Some("nothing")),
+            Err(TargetMiss::NoMatch { .. })
+        ));
+        assert!(matches!(
+            resolve(&chain, Some("0123456789ab")),
+            Err(TargetMiss::Elsewhere { .. })
+        ));
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn adjusting_a_row_below_and_above_the_range_extends_and_renders_it() {
+        let (dir, workspace) = recorded(
+            "wide",
+            &[("one", "first"), ("two", "second"), ("three", "third")],
+        );
+        let chain = chain_of(&workspace);
+        let columns = ["creator", "message", "content", "join"];
+
+        // A sheet standing from the second version is widened down to the first.
+        let widened = adjust(
+            &chain,
+            Some(&Sheet::plain(&chain, 1).unwrap()),
+            0,
+            &Change::Fields(Adjustment {
+                creator: Some("bob".to_owned()),
+                message: Some("edited".to_owned()),
+                content: Some("ba9876543210".to_owned()),
+                join: Some(None),
+            }),
+        )
+        .unwrap();
+        assert!(
+            widened
+                .render(&chain, &["note"], columns)
+                .unwrap()
+                .contains("bob")
+        );
+
+        // An added row at the top stands below the version the entry records.
+        let inserted = adjust(
+            &chain,
+            Some(&Sheet::plain(&chain, 0).unwrap()),
+            chain.top().unwrap(),
+            &Change::Insert,
+        )
+        .unwrap();
+        assert!(
+            inserted
+                .render(&chain, &[], columns)
+                .unwrap()
+                .contains("++")
+        );
+        assert_eq!(operations(&chain, &inserted).unwrap().len(), 1);
+
+        let dropped = adjust(
+            &chain,
+            Some(&Sheet::plain(&chain, 0).unwrap()),
+            0,
+            &Change::Drop,
+        )
+        .unwrap();
+        assert!(dropped.render(&chain, &[], columns).unwrap().contains("--"));
+        assert!(matches!(
+            adjust(
+                &chain,
+                Some(&dropped),
+                0,
+                &Change::Fields(Adjustment::default())
+            ),
+            Err(TweakRefusal::Target(TargetMiss::Removed { .. }))
+        ));
+
+        let (back, _) = cancel(&chain, &dropped, 1).unwrap();
+        assert!(back.is_empty());
+        assert!(matches!(
+            cancel(&chain, &dropped, 9),
+            Err(TweakRefusal::Target(TargetMiss::NoMatch { .. }))
+        ));
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn a_plan_is_written_read_back_and_removed() {
+        let (dir, workspace) = recorded("plan", &[("one", "first")]);
+        let chain = chain_of(&workspace);
+        let sheet = Sheet::plain(&chain, 0).unwrap();
+        let id = Uuid::from_u128(7);
+        let local = [3_u8; 32];
+
+        assert!(read_plan(&dir, id, &local).unwrap().is_none());
+        write_plan(
+            &dir,
+            id,
+            &local,
+            &sheet,
+            &chain,
+            &["note"],
+            ["creator", "message", "content", "join"],
+        )
+        .unwrap();
+        let read = read_plan(&dir, id, &local).unwrap().unwrap();
+        assert_eq!(read.rows().len(), sheet.rows().len());
+
+        remove_plan(&dir, id, &local).unwrap();
+        assert!(read_plan(&dir, id, &local).unwrap().is_none());
+        // Taking away what is already gone is not a failure.
+        remove_plan(&dir, id, &local).unwrap();
+        assert_eq!(
+            plan_dir(&dir, id, &local),
+            dir.join(super::WORKSPACE_TWEAKING_DIR)
+                .join(id.to_string())
+                .join(Key::new(local).hex())
         );
 
         let _ = fs::remove_dir_all(dir);

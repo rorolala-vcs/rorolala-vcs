@@ -236,6 +236,76 @@ impl EntryWriteOutcome {
 }
 
 #[cfg(test)]
+mod exchange_tests {
+    use rorolala_protocol::{Action as _, ActionContext, OnlyWorkspace};
+    use rorolala_utils_location::Locate as _;
+    use rorolala_vault::Vault;
+    use uuid::Uuid;
+
+    use crate::test_support::{member, run, scratch, session};
+
+    use super::{ActionWriteRemoteEntries, EntryWriteKind, RemoteCreate, RemoteSet};
+
+    /// A create and a set cross as one batch and answer one outcome per write, in order.
+    #[test]
+    fn a_batch_of_writes_is_made_on_the_vault_in_the_order_it_was_asked() {
+        let dir = scratch("write-remote-entries");
+        let vault_root = dir.join("vault");
+        Vault::create(&vault_root).unwrap();
+        let vault = Vault::locate(&vault_root).unwrap();
+        let id = Uuid::from_u128(4);
+        let created = "11".repeat(32);
+        let set = "22".repeat(32);
+
+        let input = (
+            vec![RemoteCreate {
+                path: "art/hero.psd".to_owned(),
+                uuid: id.to_string(),
+                version: created,
+                kind: "file".to_owned(),
+            }],
+            vec![RemoteSet {
+                uuid: id.to_string(),
+                version: set,
+            }],
+        );
+        let (client, server) = session();
+        let workspace_ctx = ActionContext::new_workspace_ctx(rorolala_auth::Account::default())
+            .with_channel(client);
+        let vault_ctx = ActionContext::new_vault_ctx(member(
+            &vault_root.join(rorolala_vault::KEYS_DIR),
+            "alice",
+        ))
+        .with_current_vault(&vault)
+        .with_channel(server);
+
+        let (here, there) = run(async {
+            tokio::join!(
+                ActionWriteRemoteEntries::process(
+                    OnlyWorkspace::from(Some(input.clone())),
+                    workspace_ctx
+                ),
+                ActionWriteRemoteEntries::process(
+                    OnlyWorkspace::<(Vec<RemoteCreate>, Vec<RemoteSet>)>::from(None),
+                    vault_ctx
+                ),
+            )
+        });
+
+        let here = here.unwrap();
+        let there = there.unwrap();
+
+        assert_eq!(here.count(), 2);
+        assert_eq!(there.count(), 2);
+        assert_eq!(here.at(0).unwrap().kind(), EntryWriteKind::Written);
+        assert_eq!(here.at(1).unwrap().kind(), EntryWriteKind::Written);
+        assert_eq!(there.at(1).unwrap().kind(), EntryWriteKind::Written);
+
+        let _ = std::fs::remove_dir_all(dir);
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::{EntryWrite, EntryWriteKind, EntryWriteOutcome, EntryWrites};
 

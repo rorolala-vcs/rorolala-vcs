@@ -505,3 +505,244 @@ fn view(index: &VCSIndex, runtime: &tokio::runtime::Runtime, variant: &Variant) 
         message: read_text(index, runtime, variant.message()),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use super::{LevelView, LookbackError, TopKind, VariantView, chain_of, read_chain, short_hash};
+    use crate::{ComputeBlake3, Creator, Hash, Message, VCSIndex, Variant, Version};
+
+    /// A directory of its own, emptied first so a rerun starts clean.
+    fn scratch(label: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "rola-cov-vcs-lookback-{label}-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        dir
+    }
+
+    /// An index holding two versions over the root, with the words of both variants.
+    struct Held {
+        dir: PathBuf,
+        index: VCSIndex,
+        runtime: tokio::runtime::Runtime,
+        creator: Creator,
+        message: Message,
+        creator_key: Hash,
+        first_version: Version,
+        first_version_key: Hash,
+        second_variant_key: Hash,
+        second_version_key: Hash,
+    }
+
+    fn held(label: &str) -> Held {
+        let dir = scratch(label);
+        let index = VCSIndex::create(dir.clone());
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+
+        let creator = Creator::try_from("me").unwrap();
+        let message = Message::try_from("did").unwrap();
+        let creator_key = runtime.block_on(index.write(creator.clone())).unwrap();
+        runtime.block_on(index.write(message.clone())).unwrap();
+        runtime.block_on(index.write(Version::root())).unwrap();
+
+        let first = Version::root().new_variant(
+            [1_u8; 32],
+            creator.compute_blake3(),
+            message.compute_blake3(),
+        );
+        runtime.block_on(index.write(first.clone())).unwrap();
+        let first_version = first.new_version();
+        let first_version_key = runtime
+            .block_on(index.write(first_version.clone()))
+            .unwrap();
+
+        let second = first_version.new_variant(
+            [2_u8; 32],
+            creator.compute_blake3(),
+            message.compute_blake3(),
+        );
+        let second_variant_key = runtime.block_on(index.write(second.clone())).unwrap();
+        let second_version_key = runtime.block_on(index.write(second.new_version())).unwrap();
+
+        Held {
+            dir,
+            index,
+            runtime,
+            creator,
+            message,
+            creator_key,
+            first_version,
+            first_version_key,
+            second_variant_key,
+            second_version_key,
+        }
+    }
+
+    /// A view drawn by `hash`, merging in `join` when one is named.
+    fn view(hash: &str, join: Option<&str>) -> VariantView {
+        VariantView {
+            hash: hash.to_owned(),
+            join: join.map(str::to_owned),
+            creator: String::new(),
+            message: String::new(),
+        }
+    }
+
+    #[test]
+    fn a_short_hash_is_the_leading_seven_characters() {
+        assert_eq!(short_hash("0123456789"), "0123456");
+        assert_eq!(short_hash("0123456"), "0123456");
+        assert_eq!(short_hash("ab"), "ab");
+        assert_eq!(short_hash(""), "");
+    }
+
+    #[test]
+    fn a_chain_is_drawn_from_its_levels_for_each_top() {
+        let levels = Vec::from([
+            LevelView {
+                number: 2,
+                variant: view("aaaaaaa", None),
+                merged: Vec::from([view("bbbbbbb", Some("cccccccc"))]),
+            },
+            LevelView {
+                number: 1,
+                variant: view("cccccccc", None),
+                merged: Vec::new(),
+            },
+        ]);
+
+        let chain = chain_of(&levels, TopKind::Version, true);
+
+        assert_eq!(chain.nodes().len(), 3);
+        assert_eq!(chain.top(), 2);
+        assert_eq!(chain.nodes()[0].label(), "aaaaaaa");
+        assert_eq!(chain.nodes()[1].label(), "bbbbbbb");
+        assert!(!chain.nodes()[1].is_spine());
+        assert_eq!(chain.nodes()[1].level(), 2);
+        assert_eq!(chain.nodes()[1].join(), Some(2));
+
+        // A version being edited is one past the highest recorded, drawn by a placeholder.
+        let editing = chain_of(&levels, TopKind::Editing, true);
+        assert_eq!(editing.nodes().len(), 4);
+        assert_eq!(editing.top(), 3);
+        assert_eq!(editing.nodes()[3].label(), "??");
+
+        let unknown = chain_of(&levels, TopKind::Unknown, false);
+        assert_eq!(unknown.nodes().len(), 3);
+        // Without a variant held apart for the oldest version, the highest recorded is one lower.
+        assert_eq!(unknown.top(), 1);
+    }
+
+    #[test]
+    fn a_chain_is_walked_from_each_of_its_tops() {
+        let held = held("walked");
+
+        let version =
+            read_chain(&held.index, &held.runtime, held.second_version_key, None).unwrap();
+        assert_eq!(version.levels.len(), 1);
+        assert_eq!(version.levels[0].variant.hash.len(), 64);
+        assert!(version.first.is_some());
+        assert_eq!(version.top, TopKind::Version);
+        assert_eq!(version.version_hashes.len(), 2);
+
+        let oldest = read_chain(&held.index, &held.runtime, held.first_version_key, None).unwrap();
+        assert_eq!(oldest.levels.len(), 0);
+        assert!(oldest.first.is_some());
+        assert_eq!(oldest.version_hashes.len(), 1);
+
+        let variant =
+            read_chain(&held.index, &held.runtime, held.second_variant_key, None).unwrap();
+        assert_eq!(variant.top, TopKind::Unknown);
+        // A variant is its chain's top over the version it is based on, so only it is a level.
+        assert_eq!(variant.levels.len(), 1);
+
+        // A Vault that records a version this chain holds marks where it stands.
+        let marked = read_chain(
+            &held.index,
+            &held.runtime,
+            held.second_version_key,
+            Some(("up", held.first_version.compute_blake3())),
+        )
+        .unwrap();
+        let origin = marked.origin.expect("an origin");
+        assert_eq!(origin.number, 0);
+        assert_eq!(origin.vault, "up");
+
+        let _ = std::fs::remove_dir_all(held.dir);
+    }
+
+    #[test]
+    fn an_object_that_starts_no_chain_is_refused() {
+        let held = held("refused");
+
+        assert!(matches!(
+            read_chain(&held.index, &held.runtime, held.creator_key, None),
+            Err(LookbackError::NotAChain)
+        ));
+        assert!(matches!(
+            read_chain(&held.index, &held.runtime, Hash::new([0xee; 32]), None),
+            Err(LookbackError::Read(_))
+        ));
+
+        let _ = std::fs::remove_dir_all(held.dir);
+    }
+
+    #[test]
+    fn a_variant_over_the_root_is_walked_as_a_chain_of_one() {
+        let held = held("over-root");
+
+        // A variant based on the root: the walk finds no version below it, so the chain is the
+        // variant alone and the root's own hash is the one version it names.
+        let variant = Variant::new_bare_variant(
+            [9_u8; 32],
+            Version::root().compute_blake3(),
+            None,
+            held.creator.compute_blake3(),
+            held.message.compute_blake3(),
+            0,
+        );
+        let key = held.runtime.block_on(held.index.write(variant)).unwrap();
+
+        let lookback = read_chain(&held.index, &held.runtime, key, None).unwrap();
+
+        assert_eq!(lookback.top, TopKind::Unknown);
+        assert_eq!(lookback.levels.len(), 1);
+        assert_eq!(lookback.levels[0].variant.hash.len(), 64);
+        assert!(lookback.first.is_none());
+        assert_eq!(lookback.version_hashes.len(), 1);
+
+        let _ = std::fs::remove_dir_all(held.dir);
+    }
+
+    #[test]
+    fn a_variant_drawn_nowhere_is_reported_with_the_version_it_is_based_on() {
+        let held = held("unjoined");
+
+        let stray = held.first_version.new_variant(
+            [7_u8; 32],
+            held.creator.compute_blake3(),
+            held.message.compute_blake3(),
+        );
+        held.runtime.block_on(held.index.write(stray)).unwrap();
+
+        let lookback =
+            read_chain(&held.index, &held.runtime, held.second_version_key, None).unwrap();
+        let found = lookback
+            .unjoined_variants(&held.index, &held.runtime)
+            .unwrap();
+
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].number, 0);
+        assert_eq!(found[0].version, lookback.version_hashes[&0]);
+        assert_eq!(found[0].variant.hash.len(), 64);
+        assert_eq!(found[0].variant.creator, "me");
+        assert_eq!(found[0].variant.message, "did");
+
+        let _ = std::fs::remove_dir_all(held.dir);
+    }
+}

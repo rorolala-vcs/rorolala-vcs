@@ -159,3 +159,72 @@ mod tests {
         assert!(unit_of("not-a-key").is_none());
     }
 }
+
+#[cfg(test)]
+mod exchange_tests {
+    use rorolala_auth::{Account, Member};
+    use rorolala_protocol::{Action as _, ActionContext, OnlyWorkspace};
+    use rorolala_storage::{RorolalaStorage, StorageSet, store_file};
+    use rorolala_utils_location::Locate as _;
+    use rorolala_vault::Vault;
+    use rorolala_workspace::Workspace;
+
+    use crate::test_support::{run, scratch, session};
+
+    use super::{ActionSyncHashes, SyncHashesRequest};
+
+    /// The named unit is carried to the Vault, and the answer is how much was read at once.
+    #[test]
+    fn a_named_unit_crosses_and_the_grant_comes_back() {
+        let dir = scratch("sync-hashes");
+        let workspace_root = dir.join("workspace");
+        Workspace::create(&workspace_root).unwrap();
+        let workspace = Workspace::locate(&workspace_root).unwrap();
+        let vault_root = dir.join("vault");
+        Vault::create(&vault_root).unwrap();
+        let vault = Vault::locate(&vault_root).unwrap();
+
+        let workspace_store = RorolalaStorage::create(dir.join("workspace-store"));
+        let workspace_set = StorageSet::sole(workspace_store.clone());
+        let vault_store = RorolalaStorage::create(dir.join("vault-store"));
+        let vault_set = StorageSet::sole(vault_store);
+
+        let file = dir.join("content.bin");
+        std::fs::write(&file, b"a content only the workspace holds").unwrap();
+        let key = run(store_file(&workspace_store, &file)).unwrap();
+
+        let units = format!("c:3 {}", key.hex());
+        let (client, server) = session();
+        let workspace_ctx = ActionContext::new_workspace_ctx(Account::default())
+            .with_current_workspace(&workspace)
+            .with_local_stores(&workspace_set)
+            .with_channel(client);
+        let vault_ctx = ActionContext::new_vault_ctx(Member::default())
+            .with_current_vault(&vault)
+            .with_local_stores(&vault_set)
+            .with_channel(server);
+
+        let (here, there) = run(async {
+            tokio::join!(
+                ActionSyncHashes::process(
+                    OnlyWorkspace::from(Some(SyncHashesRequest { units })),
+                    workspace_ctx
+                ),
+                ActionSyncHashes::process(
+                    OnlyWorkspace::<SyncHashesRequest>::from(None),
+                    vault_ctx
+                ),
+            )
+        });
+
+        // A Vault with no bound serves what was asked for: the Workspace is told the grant, while
+        // the Vault's own answer is what it falls back to once the answer has been handed over.
+        assert_eq!(here.unwrap(), "3");
+        assert_eq!(there.unwrap(), "1");
+
+        let held = run(vault_set.contains_keys(&[key])).unwrap();
+        assert!(held.held(0), "the Vault took what was named");
+
+        let _ = std::fs::remove_dir_all(dir);
+    }
+}

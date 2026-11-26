@@ -717,11 +717,16 @@ fn io(path: &Path, error: &std::io::Error) -> WriteError {
 mod tests {
     use std::fs;
 
+    use rorolala_storage::{Codec, RorolalaStorage, StorageSet};
+    use rorolala_tree::{FileMode, Staging, TreeEntry, TreeStructure, conflict_copy};
     use rorolala_utils_lazyffi::StrSpan;
     use rorolala_utils_location::Locate as _;
     use rorolala_workspace::Workspace;
 
-    use super::write_description;
+    use super::{
+        AddChangeKind, Cancellation, WriteError, put_back, stage_paths, write_description,
+        write_description_at,
+    };
 
     #[test]
     fn a_file_is_added_to_the_staged_structure() {
@@ -773,5 +778,304 @@ mod tests {
 
         assert_eq!(bytes, 5);
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// A description is written into the tree a directory names, however the target is written.
+    #[test]
+    fn a_description_is_written_by_relative_and_absolute_targets() {
+        let dir = std::env::temp_dir().join(format!(
+            "rola-cov-tree-description-at-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(dir.join(".rola-tree")).unwrap();
+        fs::create_dir_all(dir.join("tree/.rola-tree")).unwrap();
+        Workspace::create(&dir).unwrap();
+
+        // The empty target names the directory itself, which is a tree here.
+        let here = write_description_at(&dir, "", "today").unwrap();
+        assert_eq!(here.bytes(), 5);
+
+        let relative = write_description_at(&dir, "tree", "two").unwrap();
+        assert_eq!(relative.bytes(), 3);
+        let text = Staging::new(&dir.join("tree"))
+            .description()
+            .unwrap()
+            .unwrap_or_default();
+        assert_eq!(text, "two");
+
+        let absolute =
+            write_description_at(&dir, &dir.join("tree").display().to_string(), "one").unwrap();
+        assert_eq!(absolute.bytes(), 3);
+
+        let outside = std::env::temp_dir().join(format!(
+            "rola-cov-tree-description-none-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&outside);
+        fs::create_dir_all(&outside).unwrap();
+        let error = write_description_at(&outside, "", "none").unwrap_err();
+        assert!(matches!(error, WriteError::NoWorkspace));
+
+        let _ = fs::remove_dir_all(&outside);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// A directory is staged through its whole work, and a file removed from under it is staged
+    /// as gone.
+    #[test]
+    fn staging_a_directory_brings_every_file_under_it() {
+        let dir =
+            std::env::temp_dir().join(format!("rola-cov-tree-directory-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(dir.join("tree/.rola-tree")).unwrap();
+        fs::create_dir_all(dir.join("tree/art/sub")).unwrap();
+        fs::write(dir.join("tree/art/one.txt"), b"one").unwrap();
+        fs::write(dir.join("tree/art/sub/two.txt"), b"two").unwrap();
+        Workspace::create(&dir).unwrap();
+        let workspace = Workspace::locate(&dir).unwrap();
+        let tree = dir.join("tree");
+
+        let added = stage_paths(&workspace, &tree, "", &["art".to_owned()], false).unwrap();
+        assert!(
+            added
+                .iter()
+                .any(|change| change.path == "art/one.txt" && change.kind == AddChangeKind::Added),
+            "the file under the directory is staged"
+        );
+
+        fs::write(tree.join("art/one.txt"), b"changed").unwrap();
+        let updated = stage_paths(&workspace, &tree, "", &["art".to_owned()], false).unwrap();
+        assert!(
+            updated
+                .iter()
+                .any(|change| change.path == "art/one.txt" && change.kind == AddChangeKind::Updated),
+            "a changed file under the directory is updated"
+        );
+
+        fs::remove_file(tree.join("art/sub/two.txt")).unwrap();
+        let deleted = stage_paths(&workspace, &tree, "", &["art".to_owned()], false).unwrap();
+        assert!(
+            deleted
+                .iter()
+                .any(|change| change.path == "art/sub/two.txt"
+                    && change.kind == AddChangeKind::Deleted),
+            "a file the work no longer holds is staged as gone"
+        );
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// A path outside the tree, a path the tree never held, and a directory that is not a tree are
+    /// each refused, rather than staged as something else.
+    #[test]
+    fn an_unstageable_path_is_refused() {
+        let dir =
+            std::env::temp_dir().join(format!("rola-cov-tree-refused-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(dir.join("tree/.rola-tree")).unwrap();
+        fs::create_dir_all(dir.join("plain")).unwrap();
+        fs::write(dir.join("tree/one.txt"), b"one").unwrap();
+        Workspace::create(&dir).unwrap();
+        let workspace = Workspace::locate(&dir).unwrap();
+        let tree = dir.join("tree");
+
+        let outside =
+            stage_paths(&workspace, &tree, "", &["../plain".to_owned()], false).unwrap_err();
+        assert!(matches!(outside, WriteError::InvalidPath { .. }));
+
+        let absent =
+            stage_paths(&workspace, &tree, "", &["absent.txt".to_owned()], false).unwrap_err();
+        assert!(matches!(absent, WriteError::InvalidPath { .. }));
+
+        let not_a_tree = stage_paths(&workspace, &tree, "../plain", &[], false).unwrap_err();
+        assert!(matches!(not_a_tree, WriteError::NotATree { .. }));
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// Staging a path a merge left in conflict takes the path and its copy out of the list.
+    #[test]
+    fn staging_a_path_takes_it_out_of_the_conflicts() {
+        let dir =
+            std::env::temp_dir().join(format!("rola-cov-tree-conflict-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(dir.join("tree/.rola-tree")).unwrap();
+        fs::write(dir.join("tree/one.txt"), b"one").unwrap();
+        Workspace::create(&dir).unwrap();
+        let workspace = Workspace::locate(&dir).unwrap();
+        let tree = dir.join("tree");
+        let staging = Staging::new(&tree);
+        staging.ensure_store().unwrap();
+        staging.write_conflicts(&["one.txt".to_owned()]).unwrap();
+        let copy = tree.join(conflict_copy("one.txt"));
+        fs::write(&copy, b"theirs").unwrap();
+
+        stage_paths(&workspace, &tree, "", &["one.txt".to_owned()], false).unwrap();
+
+        assert_eq!(staging.conflicts().unwrap().len(), 0);
+        assert!(
+            !copy.exists(),
+            "the copy a merge left is taken away with the conflict"
+        );
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// Removing a staged path from the work stages its deletion.
+    #[test]
+    fn a_staged_path_the_work_no_longer_holds_is_staged_as_gone() {
+        let dir =
+            std::env::temp_dir().join(format!("rola-cov-tree-deleted-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(dir.join("tree/.rola-tree")).unwrap();
+        fs::write(dir.join("tree/one.txt"), b"one").unwrap();
+        Workspace::create(&dir).unwrap();
+        let workspace = Workspace::locate(&dir).unwrap();
+        let tree = dir.join("tree");
+
+        stage_paths(&workspace, &tree, "", &["one.txt".to_owned()], false).unwrap();
+        fs::remove_file(tree.join("one.txt")).unwrap();
+        let staged = stage_paths(&workspace, &tree, "", &["one.txt".to_owned()], false).unwrap();
+
+        assert!(
+            staged
+                .iter()
+                .any(|change| change.path == "one.txt" && change.kind == AddChangeKind::Deleted),
+            "the removal is reported as a deletion"
+        );
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// Writing a structure back over a work writes what it names and takes away what it dropped.
+    #[test]
+    fn putting_back_writes_the_target_and_takes_out_what_it_dropped() {
+        let dir =
+            std::env::temp_dir().join(format!("rola-cov-tree-put-back-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let store = StorageSet::sole(RorolalaStorage::create(dir.join("store")));
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+
+        let alpha = runtime
+            .block_on(store.write_object(b"alpha", Codec::Raw))
+            .unwrap();
+        let beta = runtime
+            .block_on(store.write_object(b"beta", Codec::Raw))
+            .unwrap();
+        let root = dir.join("work");
+
+        let target = TreeStructure::build(
+            None,
+            [
+                TreeEntry::directory("art"),
+                TreeEntry::file("art/a.txt", FileMode::Regular, alpha),
+                TreeEntry::file("b.txt", FileMode::Regular, beta),
+            ],
+        )
+        .unwrap();
+        let old = TreeStructure::build(
+            None,
+            [
+                TreeEntry::directory("art"),
+                TreeEntry::directory("gone"),
+                TreeEntry::file("art/a.txt", FileMode::Regular, beta),
+                TreeEntry::file("art/old.txt", FileMode::Regular, alpha),
+            ],
+        )
+        .unwrap();
+
+        run_put_back(&runtime, &store, &root, &target, &old);
+
+        assert_eq!(fs::read(root.join("art/a.txt")).unwrap(), b"alpha");
+        assert_eq!(fs::read(root.join("b.txt")).unwrap(), b"beta");
+        assert!(
+            !root.join("art/old.txt").exists(),
+            "an entry dropped is taken away"
+        );
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// A put-back asked to stop writes nothing, and one whose content is not in the store says so.
+    #[test]
+    fn a_cancelled_or_unstored_put_back_is_refused() {
+        let dir = std::env::temp_dir().join(format!(
+            "rola-cov-tree-put-back-fail-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let store = StorageSet::sole(RorolalaStorage::create(dir.join("store")));
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let root = dir.join("work");
+        let target = TreeStructure::build(
+            None,
+            [TreeEntry::file(
+                "a.txt",
+                FileMode::Regular,
+                rorolala_storage::Key::new([9; 32]),
+            )],
+        )
+        .unwrap();
+
+        let cancelled = Cancellation::new();
+        cancelled.cancel();
+        let error = put_back(
+            &runtime,
+            &store,
+            &root,
+            &target,
+            &TreeStructure::empty(),
+            false,
+            &cancelled,
+        )
+        .unwrap_err();
+        assert!(matches!(error, WriteError::Cancelled));
+
+        let error = put_back(
+            &runtime,
+            &store,
+            &root,
+            &target,
+            &TreeStructure::empty(),
+            false,
+            &Cancellation::new(),
+        )
+        .unwrap_err();
+        assert!(matches!(error, WriteError::Storage { .. }));
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// Writes `target` over `root`, with `old` as what was there before.
+    fn run_put_back(
+        runtime: &tokio::runtime::Runtime,
+        store: &StorageSet,
+        root: &std::path::Path,
+        target: &TreeStructure,
+        old: &TreeStructure,
+    ) {
+        put_back(
+            runtime,
+            store,
+            root,
+            target,
+            old,
+            true,
+            &Cancellation::new(),
+        )
+        .unwrap();
+        put_back(
+            runtime,
+            store,
+            root,
+            target,
+            target,
+            true,
+            &Cancellation::new(),
+        )
+        .unwrap();
     }
 }

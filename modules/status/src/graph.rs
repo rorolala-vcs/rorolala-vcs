@@ -706,6 +706,46 @@ mod tests {
         assert_eq!(graph.variants[0].creator, "me");
         assert_eq!(graph.variants[0].message, "did");
 
+        // Every accessor answers its part, and an index past the end answers nothing rather than
+        // failing.
+        assert_eq!(graph.version_count(), 2);
+        assert_eq!(graph.version_level(0), 1);
+        assert_eq!(graph.version_level(1), 0);
+        assert_eq!(graph.version_level(9), 0);
+        assert_eq!(graph.version_hash(0), graph.versions[0].hash);
+        assert_eq!(graph.version_hash(9), "");
+        assert_eq!(graph.version_creator(0), "me");
+        assert_eq!(graph.version_creator(9), "");
+        assert_eq!(graph.version_message(1), "did");
+        assert_eq!(graph.version_message(9), "");
+
+        assert_eq!(graph.variant_count(), 1);
+        assert_eq!(graph.variant_label(0).len(), 7);
+        assert_eq!(graph.variant_label(9), "");
+        assert_eq!(graph.variant_hash(0).len(), 64);
+        assert_eq!(graph.variant_hash(9), "");
+        assert_eq!(graph.variant_level(0), 0);
+        assert_eq!(graph.variant_level(9), 0);
+        assert!(graph.variant_spine(0));
+        assert!(!graph.variant_spine(9));
+        assert_eq!(graph.variant_join(0), -1);
+        assert_eq!(graph.variant_join(9), -1);
+        assert_eq!(graph.variant_creator(0), "me");
+        assert_eq!(graph.variant_creator(9), "");
+        assert_eq!(graph.variant_message(0), "did");
+        assert_eq!(graph.variant_message(9), "");
+
+        // No Vault is tracked here, so nothing marks where one stands and no upstream is held.
+        assert_eq!(graph.origin_level(), -1);
+        assert_eq!(graph.origin_vault(), "");
+        assert_eq!(graph.upstream_count(), 0);
+        assert_eq!(graph.upstream_level(0), 0);
+        assert_eq!(graph.upstream_hash(0), "");
+        assert_eq!(graph.upstream_creator(0), "");
+        assert_eq!(graph.upstream_message(0), "");
+        assert_eq!(graph.upstream_head(), "");
+        assert_eq!(graph.upstream_vault(), "");
+
         let _ = fs::remove_dir_all(&dir);
     }
 

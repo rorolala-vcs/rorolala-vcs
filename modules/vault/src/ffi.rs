@@ -177,4 +177,27 @@ mod tests {
         // SAFETY: as above.
         unsafe { rola_vault_lock_release(ptr::null_mut()) };
     }
+
+    /// The exports are reached by the C symbols the header declares, and a lock is taken through one.
+    #[test]
+    fn every_export_is_reachable_as_the_c_symbol_it_is_declared_by() {
+        let dir = scratch("symbols");
+        let vault = RolaVault(Vault::at(dir.clone()));
+        let is_locking: unsafe extern "C" fn(*const RolaVault) -> bool = rola_vault_is_locking;
+        let acquire: unsafe extern "C" fn(*const RolaVault) -> *mut RolaVaultLocking =
+            rola_vault_lock_acquire;
+        let release: unsafe extern "C" fn(*mut RolaVaultLocking) = rola_vault_lock_release;
+
+        // SAFETY: the handle is live for each call, and the guard is the one `acquire` handed out.
+        unsafe {
+            assert!(!is_locking(&raw const vault));
+            let guard = acquire(&raw const vault);
+            assert!(!guard.is_null());
+            assert!(is_locking(&raw const vault));
+            release(guard);
+            assert!(!is_locking(&raw const vault));
+        }
+
+        let _ = std::fs::remove_dir_all(dir);
+    }
 }

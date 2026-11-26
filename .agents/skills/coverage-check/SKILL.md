@@ -58,3 +58,22 @@ those suites run, so the complete picture comes from the Linux job.
 - CI uploads `.cache/reports/coverage/` as the `coverage-report` artifact.
 
 Running `cargo ci coverage` again rewrites all three.
+
+## A trap: hand-written C exports
+
+The workspace report and a single crate report can disagree for a file whose functions are
+`#[unsafe(no_mangle)] extern "C"` and are also called from Rust. In the workspace report those
+bodies are inlined, the standalone copies never run, and the lines read as uncovered. The same
+file measured on its own shows them covered:
+
+```sh
+cargo llvm-cov -p <crate> --lib --summary-only
+```
+
+Three files are in this state: `modules/workspace/src/ffi.rs`, `modules/vault/src/ffi.rs` and
+`modules/desktop-pty/src/pty.rs`. They read 63 to 65 percent in the workspace report while the
+single crate run reads about 94 to 98. For these three, the single crate number is the truth.
+
+Do not add `black_box` or `#[inline(never)]`, and do not split a thin wrapper from an inner
+function, to chase the workspace number: each was tried and each made the merge report the file
+twice and lower it further.

@@ -94,7 +94,18 @@ impl Action for ActionRequestOwnership {
 
 #[cfg(test)]
 mod tests {
+    use rorolala_auth::Account;
+    use rorolala_layout::MutableData;
+    use rorolala_protocol::{Action as _, ActionContext, OnlyWorkspace};
+    use rorolala_utils_location::Locate as _;
+    use rorolala_vault::Vault;
+    use uuid::Uuid;
+
+    use crate::test_support::{member, run, scratch, session};
+
+    use super::ActionRequestOwnership;
     use super::{OwnershipChange, RequestOwnershipRequest};
+    use crate::Ownership;
 
     #[test]
     fn a_request_becomes_the_change_the_exchange_carries() {
@@ -105,5 +116,57 @@ mod tests {
 
         assert_eq!(change.name, "note");
         assert_eq!(change.uuids, ["a", "b"]);
+    }
+
+    /// An entry nobody holds is taken by the account that asks, over a session.
+    #[test]
+    fn an_entry_nobody_holds_is_taken_over_a_session() {
+        let dir = scratch("request-ownership");
+        let vault_root = dir.join("vault");
+        Vault::create(&vault_root).unwrap();
+        let vault = Vault::locate(&vault_root).unwrap();
+        let layout = vault.layout().unwrap();
+        let id = Uuid::from_u128(3);
+        layout
+            .create_entry(id, MutableData::new(None, [3; 32], String::new()))
+            .unwrap();
+
+        let request = RequestOwnershipRequest::new("note".to_owned(), vec![id.to_string()]);
+        let (client, server) = session();
+        let workspace_ctx =
+            ActionContext::new_workspace_ctx(Account::default()).with_channel(client);
+        let vault_ctx = ActionContext::new_vault_ctx(member(
+            &vault_root.join(rorolala_vault::KEYS_DIR),
+            "alice",
+        ))
+        .with_current_vault(&vault)
+        .with_channel(server);
+
+        let (here, there) = run(async {
+            tokio::join!(
+                ActionRequestOwnership::process(
+                    OnlyWorkspace::from(Some(OwnershipChange::from(request))),
+                    workspace_ctx
+                ),
+                ActionRequestOwnership::process(
+                    OnlyWorkspace::<OwnershipChange>::from(None),
+                    vault_ctx
+                ),
+            )
+        });
+
+        let there = there.unwrap();
+        let here = here.unwrap();
+
+        assert_eq!(
+            here.outcomes(),
+            [Ownership::Owner(Some("alice".to_owned()))]
+        );
+        assert_eq!(
+            there.outcomes(),
+            [Ownership::Owner(Some("alice".to_owned()))]
+        );
+
+        let _ = std::fs::remove_dir_all(dir);
     }
 }

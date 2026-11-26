@@ -363,7 +363,8 @@ mod tests {
     use rorolala_vcs::view::ReadObjectView;
     use rorolala_vcs::{ROOT_VERSION, VCSIndex};
 
-    use super::{IndexObjectInput, write_file_version, write_object};
+    use super::{IndexObjectInput, write_file_version, write_file_version_at, write_object};
+    use crate::write::WriteError;
 
     #[test]
     fn a_file_version_names_its_variant_and_creator() {
@@ -430,6 +431,81 @@ mod tests {
         assert!(matches!(
             index.object_view(&message).unwrap(),
             ReadObjectView::Message { text } if text == "first"
+        ));
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_file_version_at_a_directory_reads_its_base_from_the_index() {
+        let dir = std::env::temp_dir().join(format!("rola-write-at-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let _ = rorolala_workspace::Workspace::create(&dir);
+        let storage = rorolala_storage::Key::new([4; 32]).to_string();
+        let zero = rorolala_storage::Key::new([0; 32]).to_string();
+
+        let first = write_file_version_at(&dir, &storage, &zero, "", "alice", "first").unwrap();
+        assert_ne!(first.variant(), "");
+        assert_ne!(first.version(), "");
+
+        let join = rorolala_storage::Key::new([5; 32]).to_string();
+        let second =
+            write_file_version_at(&dir, &storage, &first.version(), &join, "alice", "second")
+                .unwrap();
+        assert_ne!(second.version(), first.version());
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_key_that_does_not_read_is_a_precondition() {
+        let dir = std::env::temp_dir().join(format!("rola-write-bad-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let _ = rorolala_workspace::Workspace::create(&dir);
+        let zero = rorolala_storage::Key::new([0; 32]).to_string();
+
+        assert!(matches!(
+            write_file_version_at(&dir, "not a key", &zero, "", "alice", "first"),
+            Err(WriteError::Precondition { .. })
+        ));
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_variant_and_a_version_object_are_written_by_key() {
+        let dir = std::env::temp_dir().join(format!("rola-write-object-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let _ = rorolala_workspace::Workspace::create(&dir);
+        let index = VCSIndex::locate(&dir).unwrap();
+        let key = rorolala_storage::Key::new;
+
+        let variant = write_object(
+            &dir,
+            IndexObjectInput::Variant {
+                storage: key([1; 32]).to_string(),
+                base_version: key([0; 32]).to_string(),
+                join: key([2; 32]).to_string(),
+                creator: key([3; 32]).to_string(),
+                message: key([4; 32]).to_string(),
+            },
+        )
+        .unwrap()
+        .key();
+        assert!(matches!(
+            index.object_view(&variant).unwrap(),
+            ReadObjectView::Variant { .. }
+        ));
+
+        let version = write_object(&dir, IndexObjectInput::Version { variant })
+            .unwrap()
+            .key();
+        assert!(matches!(
+            index.object_view(&version).unwrap(),
+            ReadObjectView::Version { .. }
         ));
 
         let _ = fs::remove_dir_all(&dir);

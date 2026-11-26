@@ -2976,13 +2976,19 @@ mod tests {
     use uuid::Uuid;
 
     use super::{
-        EntryTarget, HashMiss, Recorded, Recording, Relation, RetrackInput, RetrackOptions,
-        RetrackOutcome, RetrackedPath, RetrackedTree, SwitchAction, SwitchRefusal, TargetRefusal,
-        VersionTarget, WriteRetrack, recording_of, relation, resolve_hash, retrack_at,
-        retrack_file, retrack_vault_file, switch_action, switched_data, told,
+        EntryRefusal, EntryTarget, HashMiss, Recorded, Recording, Relation, RetrackInput,
+        RetrackOptions, RetrackOutcome, RetrackRefusal, RetrackedPath, RetrackedTree, SwitchAction,
+        SwitchRefusal, TargetRefusal, VersionTarget, WriteRetrack, digests, entry_written, hex,
+        internal, recording_of, refused, relation, resolve_hash, retrack_at, retrack_file,
+        retrack_file_at, retrack_vault_file, retrack_vault_file_at, switch_action, switched_data,
+        told, tree_above, tree_rules, version_keys,
     };
-    use crate::write::track::{TrackOptions, track_file, track_vault_file};
-    use crate::write::{Cancellation, WriteProgress};
+    use crate::write::track::batch::{TrackAgreed, TrackInput, TrackMessage};
+    use crate::write::track::{
+        TrackOptions, track_apply_at, track_file, track_plan_at, track_vault_file,
+    };
+    use crate::write::tree::stage_paths;
+    use crate::write::{Cancellation, WriteError, WriteProgress};
 
     #[test]
     fn only_index_leaves_the_work_alone() {
@@ -3523,5 +3529,777 @@ mod tests {
         assert_eq!(answer.kind(), "tree");
         assert_eq!(answer.path(), "art");
         assert_eq!(answer.took_count(), 0);
+    }
+
+    /// A refusal of where the path stands is the failure a caller branches on: a path the Layout
+    /// does not name is an invalid path, and every other one is a precondition on the run.
+    #[test]
+    fn a_refusal_of_the_path_is_the_failure_a_caller_branches_on() {
+        assert!(matches!(
+            refused(
+                RetrackRefusal::NotRecorded {
+                    path: "a.txt".to_owned(),
+                },
+                "",
+            ),
+            WriteError::InvalidPath { .. }
+        ));
+        assert!(matches!(
+            refused(
+                RetrackRefusal::Nothing {
+                    path: "a.txt".to_owned(),
+                },
+                "",
+            ),
+            WriteError::Precondition { .. }
+        ));
+        assert!(matches!(
+            refused(
+                RetrackRefusal::Modified {
+                    path: "a.txt".to_owned(),
+                },
+                "",
+            ),
+            WriteError::Precondition { .. }
+        ));
+        assert!(matches!(
+            refused(
+                RetrackRefusal::Merging {
+                    path: "a.txt".to_owned(),
+                    variant: "0f".to_owned(),
+                },
+                "",
+            ),
+            WriteError::Precondition { .. }
+        ));
+    }
+
+    /// A tree that holds work and a jump off the chain are preconditions too, and so is a failure
+    /// the run carries as itself.
+    #[test]
+    fn a_refusal_of_a_tree_or_a_step_is_a_precondition() {
+        assert!(matches!(
+            refused(
+                RetrackRefusal::TreeDirty {
+                    path: "art".to_owned(),
+                },
+                "",
+            ),
+            WriteError::Precondition { .. }
+        ));
+        assert!(matches!(
+            refused(
+                RetrackRefusal::Jump {
+                    path: "a.txt".to_owned(),
+                },
+                "",
+            ),
+            WriteError::Precondition { .. }
+        ));
+        assert!(matches!(
+            refused(RetrackRefusal::Target(TargetRefusal::NotATarget), ""),
+            WriteError::Precondition { .. }
+        ));
+        assert!(matches!(
+            refused(RetrackRefusal::Entry(EntryRefusal::NoVaultTracked), "x"),
+            WriteError::Precondition { .. }
+        ));
+        assert!(matches!(
+            refused(RetrackRefusal::Failed(WriteError::NoIndex), ""),
+            WriteError::NoIndex
+        ));
+    }
+
+    /// A refusal says what it refused, in the words a caller reads.
+    #[test]
+    fn a_refusal_says_what_it_refused() {
+        assert_eq!(
+            RetrackRefusal::NotRecorded {
+                path: "a.txt".to_owned(),
+            }
+            .to_string(),
+            "the Layout records no entry at a.txt"
+        );
+        assert_eq!(
+            RetrackRefusal::Nothing {
+                path: "a.txt".to_owned(),
+            }
+            .to_string(),
+            "a.txt was never recorded"
+        );
+        assert_eq!(
+            RetrackRefusal::Modified {
+                path: "a.txt".to_owned(),
+            }
+            .to_string(),
+            "a.txt has changes never recorded"
+        );
+        assert_eq!(
+            RetrackRefusal::Merging {
+                path: "a.txt".to_owned(),
+                variant: "0f".to_owned(),
+            }
+            .to_string(),
+            "a.txt has the variant 0f waiting"
+        );
+    }
+
+    /// The rest of the refusals say what they refused as well, a tree and a jump included.
+    #[test]
+    fn the_other_refusals_say_what_they_refused() {
+        assert_eq!(
+            RetrackRefusal::TreeDirty {
+                path: "art".to_owned(),
+            }
+            .to_string(),
+            "art holds work never recorded"
+        );
+        assert_eq!(
+            RetrackRefusal::Jump {
+                path: "a.txt".to_owned(),
+            }
+            .to_string(),
+            "a.txt would jump to another chain"
+        );
+        assert_eq!(
+            RetrackRefusal::Target(TargetRefusal::DashNumber).to_string(),
+            "a step count written with a dash is read as a flag"
+        );
+        assert_eq!(
+            RetrackRefusal::Target(TargetRefusal::AmbiguousHash {
+                candidates: vec!["0f".to_owned(), "1f".to_owned()],
+            })
+            .to_string(),
+            "the hash names 0f, 1f"
+        );
+        assert_eq!(
+            RetrackRefusal::Entry(EntryRefusal::Named {
+                uuid: "0f".to_owned(),
+                path: "b.txt".to_owned(),
+            })
+            .to_string(),
+            "0f is recorded under b.txt"
+        );
+        assert_eq!(
+            RetrackRefusal::Failed(WriteError::NoIndex).to_string(),
+            WriteError::NoIndex.to_string()
+        );
+    }
+
+    /// A target refusal names the chain it is outside and the way back it is not on, and an entry
+    /// refusal names the Vault, the `Uuid` and the version a caller reads.
+    #[test]
+    fn a_target_and_an_entry_refusal_say_what_they_found() {
+        assert_eq!(
+            TargetRefusal::NotAVersion.to_string(),
+            "the hash names no version"
+        );
+        assert_eq!(
+            TargetRefusal::OutOfChain {
+                path: "a.txt".to_owned(),
+            }
+            .to_string(),
+            "the target is outside the chain a.txt is at"
+        );
+        assert_eq!(
+            TargetRefusal::NotAncestor {
+                path: "a.txt".to_owned(),
+            }
+            .to_string(),
+            "the target is not on the way back from a.txt"
+        );
+
+        assert_eq!(
+            EntryRefusal::NoVaultTracked.to_string(),
+            "the Layout tracks no Vault"
+        );
+        assert_eq!(
+            EntryRefusal::NotUpstream {
+                vault: "origin".to_owned(),
+            }
+            .to_string(),
+            "origin names no such path"
+        );
+        assert_eq!(
+            EntryRefusal::UnknownUuid {
+                uuid: "0f".to_owned(),
+            }
+            .to_string(),
+            "nothing holds 0f"
+        );
+        assert_eq!(
+            EntryRefusal::SameUuid {
+                uuid: "0f".to_owned(),
+            }
+            .to_string(),
+            "the path records 0f already"
+        );
+        assert_eq!(
+            EntryRefusal::NoVersion {
+                uuid: "0f".to_owned(),
+            }
+            .to_string(),
+            "0f records no version"
+        );
+    }
+
+    /// The small helpers read what they are given: a hash is written as hex, a chain names the
+    /// hashes it holds, and an empty index names no version at all.
+    #[test]
+    fn the_helpers_answer_what_they_are_given() {
+        assert_eq!(hex([1; 32]), Key::new([1; 32]).hex());
+        assert!(matches!(
+            internal("broken"),
+            RetrackRefusal::Failed(WriteError::Internal { .. })
+        ));
+        assert_eq!(digests(&[]).len(), 0);
+        assert_eq!(
+            entry_written(&EntryTarget::Uuid(Uuid::from_u128(3))),
+            Uuid::from_u128(3).to_string()
+        );
+        assert_eq!(
+            entry_written(&EntryTarget::Upstream(
+                rorolala_layout::LayoutPath::new("art").unwrap()
+            )),
+            "art"
+        );
+        assert_eq!(version_keys(None).len(), 0);
+    }
+
+    /// The rules a tree is read by are the Workspace's own, and a Workspace with none reads as
+    /// none rather than as a failure.
+    #[test]
+    fn the_rules_of_a_tree_are_the_workspaces_own() {
+        let dir =
+            std::env::temp_dir().join(format!("rola-cov-retrack-rules-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        Workspace::create(&dir).unwrap();
+        let workspace = Workspace::locate(&dir).unwrap();
+
+        let rules = tree_rules(&workspace);
+        assert!(!rules.is_ignore(std::path::Path::new("a.txt"), false));
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// A path outside the Workspace and a target that is no version are refused before anything is
+    /// read, and a fork beside a target names nothing the run could act on.
+    #[test]
+    fn a_path_or_a_target_the_run_cannot_use_is_refused() {
+        let dir =
+            std::env::temp_dir().join(format!("rola-cov-retrack-refused-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        Workspace::create(&dir).unwrap();
+        let workspace = Workspace::locate(&dir).unwrap();
+        fs::write(dir.join("a.txt"), b"one").unwrap();
+        track_file(
+            &workspace,
+            &dir,
+            "a.txt",
+            "alice",
+            "first",
+            TrackOptions::default(),
+        )
+        .unwrap();
+
+        assert!(
+            retrack_file(
+                &workspace,
+                &dir,
+                "../outside.txt",
+                None,
+                RetrackOptions::default()
+            )
+            .is_err()
+        );
+        assert!(
+            retrack_file(
+                &workspace,
+                &dir,
+                "missing.txt",
+                None,
+                RetrackOptions::default()
+            )
+            .is_err()
+        );
+        assert!(
+            retrack_file(
+                &workspace,
+                &dir,
+                "a.txt",
+                Some("not-a-hash"),
+                RetrackOptions::default()
+            )
+            .is_err()
+        );
+        assert!(
+            retrack_file(
+                &workspace,
+                &dir,
+                "a.txt",
+                Some("0f".repeat(32).as_str()),
+                RetrackOptions {
+                    fork: true,
+                    ..RetrackOptions::default()
+                }
+            )
+            .is_err()
+        );
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// The one-file C entry works for a Workspace and for a Vault, and answers what it wrote.
+    #[test]
+    fn a_one_file_retrack_crosses_the_abi() {
+        let dir = std::env::temp_dir().join(format!("rola-cov-retrack-abi-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        Workspace::create(&dir).unwrap();
+        let workspace = Workspace::locate(&dir).unwrap();
+        fs::write(dir.join("a.txt"), b"one").unwrap();
+        let first = track_file(
+            &workspace,
+            &dir,
+            "a.txt",
+            "alice",
+            "first",
+            TrackOptions::default(),
+        )
+        .unwrap();
+        fs::write(dir.join("a.txt"), b"two").unwrap();
+        track_file(
+            &workspace,
+            &dir,
+            "a.txt",
+            "alice",
+            "second",
+            TrackOptions::default(),
+        )
+        .unwrap();
+
+        let answer = retrack_file_at(
+            &dir,
+            "a.txt",
+            &first.version.hex(),
+            false,
+            true,
+            false,
+            false,
+        )
+        .expect("the record moves");
+        assert_eq!(answer.version(), first.version.to_string());
+
+        let vault_dir =
+            std::env::temp_dir().join(format!("rola-cov-retrack-abi-vault-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&vault_dir);
+        fs::create_dir_all(&vault_dir).unwrap();
+        Vault::create(&vault_dir).unwrap();
+        let vault = Vault::locate(&vault_dir).unwrap();
+        fs::write(vault_dir.join("a.txt"), b"one").unwrap();
+        let first = track_vault_file(
+            &vault,
+            &vault_dir,
+            "a.txt",
+            "alice",
+            "first",
+            TrackOptions::default(),
+        )
+        .unwrap();
+        fs::write(vault_dir.join("a.txt"), b"two").unwrap();
+        track_vault_file(
+            &vault,
+            &vault_dir,
+            "a.txt",
+            "alice",
+            "second",
+            TrackOptions::default(),
+        )
+        .unwrap();
+
+        let answer = retrack_vault_file_at(
+            &vault_dir,
+            "a.txt",
+            &first.version.hex(),
+            false,
+            true,
+            false,
+            false,
+        )
+        .expect("the record moves");
+        assert_eq!(answer.version(), first.version.to_string());
+
+        let _ = fs::remove_dir_all(&dir);
+        let _ = fs::remove_dir_all(&vault_dir);
+    }
+
+    /// A request that says two opposite things, and one the caller stopped, are refused before the
+    /// Workspace is reached.
+    #[test]
+    fn a_request_that_says_two_opposite_things_is_refused() {
+        let dir =
+            std::env::temp_dir().join(format!("rola-cov-retrack-request-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        Workspace::create(&dir).unwrap();
+
+        let common = crate::write::request::WriteCommon {
+            workspace: dir.display().to_string(),
+            ..Default::default()
+        };
+        let fork = RetrackInput {
+            common: common.clone(),
+            file: "a.txt".to_owned(),
+            record: "~1".to_owned(),
+            only_index: false,
+            deny_jump: false,
+            fork: true,
+        };
+        let error = retrack_at(&fork, &WriteProgress::new(), &Cancellation::new())
+            .expect_err("a fork names no target");
+        assert!(matches!(error, WriteError::Precondition { .. }));
+
+        let both = RetrackInput {
+            common: crate::write::request::WriteCommon {
+                force: true,
+                ..common
+            },
+            file: "a.txt".to_owned(),
+            record: String::new(),
+            only_index: true,
+            deny_jump: false,
+            fork: false,
+        };
+        let error = retrack_at(&both, &WriteProgress::new(), &Cancellation::new())
+            .expect_err("the two flags disagree");
+        assert!(matches!(error, WriteError::Precondition { .. }));
+
+        let cancellation = Cancellation::new();
+        cancellation.cancel();
+        let stopped = RetrackInput {
+            common: crate::write::request::WriteCommon {
+                workspace: dir.display().to_string(),
+                ..Default::default()
+            },
+            file: "a.txt".to_owned(),
+            record: String::new(),
+            only_index: false,
+            deny_jump: false,
+            fork: false,
+        };
+        let error = retrack_at(&stopped, &WriteProgress::new(), &cancellation)
+            .expect_err("the run was asked to stop");
+        assert!(matches!(error, WriteError::Cancelled));
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// The entry a target names is refused when this Layout already names it under another path.
+    #[test]
+    fn an_entry_named_under_another_path_is_refused() {
+        let dir =
+            std::env::temp_dir().join(format!("rola-cov-retrack-named-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        Workspace::create(&dir).unwrap();
+        let workspace = Workspace::locate(&dir).unwrap();
+        fs::write(dir.join("a.txt"), b"one").unwrap();
+        track_file(
+            &workspace,
+            &dir,
+            "a.txt",
+            "alice",
+            "first",
+            TrackOptions::default(),
+        )
+        .unwrap();
+        fs::write(dir.join("b.txt"), b"other").unwrap();
+        let other = track_file(
+            &workspace,
+            &dir,
+            "b.txt",
+            "alice",
+            "other",
+            TrackOptions::default(),
+        )
+        .unwrap();
+
+        let request = RetrackInput {
+            common: crate::write::request::WriteCommon {
+                workspace: dir.display().to_string(),
+                ..Default::default()
+            },
+            file: "a.txt".to_owned(),
+            record: other.id.to_string(),
+            only_index: true,
+            deny_jump: false,
+            fork: false,
+        };
+        let error = retrack_at(&request, &WriteProgress::new(), &Cancellation::new())
+            .expect_err("the entry is named elsewhere");
+        assert!(matches!(error, WriteError::Precondition { .. }));
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// A Workspace holding one tree at `tree`, with `one` in `a.txt`, and a key file that lets a
+    /// recording act as `alice` without signing anything.
+    fn tree_workspace(tag: &str) -> std::path::PathBuf {
+        let dir =
+            std::env::temp_dir().join(format!("rola-cov-retrack-{tag}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(dir.join("tree/.rola-tree")).unwrap();
+        fs::write(dir.join("tree/a.txt"), b"one").unwrap();
+        Workspace::create(&dir).unwrap();
+        fs::create_dir_all(dir.join(".rola/auth")).unwrap();
+        fs::write(
+            dir.join(".rola/auth/alice.pem"),
+            b"a key this test never signs with",
+        )
+        .unwrap();
+
+        dir
+    }
+
+    /// Records the tree `name` as its work stands, and answers the version the Layout names.
+    fn record_tree(dir: &std::path::Path, name: &str) -> [u8; 32] {
+        let workspace = Workspace::locate(dir).expect("the Workspace is there");
+        stage_paths(
+            &workspace,
+            &dir.join(name),
+            "",
+            &["a.txt".to_owned()],
+            false,
+        )
+        .expect("the work stages");
+
+        let request = TrackInput {
+            common: crate::write::request::WriteCommon {
+                workspace: dir.display().to_string(),
+                account: "alice".to_owned(),
+                ..Default::default()
+            },
+            files: vec![name.to_owned()].into(),
+            replace: false,
+            policy: String::new(),
+            include_ignored: false,
+        };
+        let progress = WriteProgress::new();
+        let cancellation = Cancellation::new();
+        let planned = track_plan_at(&request, &progress, &cancellation).expect("the tree plans");
+        let subject = planned.subject_at(0).expect("the tree is a subject");
+        let agreed = vec![TrackAgreed {
+            path: subject.path(),
+            digest: subject.digest(),
+        }];
+        let messages = vec![TrackMessage {
+            path: subject.path(),
+            text: "recorded".to_owned(),
+        }];
+        track_apply_at(&request, &agreed, &messages, &progress, &cancellation)
+            .expect("the tree records");
+
+        let workspace = Workspace::locate(dir).expect("the Workspace is there");
+        let layout = workspace.layout().expect("the Layout is there");
+        let path = rorolala_layout::LayoutPath::new(name).expect("a path a Layout names");
+        let id = layout.id_of(&path).expect("the tree is recorded");
+
+        layout.entry(id).expect("the entry is there").version()
+    }
+
+    /// A request that retracks the tree `tree`.
+    fn tree_request(
+        dir: &std::path::Path,
+        record: &str,
+        only_index: bool,
+        force: bool,
+        fork: bool,
+    ) -> RetrackInput {
+        RetrackInput {
+            common: crate::write::request::WriteCommon {
+                workspace: dir.display().to_string(),
+                account: "alice".to_owned(),
+                force,
+                ..Default::default()
+            },
+            file: "tree".to_owned(),
+            record: record.to_owned(),
+            only_index,
+            deny_jump: false,
+            fork,
+        }
+    }
+
+    /// A tree is one Layout entry: moving it back a version puts the work back from the structure
+    /// the version holds, the whole tree and not a file at a path.
+    #[test]
+    fn a_tree_moves_back_a_version_with_its_work() {
+        let dir = tree_workspace("tree-back");
+        let first = record_tree(&dir, "tree");
+        fs::write(dir.join("tree/a.txt"), b"two").unwrap();
+        let workspace = Workspace::locate(&dir).unwrap();
+        stage_paths(
+            &workspace,
+            &dir.join("tree"),
+            "",
+            &["a.txt".to_owned()],
+            false,
+        )
+        .unwrap();
+        record_tree(&dir, "tree");
+
+        let request = tree_request(&dir, "~1", false, false, false);
+        let answer = retrack_at(&request, &WriteProgress::new(), &Cancellation::new())
+            .expect("the tree moves back");
+
+        assert_eq!(answer.kind(), "tree");
+        assert_eq!(answer.path(), "tree");
+        assert_eq!(answer.version(), Key::new(first).hex());
+        assert_eq!(fs::read(dir.join("tree/a.txt")).unwrap(), b"one");
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// Work the tree never recorded is not written over unless the run was forced to, and forcing
+    /// it is what moves the record and the work together.
+    #[test]
+    fn a_tree_with_work_is_refused_until_it_is_forced() {
+        let dir = tree_workspace("tree-dirty");
+        let first = record_tree(&dir, "tree");
+        fs::write(dir.join("tree/a.txt"), b"two").unwrap();
+        let workspace = Workspace::locate(&dir).unwrap();
+        stage_paths(
+            &workspace,
+            &dir.join("tree"),
+            "",
+            &["a.txt".to_owned()],
+            false,
+        )
+        .unwrap();
+        let second = record_tree(&dir, "tree");
+
+        // Back to the first version, so the work is clean, and then changed without being recorded.
+        let back = tree_request(&dir, &Key::new(first).hex(), false, false, false);
+        retrack_at(&back, &WriteProgress::new(), &Cancellation::new())
+            .expect("the tree moves back");
+        fs::write(dir.join("tree/a.txt"), b"dirty").unwrap();
+
+        let forced = tree_request(&dir, &Key::new(second).hex(), false, true, false);
+        let refused = tree_request(&dir, &Key::new(second).hex(), false, false, false);
+        let error = retrack_at(&refused, &WriteProgress::new(), &Cancellation::new())
+            .expect_err("the tree holds work");
+        assert!(matches!(error, WriteError::Precondition { .. }));
+
+        retrack_at(&forced, &WriteProgress::new(), &Cancellation::new())
+            .expect("a forced run writes over the work");
+        assert_eq!(fs::read(dir.join("tree/a.txt")).unwrap(), b"two");
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// A fork gives the tree a fresh `Uuid` holding what it records now, and the mark follows so a
+    /// reading pairs the directory with the entry rather than a loss and a gain.
+    #[test]
+    fn a_tree_is_forked_with_what_it_records() {
+        let dir = tree_workspace("tree-fork");
+        let first = record_tree(&dir, "tree");
+        let workspace = Workspace::locate(&dir).unwrap();
+        let path = rorolala_layout::LayoutPath::new("tree").unwrap();
+        let old = workspace
+            .layout()
+            .unwrap()
+            .id_of(&path)
+            .expect("the tree is named");
+
+        let request = tree_request(&dir, "", false, false, true);
+        let answer = retrack_at(&request, &WriteProgress::new(), &Cancellation::new())
+            .expect("the tree forks");
+
+        assert_eq!(answer.kind(), "tree");
+        assert_eq!(answer.version(), Key::new(first).hex());
+        let now = workspace
+            .layout()
+            .unwrap()
+            .id_of(&path)
+            .expect("the tree is named");
+        assert_ne!(now, old);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// A tree whose record alone moves leaves the work as it stands, and a short hash names the
+    /// version it is the head of.
+    #[test]
+    fn a_tree_record_moves_alone_and_a_short_hash_names_it() {
+        let dir = tree_workspace("tree-index");
+        let first = record_tree(&dir, "tree");
+        fs::write(dir.join("tree/a.txt"), b"two").unwrap();
+        let workspace = Workspace::locate(&dir).unwrap();
+        stage_paths(
+            &workspace,
+            &dir.join("tree"),
+            "",
+            &["a.txt".to_owned()],
+            false,
+        )
+        .unwrap();
+        record_tree(&dir, "tree");
+
+        let short = &Key::new(first).hex()[..8];
+        let request = tree_request(&dir, short, true, false, false);
+        let answer = retrack_at(&request, &WriteProgress::new(), &Cancellation::new())
+            .expect("the record moves alone");
+
+        assert_eq!(answer.version(), Key::new(first).hex());
+        assert_eq!(fs::read(dir.join("tree/a.txt")).unwrap(), b"two");
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// A path inside a tree names the tree, since that is the entry the Layout has, and a path in
+    /// no tree names none.
+    #[test]
+    fn a_path_names_the_tree_it_sits_in() {
+        let dir = tree_workspace("tree-above");
+        record_tree(&dir, "tree");
+        let workspace = Workspace::locate(&dir).unwrap();
+        let layout = workspace.layout().unwrap();
+
+        let inside = rorolala_layout::LayoutPath::new("tree/a.txt").unwrap();
+        assert_eq!(
+            tree_above(&layout, &inside).map(|path| path.as_str().to_owned()),
+            Some("tree".to_owned())
+        );
+        let outside = rorolala_layout::LayoutPath::new("nothing.txt").unwrap();
+        assert!(tree_above(&layout, &outside).is_none());
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// What a retrack came to says which `Uuid`s it moved between, and that it forked the entry.
+    #[test]
+    fn what_a_retrack_came_to_knows_the_uuid_it_moved_between() {
+        let moved = RetrackOutcome {
+            record: Recorded::Path(RetrackedPath {
+                path: "art/a.psd".to_owned(),
+                version: "0f".repeat(32),
+                number: None,
+                changed: true,
+                switched: false,
+                from: Some(Uuid::from_u128(1).to_string()),
+                to: Some(Uuid::from_u128(2).to_string()),
+                forked: true,
+            }),
+            took: Vec::new(),
+        };
+        let answer = WriteRetrack::of(&moved);
+
+        assert_eq!(answer.from(), Uuid::from_u128(1).to_string());
+        assert_eq!(answer.to(), Uuid::from_u128(2).to_string());
+        assert!(answer.forked());
+        assert!(!answer.number_present());
+        assert!(answer.took_at(0).is_none());
     }
 }

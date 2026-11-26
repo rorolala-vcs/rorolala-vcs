@@ -438,11 +438,12 @@ mod tests {
     use rorolala_layout::Layout;
     use rorolala_storage::{Key, RorolalaStorage, StorageSet};
     use rorolala_tree::{FileMode, Tree, TreeEntry, TreeStructure};
+    use rorolala_utils_lazyffi::StrSpan;
     use rorolala_utils_location::Locate as _;
     use rorolala_vcs::VCSIndex;
     use rorolala_workspace::Workspace;
 
-    use super::{RemoveOptions, collect_targets, remove_paths};
+    use super::{RemoveOptions, collect_targets, remove_paths, remove_paths_at};
     use crate::write::WriteError;
 
     #[test]
@@ -533,5 +534,102 @@ mod tests {
             collect_targets(&entries, &root, &outside, &["a.txt".to_owned()], false),
             Err(WriteError::InvalidPath { .. })
         ));
+    }
+
+    /// A staged tree whose work is `disk`, with one file `one.txt` recorded.
+    fn staged_tree(label: &str, disk: &[u8]) -> (std::path::PathBuf, Tree) {
+        let dir = std::env::temp_dir().join(format!(
+            "rola-cov-tree-remove-{}-{label}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(dir.join("tree/.rola-tree")).unwrap();
+        fs::write(dir.join("tree/one.txt"), disk).unwrap();
+        Workspace::create(&dir).unwrap();
+        let workspace = Workspace::locate(&dir).unwrap();
+        let store = workspace.get_current_rola_storage().unwrap();
+        let key = tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(store.write_object(b"one", rorolala_storage::Codec::Raw))
+            .unwrap();
+        let tree = Tree::locate(workspace.get_root(), &dir.join("tree")).unwrap();
+        tree.staging()
+            .write_structure(
+                &TreeStructure::build(None, [TreeEntry::file("one.txt", FileMode::Regular, key)])
+                    .unwrap(),
+            )
+            .unwrap();
+
+        (dir, tree)
+    }
+
+    /// A cached removal takes the path out of the structure and leaves the work where it was.
+    #[test]
+    fn a_cached_removal_through_a_directory_leaves_the_work() {
+        let (dir, _tree) = staged_tree("cached", b"one");
+
+        let answer = remove_paths_at(
+            &dir.join("tree"),
+            "",
+            StrSpan::from(vec!["one.txt".to_owned()]),
+            true,
+            false,
+            false,
+        )
+        .unwrap();
+
+        assert_eq!(answer.path_count(), 1);
+        assert_eq!(answer.path_at(0), "one.txt");
+        assert_eq!(answer.path_at(1), "");
+        assert!(answer.cached());
+        assert!(dir.join("tree/one.txt").is_file());
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// A removal refuses work that changed on disk, and takes it when forced.
+    #[test]
+    fn a_removal_refuses_dirty_work_and_force_takes_it() {
+        let (dir, tree) = staged_tree("dirty", b"changed");
+        let workspace = Workspace::locate(&dir).unwrap();
+        let layout = workspace.layout().unwrap();
+        let store = workspace.storage_set().unwrap();
+        let index = VCSIndex::locate(&dir).unwrap();
+        let options = RemoveOptions {
+            cached: false,
+            recursive: false,
+            force: false,
+        };
+
+        assert!(matches!(
+            remove_paths(
+                &tree,
+                &layout,
+                &store,
+                &index,
+                &dir.join("tree"),
+                &["one.txt".to_owned()],
+                options,
+            ),
+            Err(WriteError::Precondition { .. })
+        ));
+
+        let removal = remove_paths(
+            &tree,
+            &layout,
+            &store,
+            &index,
+            &dir.join("tree"),
+            &["one.txt".to_owned()],
+            RemoveOptions {
+                force: true,
+                ..options
+            },
+        )
+        .unwrap();
+        assert_eq!(removal.paths, vec!["one.txt"]);
+        assert!(!dir.join("tree/one.txt").exists());
+
+        let _ = fs::remove_dir_all(&dir);
     }
 }

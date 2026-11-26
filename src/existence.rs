@@ -541,9 +541,12 @@ mod tests {
     use rorolala_status::{Existence, SearchTarget, Target};
     use rorolala_storage::Key;
 
-    use super::{SearchSource, SearchSources, Sourced, needed};
+    use super::{SearchSource, SearchSources, Sourced, candidates, needed, search, search_source};
     use rorolala_layout::LayoutPath;
     use rorolala_protocol::VaultAddress;
+    use rorolala_utils_constants::WORKSPACE_KEYS_DIR;
+    use rorolala_utils_location::Locate as _;
+    use rorolala_vcs::VCSIndex;
 
     use rorolala_auth::Account;
     use rorolala_workspace::Workspace;
@@ -644,6 +647,103 @@ mod tests {
         assert_eq!(sources.count(), 1);
         assert!(sources.at(0).is_some());
         assert!(sources.at(1).is_none());
+    }
+
+    #[test]
+    fn a_search_through_an_unreachable_vault_names_it() {
+        let dir =
+            std::env::temp_dir().join(format!("rola-cov-existence-search-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        Workspace::create(&dir).unwrap();
+        let workspace = Workspace::locate(&dir).unwrap();
+        let layout = workspace.layout().unwrap();
+        let index = VCSIndex::locate(&dir).unwrap();
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let account = Account::default();
+        let address: VaultAddress = "127.0.0.1:1".parse().unwrap();
+        let named = vec![("alpha".to_owned(), address)];
+        let targets = vec![
+            Target::Storage(key(1)),
+            Target::Variant(key(2)),
+            Target::Version(key(3)),
+            Target::Entry(LayoutPath::new("a.psd").unwrap()),
+        ];
+
+        let sourced = search(
+            &runtime, &workspace, &layout, &index, &account, &named, &targets,
+        );
+
+        assert_eq!(sourced.len(), 4);
+        for one in &sourced {
+            assert_eq!(one.unreachable, ["alpha".to_owned()]);
+            assert_eq!(one.sources.len(), 0);
+        }
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_search_source_answers_a_target_with_an_account_here() {
+        let dir =
+            std::env::temp_dir().join(format!("rola-cov-existence-source-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        Workspace::create(&dir).unwrap();
+        let keys = dir.join(WORKSPACE_KEYS_DIR);
+        std::fs::create_dir_all(&keys).unwrap();
+        std::fs::write(keys.join("alice.pem"), "not really a key").unwrap();
+
+        let sources = search_source(
+            &dir,
+            &[SearchTarget::Entry {
+                path: "a.psd".to_owned(),
+            }],
+            "alice",
+        )
+        .unwrap();
+
+        assert_eq!(sources.count(), 1);
+        let one = sources.at(0).unwrap();
+        assert_eq!(one.kind(), "entry");
+        assert_eq!(one.path(), "a.psd");
+        assert_eq!(one.hash(), "");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_search_source_refuses_an_account_that_is_not_here() {
+        let dir = std::env::temp_dir().join(format!(
+            "rola-cov-existence-no-account-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        Workspace::create(&dir).unwrap();
+
+        assert!(matches!(
+            search_source(&dir, &[], "nobody"),
+            Err(super::ExistenceError::NoAccount { .. })
+        ));
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_workspace_with_no_vault_bound_offers_no_candidate() {
+        let dir = std::env::temp_dir().join(format!(
+            "rola-cov-existence-candidates-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        Workspace::create(&dir).unwrap();
+        let workspace = Workspace::locate(&dir).unwrap();
+
+        assert_eq!(candidates(&workspace).unwrap().len(), 0);
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

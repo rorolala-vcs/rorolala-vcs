@@ -416,7 +416,7 @@ const fn size(cols: u16, rows: u16) -> PtySize {
 
 #[cfg(test)]
 mod tests {
-    use std::ffi::CString;
+    use std::ffi::{CString, c_char};
     use std::ptr;
     use std::sync::mpsc::channel;
     use std::time::{Duration, Instant};
@@ -597,6 +597,35 @@ mod tests {
         );
         // SAFETY: null is the empty list this helper accepts.
         assert_eq!(unsafe { list(ptr::null()) }, Vec::<String>::new());
+    }
+
+    /// Every export is reachable as the C symbol the header declares, and refuses a null handle.
+    #[test]
+    fn every_export_is_reachable_as_the_c_symbol_it_is_declared_by() {
+        let open: unsafe extern "C" fn(
+            *const c_char,
+            *const c_char,
+            *const c_char,
+            u16,
+            u16,
+        ) -> *mut super::RolaDesktopPty = rola_desktop_pty_open;
+        let read: unsafe extern "C" fn(*mut super::RolaDesktopPty, *mut u8, usize) -> isize =
+            rola_desktop_pty_read;
+        let write: unsafe extern "C" fn(*mut super::RolaDesktopPty, *const u8, usize) -> bool =
+            rola_desktop_pty_write;
+        let resize: unsafe extern "C" fn(*mut super::RolaDesktopPty, u16, u16) -> bool =
+            rola_desktop_pty_resize;
+        let close: unsafe extern "C" fn(*mut super::RolaDesktopPty) = rola_desktop_pty_close;
+        let mut buffer = [0_u8; 4];
+
+        // SAFETY: null is what every export accepts as nothing to act on.
+        unsafe {
+            assert!(open(ptr::null(), ptr::null(), ptr::null(), 80, 24).is_null());
+            assert_eq!(read(ptr::null_mut(), buffer.as_mut_ptr(), buffer.len()), 0);
+            assert!(!write(ptr::null_mut(), buffer.as_ptr(), buffer.len()));
+            assert!(!resize(ptr::null_mut(), 80, 24));
+            close(ptr::null_mut());
+        }
     }
 
     /// A size carries the columns and rows it was told and no pixel measure.

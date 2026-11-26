@@ -3823,3 +3823,477 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
     }
 }
+
+/// Checks of the refusal, item and plan shapes a C caller reads, and of the gates a plan reads
+/// before anything is written.
+#[cfg(test)]
+mod coverage_tests {
+    use std::fs;
+    use std::path::PathBuf;
+
+    use rorolala_ignore::IgnoreRuleSet;
+    use rorolala_layout::{Layout, LayoutPath, MutableData};
+    use rorolala_storage::{Key, StorageSet};
+    use rorolala_utils_location::Locate as _;
+    use rorolala_utils_progress::Progress;
+    use rorolala_vcs::VCSIndex;
+    use rorolala_workspace::Workspace;
+    use uuid::Uuid;
+
+    use super::WriteTrackItem;
+    use super::WriteTrackPlan;
+    use super::WriteTrackRefusal;
+    use super::WriteTrackedFile;
+    use super::batch::{Action, Carry, FileKind, Item, Messages, Options, Refusal, apply, plan};
+    use super::{TrackOptions, TrackedFile, track_file};
+
+    /// One refusal and the shape it is handed over as.
+    struct RefusalCase {
+        refusal: Refusal,
+        kind: &'static str,
+        path: &'static str,
+        name: &'static str,
+        file_kind: &'static str,
+        cause: &'static str,
+        paths: usize,
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one case per refusal variant is the whole of what the check reads"
+    )]
+    fn every_refusal_crosses_the_abi_with_its_own_field() {
+        let cases = vec![
+            RefusalCase {
+                refusal: Refusal::File {
+                    path: "a".to_owned(),
+                    kind: FileKind::NotAFile,
+                },
+                kind: "file",
+                path: "a",
+                name: "",
+                file_kind: "not_a_file",
+                cause: "",
+                paths: 0,
+            },
+            RefusalCase {
+                refusal: Refusal::File {
+                    path: "b".to_owned(),
+                    kind: FileKind::OutsideWorkspace,
+                },
+                kind: "file",
+                path: "b",
+                name: "",
+                file_kind: "outside_workspace",
+                cause: "",
+                paths: 0,
+            },
+            RefusalCase {
+                refusal: Refusal::File {
+                    path: "c".to_owned(),
+                    kind: FileKind::InsideData,
+                },
+                kind: "file",
+                path: "c",
+                name: "",
+                file_kind: "inside_data",
+                cause: "",
+                paths: 0,
+            },
+            RefusalCase {
+                refusal: Refusal::Ignored {
+                    paths: vec!["d".to_owned()],
+                },
+                kind: "ignored",
+                path: "",
+                name: "",
+                file_kind: "",
+                cause: "",
+                paths: 1,
+            },
+            RefusalCase {
+                refusal: Refusal::Preference {
+                    path: "e".to_owned(),
+                    name: "cut".to_owned(),
+                },
+                kind: "preference",
+                path: "e",
+                name: "cut",
+                file_kind: "",
+                cause: "",
+                paths: 0,
+            },
+            RefusalCase {
+                refusal: Refusal::Lost {
+                    paths: vec!["f".to_owned()],
+                },
+                kind: "lost",
+                path: "",
+                name: "",
+                file_kind: "",
+                cause: "",
+                paths: 1,
+            },
+            RefusalCase {
+                refusal: Refusal::Unowned {
+                    paths: vec!["g".to_owned()],
+                },
+                kind: "unowned",
+                path: "",
+                name: "",
+                file_kind: "",
+                cause: "",
+                paths: 1,
+            },
+            RefusalCase {
+                refusal: Refusal::Unrecorded {
+                    path: "h".to_owned(),
+                },
+                kind: "unrecorded",
+                path: "h",
+                name: "",
+                file_kind: "",
+                cause: "",
+                paths: 0,
+            },
+            RefusalCase {
+                refusal: Refusal::Merge {
+                    path: "i".to_owned(),
+                },
+                kind: "merge",
+                path: "i",
+                name: "",
+                file_kind: "",
+                cause: "",
+                paths: 0,
+            },
+            RefusalCase {
+                refusal: Refusal::Merging {
+                    path: "j".to_owned(),
+                },
+                kind: "merging",
+                path: "j",
+                name: "",
+                file_kind: "",
+                cause: "",
+                paths: 0,
+            },
+            RefusalCase {
+                refusal: Refusal::MergeChanged {
+                    path: "k".to_owned(),
+                },
+                kind: "merge_changed",
+                path: "k",
+                name: "",
+                file_kind: "",
+                cause: "",
+                paths: 0,
+            },
+            RefusalCase {
+                refusal: Refusal::TreeUnsupported,
+                kind: "tree_unsupported",
+                path: "",
+                name: "",
+                file_kind: "",
+                cause: "",
+                paths: 0,
+            },
+            RefusalCase {
+                refusal: Refusal::TreeConflict {
+                    path: "l".to_owned(),
+                },
+                kind: "tree_conflict",
+                path: "l",
+                name: "",
+                file_kind: "",
+                cause: "",
+                paths: 0,
+            },
+            RefusalCase {
+                refusal: Refusal::LayoutExists,
+                kind: "layout_exists",
+                path: "",
+                name: "",
+                file_kind: "",
+                cause: "",
+                paths: 0,
+            },
+            RefusalCase {
+                refusal: Refusal::LayoutMissing,
+                kind: "layout_missing",
+                path: "",
+                name: "",
+                file_kind: "",
+                cause: "",
+                paths: 0,
+            },
+            RefusalCase {
+                refusal: Refusal::LayoutFailed {
+                    cause: "no".to_owned(),
+                },
+                kind: "layout_failed",
+                path: "",
+                name: "",
+                file_kind: "",
+                cause: "no",
+                paths: 0,
+            },
+        ];
+
+        for case in &cases {
+            let answer = WriteTrackRefusal::from(&case.refusal);
+            assert_eq!(answer.kind(), case.kind, "{}", case.kind);
+            assert_eq!(answer.path(), case.path, "{}", case.kind);
+            assert_eq!(answer.name(), case.name, "{}", case.kind);
+            assert_eq!(answer.file_kind(), case.file_kind, "{}", case.kind);
+            assert_eq!(answer.cause(), case.cause, "{}", case.kind);
+            assert_eq!(answer.paths_count(), case.paths, "{}", case.kind);
+        }
+
+        let ignored = WriteTrackRefusal::from(&Refusal::Ignored {
+            paths: vec!["m".to_owned()],
+        });
+        assert_eq!(ignored.paths_at(0), "m");
+        assert_eq!(ignored.paths_at(4), "");
+    }
+
+    #[test]
+    fn a_tracked_file_crosses_the_abi_and_every_action_has_its_word() {
+        let tracked = TrackedFile {
+            id: Uuid::from_u128(1),
+            storage: Key::new([1_u8; 32]),
+            variant: Key::new([2_u8; 32]),
+            version: Key::new([3_u8; 32]),
+        };
+        let answer = WriteTrackedFile::of(&tracked);
+
+        assert_eq!(answer.id(), Uuid::from_u128(1).to_string());
+        assert_eq!(answer.storage(), tracked.storage.to_string());
+        assert_eq!(answer.variant(), tracked.variant.to_string());
+        assert_eq!(answer.version(), tracked.version.to_string());
+
+        for (action, word) in [
+            (Action::Added, "added"),
+            (Action::Updated, "updated"),
+            (Action::Replaced, "replaced"),
+        ] {
+            let item = WriteTrackItem::from(&Item {
+                path: "a.psd".to_owned(),
+                action,
+            });
+            assert_eq!(item.path(), "a.psd");
+            assert_eq!(item.action(), word);
+        }
+    }
+
+    #[test]
+    fn a_prefilled_word_is_read_back_and_nothing_is_read_past_it() {
+        let plan = WriteTrackPlan::of(&[], 0, &["first".to_owned()], None);
+
+        assert_eq!(plan.prefill_count(), 1);
+        assert_eq!(plan.prefill_at(0), "first");
+        assert_eq!(plan.prefill_at(3), "");
+        assert!(plan.refused().is_none());
+    }
+
+    /// The parts a plan is read through, in a Workspace of their own.
+    struct Parts {
+        dir: PathBuf,
+        workspace: Workspace,
+        layout: Layout,
+        store: StorageSet,
+        index: VCSIndex,
+        rules: IgnoreRuleSet,
+        messages: Messages,
+    }
+
+    impl Parts {
+        fn new(label: &str) -> Self {
+            let dir =
+                std::env::temp_dir().join(format!("rola-cov-track-{}-{label}", std::process::id()));
+            let _ = fs::remove_dir_all(&dir);
+            fs::create_dir_all(&dir).unwrap();
+            Workspace::create(&dir).unwrap();
+            let workspace = Workspace::locate(&dir).unwrap();
+            let layout = workspace.layout().unwrap();
+            let store = workspace.storage_set().unwrap();
+            let index = VCSIndex::locate(&dir).unwrap();
+
+            Self {
+                dir,
+                workspace,
+                layout,
+                store,
+                index,
+                rules: IgnoreRuleSet::empty(),
+                messages: Messages::default(),
+            }
+        }
+
+        fn carry(&self) -> Carry<'_> {
+            Carry {
+                workspace: &self.workspace,
+                layout: &self.layout,
+                store: &self.store,
+                index: &self.index,
+                creator: "alice",
+                rules: &self.rules,
+                messages: &self.messages,
+            }
+        }
+
+        fn read(&self, names: &[String], options: Options) -> super::batch::Plan {
+            plan(
+                &self.carry(),
+                &self.dir,
+                names,
+                options,
+                &Progress::silent(),
+                &crate::write::Cancellation::new(),
+            )
+            .unwrap()
+        }
+    }
+
+    impl Drop for Parts {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.dir);
+        }
+    }
+
+    /// A name that is not a file, one outside the Workspace and one in its own data are each
+    /// refused before anything is read.
+    #[test]
+    fn a_plan_refuses_a_name_it_cannot_record() {
+        let parts = Parts::new("refused-names");
+        fs::write(parts.dir.join("a.txt"), b"one").unwrap();
+        let outside =
+            std::env::temp_dir().join(format!("rola-cov-track-outside-{}.txt", std::process::id()));
+        fs::write(&outside, b"outside").unwrap();
+        let outside_name = format!(
+            "../{}",
+            outside.file_name().and_then(|name| name.to_str()).unwrap()
+        );
+
+        let absent = parts.read(&["absent.txt".to_owned()], Options::default());
+        assert!(matches!(
+            absent.refused(),
+            Some(Refusal::File {
+                kind: FileKind::NotAFile,
+                ..
+            })
+        ));
+
+        let outside_plan = parts.read(&[outside_name], Options::default());
+        assert!(matches!(
+            outside_plan.refused(),
+            Some(Refusal::File {
+                kind: FileKind::OutsideWorkspace,
+                ..
+            })
+        ));
+
+        let _ = fs::remove_file(&outside);
+    }
+
+    /// A directory named is read as the files under it, through the same walk the tree reading
+    /// uses.
+    #[test]
+    fn a_plan_on_a_directory_takes_the_files_under_it() {
+        let parts = Parts::new("directory");
+        fs::create_dir_all(parts.dir.join("art")).unwrap();
+        fs::write(parts.dir.join("art/one.txt"), b"one").unwrap();
+        fs::write(parts.dir.join("art/two.txt"), b"two").unwrap();
+
+        let plan = parts.read(&["art".to_owned()], Options::default());
+
+        assert!(plan.refused().is_none());
+        assert_eq!(plan.changed(), 2);
+        assert_eq!(plan.subjects().len(), 2);
+    }
+
+    /// A Layout path the work no longer holds stops the plan with the lost paths named.
+    #[test]
+    fn a_plan_refuses_a_path_the_layout_names_and_the_work_lost() {
+        let parts = Parts::new("lost");
+        fs::write(parts.dir.join("a.txt"), b"one").unwrap();
+        track_file(
+            &parts.workspace,
+            &parts.dir,
+            "a.txt",
+            "alice",
+            "first",
+            TrackOptions::default(),
+        )
+        .unwrap();
+
+        fs::remove_file(parts.dir.join("a.txt")).unwrap();
+        let plan = parts.read(&[], Options::default());
+
+        assert!(matches!(
+            plan.refused(),
+            Some(Refusal::Lost { paths }) if paths.len() == 1 && paths[0] == "a.txt"
+        ));
+    }
+
+    /// A replacing run names a file the Layout records no version for, and is refused.
+    #[test]
+    fn a_plan_refuses_to_replace_a_file_it_never_recorded() {
+        let parts = Parts::new("unrecorded");
+        fs::write(parts.dir.join("a.txt"), b"one").unwrap();
+
+        let plan = parts.read(
+            &["a.txt".to_owned()],
+            Options {
+                replace: true,
+                ..Options::default()
+            },
+        );
+
+        assert!(matches!(plan.refused(), Some(Refusal::Unrecorded { .. })));
+    }
+
+    /// A preference this build does not carry stops the run before anything is written.
+    #[test]
+    fn a_plan_refuses_a_preference_this_build_cannot_honour() {
+        let parts = Parts::new("preference");
+        fs::write(parts.dir.join("a.txt"), b"one").unwrap();
+        let mut batch = parts.layout.batch();
+        batch
+            .create_file(
+                Uuid::from_u128(1),
+                MutableData::new(Some("alice".to_owned()), [1_u8; 32], String::new())
+                    .with_preference(Some("no such cut".to_owned())),
+                &LayoutPath::new("a.txt").unwrap(),
+            )
+            .unwrap();
+        batch.commit().unwrap();
+
+        let plan = parts.read(&["a.txt".to_owned()], Options::default());
+
+        assert!(matches!(
+            plan.refused(),
+            Some(Refusal::Preference { name, .. }) if name == "no such cut"
+        ));
+    }
+
+    /// An apply over a plan of nothing writes nothing and refuses nothing.
+    #[test]
+    fn an_apply_of_an_empty_plan_writes_nothing() {
+        let parts = Parts::new("empty-apply");
+        let plan = parts.read(&[], Options::default());
+        let outcome = apply(
+            &parts.carry(),
+            plan,
+            &[],
+            Options::default(),
+            &Progress::silent(),
+            &crate::write::Cancellation::new(),
+        )
+        .unwrap();
+
+        assert_eq!(outcome.items.len(), 0);
+        assert_eq!(outcome.refused.len(), 0);
+    }
+}

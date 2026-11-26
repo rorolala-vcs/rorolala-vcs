@@ -834,7 +834,9 @@ mod direct {
 
 #[cfg(test)]
 mod tests {
-    use rorolala_vcs::{Hash, ROOT_VERSION};
+    use std::path::PathBuf;
+
+    use rorolala_vcs::{ComputeBlake3, Creator, Hash, Message, ROOT_VERSION, VCSIndex, Version};
 
     use super::{InverseIndex, RebuildMode, count_numbered, is_appendable, mode_of};
     use crate::{Edge, Table};
@@ -1000,5 +1002,235 @@ mod tests {
 
         let _ = std::fs::remove_dir_all(&dir);
         let _ = std::fs::remove_dir_all(&empty);
+    }
+
+    /// A directory of its own, emptied first so a rerun starts clean.
+    fn scratch(label: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "rola-cov-inverse-index-{label}-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        dir
+    }
+
+    /// An index holding two versions over the root and a merge variant joining the first.
+    struct Held {
+        dir: PathBuf,
+        index: VCSIndex,
+        runtime: tokio::runtime::Runtime,
+        creator: Hash,
+        message: Hash,
+        variant: Hash,
+        version: Hash,
+        second_variant: Hash,
+        second_version: Hash,
+        merge: Hash,
+    }
+
+    fn held(label: &str) -> Held {
+        let dir = scratch(label);
+        let index = VCSIndex::create(dir.clone());
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+
+        let creator = Creator::try_from("me").unwrap();
+        let message = Message::try_from("did").unwrap();
+        let creator_key = runtime.block_on(index.write(creator.clone())).unwrap();
+        let message_key = runtime.block_on(index.write(message.clone())).unwrap();
+        runtime.block_on(index.write(Version::root())).unwrap();
+
+        let first = Version::root().new_variant(
+            [1_u8; 32],
+            creator.compute_blake3(),
+            message.compute_blake3(),
+        );
+        let first_key = runtime.block_on(index.write(first.clone())).unwrap();
+        let first_version = first.new_version();
+        let first_version_key = runtime
+            .block_on(index.write(first_version.clone()))
+            .unwrap();
+
+        let second = first_version.new_variant(
+            [2_u8; 32],
+            creator.compute_blake3(),
+            message.compute_blake3(),
+        );
+        let second_key = runtime.block_on(index.write(second.clone())).unwrap();
+        let second_version_key = runtime.block_on(index.write(second.new_version())).unwrap();
+
+        let merged = Version::root()
+            .new_variant(
+                [3_u8; 32],
+                creator.compute_blake3(),
+                message.compute_blake3(),
+            )
+            .new_merge_variant([4_u8; 32], &first);
+        let merge_key = runtime.block_on(index.write(merged)).unwrap();
+
+        Held {
+            dir,
+            index,
+            runtime,
+            creator: creator_key,
+            message: message_key,
+            variant: first_key,
+            version: first_version_key,
+            second_variant: second_key,
+            second_version: second_version_key,
+            merge: merge_key,
+        }
+    }
+
+    #[test]
+    fn the_objects_answer_when_the_records_are_not_built() {
+        let held = held("direct");
+        let inverse = InverseIndex::at(held.index.clone());
+        let runtime = &held.runtime;
+
+        // Nothing is written yet, so every question is put to the objects.
+        assert_eq!(
+            runtime
+                .block_on(inverse.store_dependents(Hash::new([1_u8; 32])))
+                .unwrap(),
+            vec![held.variant]
+        );
+        assert_eq!(
+            runtime
+                .block_on(inverse.variant_dependents(held.variant))
+                .unwrap(),
+            vec![held.version]
+        );
+        assert_eq!(
+            runtime
+                .block_on(inverse.version_dependents(held.version))
+                .unwrap(),
+            vec![held.second_variant]
+        );
+        assert_eq!(
+            runtime
+                .block_on(inverse.child_versions(held.version))
+                .unwrap(),
+            vec![held.second_version]
+        );
+        assert_eq!(
+            runtime
+                .block_on(inverse.join_dependents(held.variant))
+                .unwrap(),
+            vec![held.merge]
+        );
+
+        let by_creator = runtime
+            .block_on(inverse.creator_dependents(held.creator))
+            .unwrap();
+        assert_eq!(by_creator.len(), 3);
+        assert!(by_creator.contains(&held.variant));
+        assert!(by_creator.contains(&held.second_variant));
+        assert!(by_creator.contains(&held.merge));
+
+        let by_message = runtime
+            .block_on(inverse.message_dependents(held.message))
+            .unwrap();
+        assert_eq!(by_message.len(), 3);
+
+        assert_eq!(
+            runtime.block_on(inverse.version_num(held.version)).unwrap(),
+            0
+        );
+        assert_eq!(
+            runtime
+                .block_on(inverse.version_num(held.second_version))
+                .unwrap(),
+            1
+        );
+
+        assert!(runtime.block_on(inverse.scan()).is_ok());
+
+        let _ = std::fs::remove_dir_all(&held.dir);
+    }
+
+    #[test]
+    fn a_rebuilt_records_answer_the_same_questions() {
+        let held = held("records");
+        let inverse = InverseIndex::at(held.index.clone());
+        let runtime = &held.runtime;
+
+        // No records yet: every object is read, and what is written describes the index.
+        let report = runtime.block_on(inverse.rebuild()).unwrap();
+        assert_eq!(report.mode, RebuildMode::Full);
+        assert_eq!(report.objects, 8);
+        assert!(runtime.block_on(inverse.snapshot()).unwrap().is_some());
+
+        // The records already describe the index, so a second rebuild reads nothing.
+        let again = runtime.block_on(inverse.rebuild()).unwrap();
+        assert_eq!(again.mode, RebuildMode::Fresh);
+        assert_eq!(again.objects_read, 0);
+
+        // One object written since: only it is read, and the records are written again.
+        runtime
+            .block_on(held.index.write(Creator::try_from("you").unwrap()))
+            .unwrap();
+        let added = runtime.block_on(inverse.rebuild()).unwrap();
+        assert_eq!(added.mode, RebuildMode::Incremental);
+        assert_eq!(added.objects_read, 1);
+
+        // The same questions, now answered from the records.
+        assert_eq!(
+            runtime
+                .block_on(inverse.store_dependents(Hash::new([1_u8; 32])))
+                .unwrap(),
+            vec![held.variant]
+        );
+        assert_eq!(
+            runtime
+                .block_on(inverse.variant_dependents(held.variant))
+                .unwrap(),
+            vec![held.version]
+        );
+        assert_eq!(
+            runtime
+                .block_on(inverse.version_dependents(held.version))
+                .unwrap(),
+            vec![held.second_variant]
+        );
+        assert_eq!(
+            runtime
+                .block_on(inverse.child_versions(held.version))
+                .unwrap(),
+            vec![held.second_version]
+        );
+        assert_eq!(
+            runtime
+                .block_on(inverse.join_dependents(held.variant))
+                .unwrap(),
+            vec![held.merge]
+        );
+        assert_eq!(
+            runtime
+                .block_on(inverse.creator_dependents(held.creator))
+                .unwrap()
+                .len(),
+            3
+        );
+        assert_eq!(
+            runtime
+                .block_on(inverse.message_dependents(held.message))
+                .unwrap()
+                .len(),
+            3
+        );
+        assert_eq!(
+            runtime.block_on(inverse.version_num(held.version)).unwrap(),
+            0
+        );
+        assert_eq!(
+            runtime
+                .block_on(inverse.version_num(held.second_version))
+                .unwrap(),
+            1
+        );
+
+        let _ = std::fs::remove_dir_all(&held.dir);
     }
 }

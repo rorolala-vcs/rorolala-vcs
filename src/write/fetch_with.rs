@@ -1176,9 +1176,22 @@ mod tests {
     use std::path::{Path, PathBuf};
 
     use rorolala_layout::{EntryKind, Layout, LayoutPath, MutableData};
+    use rorolala_storage::{Codec, Key, RorolalaStorage, StorageSet};
+    use rorolala_tree::{FileMode, TreeEntry, TreeStructure};
+    use rorolala_utils_constants::WORKSPACE_INDEX_DIR;
+    use rorolala_utils_lazyffi::StrSpan;
+    use rorolala_utils_progress::Progress;
+    use rorolala_vcs::{VCSIndex, VCSWrite as _, Variant, Version};
     use uuid::Uuid;
 
-    use super::{reads_as_hash, resolve_words};
+    use super::{
+        FetchInput, FetchWithRefusal, FetchWithRequest, HashMiss, Named, Wanted, absent_versions,
+        chain_keys, expands, reads_as_hash, resolve_hash, resolve_words, shown_path, shown_path_of,
+        structure_keys, target_name, target_version, version_held, version_keys,
+    };
+    use crate::write::Cancellation;
+    use crate::write::WriteError;
+    use crate::write::request::WriteCommon;
 
     /// The `Uuid`s of the entries the tests lay down.
     const FIRST: Uuid = Uuid::from_u128(0x11);
@@ -1305,6 +1318,260 @@ mod tests {
         assert_eq!(ids(&layout, &dir, true, &["assets"]), wanted);
 
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// An index holding a root version, a variant and the version that fixes it.
+    fn objects(label: &str) -> (PathBuf, VCSIndex, tokio::runtime::Runtime, Version, Variant) {
+        let dir = std::env::temp_dir().join(format!(
+            "rola-cov-fetch-{label}-{}-{}",
+            std::process::id(),
+            Uuid::new_v4()
+        ));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).expect("a scratch directory");
+        let index = VCSIndex::create(dir.join("index"));
+        let runtime = tokio::runtime::Runtime::new().expect("a runtime");
+        let root = Version::new_bare_version([0; 32], u64::MAX);
+        let variant =
+            Variant::new_bare_variant([1; 32], *root.hash().digest(), None, [2; 32], [3; 32], 0);
+        let version = variant.new_version();
+
+        runtime.block_on(index.write(root)).unwrap();
+        runtime.block_on(index.write(variant.clone())).unwrap();
+        runtime.block_on(index.write(version.clone())).unwrap();
+
+        (dir, index, runtime, version, variant)
+    }
+
+    #[test]
+    fn a_hash_names_a_variant_or_a_version() {
+        let (dir, index, runtime, version, variant) = objects("hash");
+        let version_key = Key::new(*version.hash().digest());
+        let variant_key = Key::new(*variant.hash().digest());
+        let version_word = version_key.hex();
+
+        assert!(matches!(
+            resolve_hash(&index, &runtime, &version_word),
+            Ok(Named::Version { key }) if key == version_key
+        ));
+        assert!(matches!(
+            resolve_hash(&index, &runtime, &variant_key.hex()),
+            Ok(Named::Variant { key, storage, .. })
+                if key == variant_key && storage == Key::new([1; 32])
+        ));
+        // The head of a key resolves among the objects the index holds.
+        assert!(matches!(
+            resolve_hash(&index, &runtime, &version_word[..12]),
+            Ok(Named::Version { .. })
+        ));
+        // A whole key the index does not hold names nothing.
+        assert!(matches!(
+            resolve_hash(&index, &runtime, &Key::new([9; 32]).hex()),
+            Err(FetchWithRefusal::Hash {
+                miss: HashMiss::Unknown,
+                ..
+            })
+        ));
+        // Nor does a word that is not a hash at all.
+        assert!(matches!(
+            resolve_hash(&index, &runtime, "zz"),
+            Err(FetchWithRefusal::Hash { .. })
+        ));
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn every_target_answers_what_it_is_and_what_it_holds() {
+        let (dir, index, runtime, version, variant) = objects("targets");
+        let version_key = Key::new(*version.hash().digest());
+        let variant_key = Key::new(*variant.hash().digest());
+        let digest = *version.hash().digest();
+        let path = LayoutPath::new("a.psd").unwrap();
+        let entry = Named::Entry {
+            id: Uuid::from_u128(1),
+            path: Some(path.clone()),
+            version: digest,
+            kind: EntryKind::File,
+        };
+        let version_target = Named::Version { key: version_key };
+        let variant_target = Named::Variant {
+            key: variant_key,
+            storage: Key::new([1; 32]),
+            version: version_key,
+            base: [0; 32],
+        };
+
+        let keys = chain_keys(&index, &runtime).unwrap();
+        assert!(keys.contains(&version_key));
+        assert!(keys.contains(&variant_key));
+
+        assert!(!absent_versions(&index, &runtime, std::slice::from_ref(&entry)).unwrap());
+        assert!(
+            absent_versions(
+                &index,
+                &runtime,
+                &[Named::Entry {
+                    id: Uuid::from_u128(2),
+                    path: None,
+                    version: [7; 32],
+                    kind: EntryKind::File,
+                }]
+            )
+            .unwrap()
+        );
+        assert!(!absent_versions(&index, &runtime, &[]).unwrap());
+
+        assert!(version_held(&index, &runtime, &entry).unwrap());
+        assert!(version_held(&index, &runtime, &variant_target).unwrap());
+        assert!(
+            !version_held(
+                &index,
+                &runtime,
+                &Named::Version {
+                    key: Key::new([8; 32])
+                }
+            )
+            .unwrap()
+        );
+
+        assert_eq!(
+            version_keys(&index, &runtime, &digest, false).unwrap(),
+            vec![Key::new([1; 32])]
+        );
+        assert!(
+            version_keys(&index, &runtime, &digest, true)
+                .unwrap()
+                .contains(&Key::new([1; 32]))
+        );
+
+        assert!(!expands(&entry));
+        assert!(expands(&Named::Entry {
+            id: Uuid::from_u128(1),
+            path: Some(path.clone()),
+            version: digest,
+            kind: EntryKind::Tree,
+        }));
+        assert!(expands(&version_target));
+        assert!(expands(&variant_target));
+
+        assert_eq!(target_name(&version_target), version_key.hex());
+        assert_eq!(target_name(&entry), Uuid::from_u128(1).to_string());
+        assert_eq!(target_version(&version_target), version_key.hex());
+        assert_eq!(target_version(&entry), Key::new(digest).hex());
+        assert_eq!(target_version(&variant_target), version_key.hex());
+
+        assert_eq!(shown_path(&version_target), ".");
+        assert_eq!(shown_path(&entry), "a.psd");
+        assert_eq!(shown_path_of(None), ".");
+        assert_eq!(shown_path_of(Some(&path)), "a.psd");
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn a_tree_target_names_what_its_structure_holds() {
+        let (dir, _, runtime, version, _) = objects("structure");
+        let version_key = Key::new(*version.hash().digest());
+        let store_root = dir.join("store");
+        let storage = RorolalaStorage::create(&store_root);
+        let set =
+            StorageSet::with_bindings(Some(storage), &store_root, &dir, Vec::<String>::new(), None);
+        let structure = TreeStructure::build(
+            None,
+            [TreeEntry::file(
+                "a.psd",
+                FileMode::Regular,
+                Key::new([5; 32]),
+            )],
+        )
+        .unwrap();
+        let key = runtime
+            .block_on(set.write_object(&structure.encode(), Codec::Raw))
+            .unwrap();
+
+        // A target that names no tree asks the store for nothing.
+        let shallow = Wanted {
+            target: Named::Version { key: version_key },
+            keys: vec![key],
+            expand: false,
+        };
+        assert_eq!(structure_keys(&set, &runtime, &shallow).len(), 0);
+
+        let rooted = Wanted {
+            target: Named::Version { key: version_key },
+            keys: vec![key],
+            expand: true,
+        };
+        assert!(structure_keys(&set, &runtime, &rooted).contains(&Key::new([5; 32])));
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn a_fetch_with_no_account_stops_before_the_vault() {
+        let root = std::env::temp_dir().join(format!(
+            "rola-cov-fetch-noaccount-{}-{}",
+            std::process::id(),
+            Uuid::new_v4()
+        ));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        rorolala_workspace::Workspace::create(&root).unwrap();
+        let _ = VCSIndex::create(root.join(WORKSPACE_INDEX_DIR));
+        let common = WriteCommon {
+            workspace: root.to_str().unwrap().to_owned(),
+            ..Default::default()
+        };
+        let request = FetchWithRequest::from(FetchInput {
+            common,
+            layout: String::new(),
+            words: StrSpan::from(Vec::<String>::new()),
+            recursive: false,
+        });
+
+        assert!(matches!(
+            request.fetch_with(&Progress::silent(), &Cancellation::new()),
+            Err(FetchWithRefusal::Failed(WriteError::NoAccount))
+        ));
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_fetch_that_may_reach_nothing_is_refused_before_it_starts() {
+        let request = || {
+            let common = WriteCommon::default();
+            FetchWithRequest::from(FetchInput {
+                common,
+                layout: String::new(),
+                words: StrSpan::from(Vec::<String>::new()),
+                recursive: false,
+            })
+        };
+        let progress = Progress::silent();
+
+        let cancellation = Cancellation::new();
+        cancellation.cancel();
+        assert!(matches!(
+            request().fetch_with(&progress, &cancellation),
+            Err(FetchWithRefusal::Cancelled)
+        ));
+
+        let common = WriteCommon {
+            offline: true,
+            ..Default::default()
+        };
+        let offline = FetchWithRequest::from(FetchInput {
+            common,
+            layout: String::new(),
+            words: StrSpan::from(Vec::<String>::new()),
+            recursive: false,
+        });
+        assert!(matches!(
+            offline.fetch_with(&progress, &Cancellation::new()),
+            Err(FetchWithRefusal::Failed(WriteError::Offline))
+        ));
     }
 
     #[test]

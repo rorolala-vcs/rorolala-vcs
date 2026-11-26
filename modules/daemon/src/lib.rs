@@ -252,11 +252,108 @@ fn init_close_channel() -> Cancellation {
     Cancellation { rx, future }
 }
 
+/// Setup the crate's tests share: a directory of its own, a runtime, a handshaked pair of
+/// channels, and a member named by a key file.
+///
+/// The exchange tests of the actions all need the same four things, and a session is worth
+/// building the same way every time: two identities, one duplex, one handshake each side.
+#[cfg(test)]
+pub(crate) mod test_support {
+    use std::fs;
+    use std::future::Future;
+    use std::path::{Path, PathBuf};
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    use ed25519_dalek::SigningKey as Ed25519SigningKey;
+    use ed25519_dalek::pkcs8::EncodePublicKey as _;
+    use ed25519_dalek::pkcs8::spki::der::pem::LineEnding;
+    use rorolala_auth::{
+        KeyAlgorithm, KeyLocateRule, Member, SecureStream, SigningKey, find_member,
+    };
+    use rorolala_protocol::{Channel, Socket};
+
+    /// A directory of its own, emptied first so a rerun starts clean.
+    pub(crate) fn scratch(label: &str) -> PathBuf {
+        static NEXT: AtomicUsize = AtomicUsize::new(0);
+
+        let dir = std::env::temp_dir().join(format!(
+            "rola-cov-daemon-{}-{label}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        ));
+
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+
+        dir
+    }
+
+    /// A current-thread runtime, which is what the exchanges here need and nothing more.
+    pub(crate) fn run<T>(future: impl Future<Output = T>) -> T {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("a runtime")
+            .block_on(future)
+    }
+
+    /// Two ends of one handshaked session: the Workspace side first, the Vault side second.
+    pub(crate) fn session() -> (Channel, Channel) {
+        run(async {
+            let server = SigningKey::from_bytes(KeyAlgorithm::Ed25519, [1; 32]).expect("a key");
+            let expected = server.public_key();
+            let client = SigningKey::from_bytes(KeyAlgorithm::Ed25519, [2; 32]).expect("a key");
+            let (client_io, server_io) = tokio::io::duplex(64 * 1024);
+            let client_io: Box<dyn Socket> = Box::new(client_io);
+            let server_io: Box<dyn Socket> = Box::new(server_io);
+
+            let (client, server) = tokio::join!(
+                SecureStream::connect(client_io, &client, &expected),
+                SecureStream::accept(server_io, &server),
+            );
+
+            (
+                client.expect("the client handshakes"),
+                server.expect("the server handshakes"),
+            )
+        })
+    }
+
+    /// The member `name`, whose public key is written at `dir` under that name.
+    ///
+    /// A member is its key file, so a test that needs a named one writes the key where a search
+    /// finds it rather than naming a member directly.
+    pub(crate) fn member(dir: &Path, name: &str) -> Member {
+        let signing = Ed25519SigningKey::from_bytes(&[9; 32]);
+        let pem = signing
+            .verifying_key()
+            .to_public_key_pem(LineEnding::LF)
+            .unwrap();
+        fs::create_dir_all(dir).unwrap();
+        fs::write(dir.join(format!("{name}.pub")), pem).unwrap();
+
+        find_member(
+            name,
+            &[dir.to_path_buf()],
+            &KeyLocateRule {
+                find_global: false,
+                find_local: true,
+                find_user: false,
+                find_env: false,
+            },
+        )
+        .unwrap()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
+    use std::time::Duration;
 
-    use super::{daemon_serve_vault, daemon_serve_vault_async, init_close_channel};
+    use super::{
+        daemon_begin_async, daemon_serve_vault, daemon_serve_vault_async, init_close_channel,
+    };
 
     fn missing(label: &str) -> PathBuf {
         std::env::temp_dir().join(format!(
@@ -290,5 +387,23 @@ mod tests {
         let signal = cancellation.get_rx();
 
         assert!(!*signal.rx.borrow());
+    }
+
+    /// Starting a daemon reaches the point where it serves and waits for a cancellation, so what
+    /// is checked is that it starts rather than fails: the wait is cut short here because the
+    /// console signal is not something a test can send.
+    #[tokio::test]
+    async fn a_started_daemon_waits_for_a_cancellation() {
+        let registry = missing("registry");
+
+        let started = tokio::time::timeout(Duration::from_millis(800), async {
+            daemon_begin_async(&registry, 0).await
+        })
+        .await;
+
+        assert!(
+            started.is_err(),
+            "a daemon that started serves until cancelled"
+        );
     }
 }
