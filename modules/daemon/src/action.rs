@@ -299,7 +299,17 @@ mod tests {
     use rorolala_workspace::Workspace;
     use tokio::net::TcpListener;
 
-    use super::{ActionHandshake, build_action_registry, do_action_with, proc_action};
+    use super::{
+        ActionHandshake, BringRemoteIndexRequest, FetchIgnoreRulesRequest, FetchLayoutRequest,
+        GiveupOwnershipRequest, ListRemoteIndexRequest, ListRemoteRequest, ReadRemoteIndexRequest,
+        RemoveRemotePathRequest, RequestOwnershipRequest, SyncAllRequest, SyncHashesRequest,
+        action_bring_remote_index, action_create_remote_entry, action_fetch_ignore_rules,
+        action_fetch_layout, action_giveup_ownership, action_handshake, action_list_remote,
+        action_list_remote_index, action_move_remote_path, action_read_remote_index,
+        action_remove_remote_path, action_request_ownership, action_set_remote_version,
+        action_sync_all, action_sync_hashes, action_sync_index_all, action_write_remote_entries,
+        build_action_registry, do_action_with, proc_action,
+    };
     use crate::wire;
 
     /// A directory of its own, emptied first so a rerun starts clean.
@@ -464,5 +474,137 @@ mod tests {
 
         assert!(matches!(error, ActionError::UnknownAction(id) if id == ActionHandshake::ID));
         serving.await.unwrap();
+    }
+
+    /// Every entry point that reads from a Vault refuses a target that is not an address.
+    ///
+    /// The address is read before a key or a connection, so a malformed one is answered the
+    /// same way whichever action was asked for, and nothing else is touched.
+    #[test]
+    fn read_entry_points_refuse_a_target_that_is_not_an_address() {
+        let workspace = Workspace::default();
+        let account = Account::default();
+        let target = "rola://".to_owned();
+
+        refused(action_handshake(
+            &workspace,
+            &account,
+            target.clone(),
+            "world".to_owned(),
+        ));
+        refused(action_sync_index_all(&workspace, &account, target.clone()));
+        refused(action_list_remote(
+            &workspace,
+            &account,
+            target.clone(),
+            &ListRemoteRequest::default(),
+        ));
+        refused(action_sync_hashes(
+            &workspace,
+            &account,
+            target.clone(),
+            &SyncHashesRequest::default(),
+        ));
+        refused(action_list_remote_index(
+            &workspace,
+            &account,
+            target.clone(),
+            &ListRemoteIndexRequest::default(),
+        ));
+        refused(action_read_remote_index(
+            &workspace,
+            &account,
+            target.clone(),
+            &ReadRemoteIndexRequest::default(),
+        ));
+        refused(action_fetch_layout(
+            &workspace,
+            &account,
+            target.clone(),
+            &FetchLayoutRequest::default(),
+        ));
+        refused(action_fetch_ignore_rules(
+            &workspace,
+            &account,
+            target,
+            &FetchIgnoreRulesRequest::default(),
+        ));
+    }
+
+    /// Every entry point that writes to a Vault refuses a target that is not an address.
+    #[test]
+    fn write_entry_points_refuse_a_target_that_is_not_an_address() {
+        let workspace = Workspace::default();
+        let account = Account::default();
+        let target = "rola://".to_owned();
+
+        refused(action_sync_all(
+            &workspace,
+            &account,
+            target.clone(),
+            &SyncAllRequest::default(),
+        ));
+        refused(action_request_ownership(
+            &workspace,
+            &account,
+            target.clone(),
+            &RequestOwnershipRequest::default(),
+        ));
+        refused(action_giveup_ownership(
+            &workspace,
+            &account,
+            target.clone(),
+            &GiveupOwnershipRequest::default(),
+        ));
+        refused(action_move_remote_path(
+            &workspace,
+            &account,
+            target.clone(),
+            String::new(),
+            String::new(),
+        ));
+        refused(action_create_remote_entry(
+            &workspace,
+            &account,
+            target.clone(),
+            String::new(),
+            String::new(),
+            String::new(),
+        ));
+        refused(action_set_remote_version(
+            &workspace,
+            &account,
+            target.clone(),
+            String::new(),
+            String::new(),
+        ));
+        refused(action_write_remote_entries(
+            &workspace,
+            &account,
+            target.clone(),
+            &[],
+            &[],
+        ));
+        refused(action_bring_remote_index(
+            &workspace,
+            &account,
+            target.clone(),
+            &BringRemoteIndexRequest::default(),
+        ));
+        refused(action_remove_remote_path(
+            &workspace,
+            &account,
+            target,
+            &RemoveRemotePathRequest::default(),
+        ));
+    }
+
+    /// Asserts that an entry point answered a malformed address rather than anything else.
+    fn refused<T>(result: Result<T, ActionError>) {
+        let Err(error) = result else {
+            panic!("an entry point given no address must not run");
+        };
+
+        assert!(matches!(error, ActionError::Addr(_)));
     }
 }

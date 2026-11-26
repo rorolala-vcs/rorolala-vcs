@@ -163,3 +163,170 @@ impl From<StorageConfigError> for WriteError {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use rorolala_storage::StorageConfigError;
+
+    use super::WriteError;
+
+    #[test]
+    fn a_write_failure_without_details_says_what_a_caller_acts_on() {
+        assert_eq!(
+            WriteError::NoWorkspace.to_string(),
+            "no Workspace holds the directory"
+        );
+        assert_eq!(
+            WriteError::NoLayout.to_string(),
+            "the Workspace works in no Layout"
+        );
+        assert_eq!(
+            WriteError::NoStore.to_string(),
+            "no Workspace or Vault holds a store"
+        );
+        assert_eq!(WriteError::NoIndex.to_string(), "no index is there");
+        assert_eq!(WriteError::NoAccount.to_string(), "no account is bound");
+        assert_eq!(
+            WriteError::NoTrack.to_string(),
+            "the Layout tracks no Vault"
+        );
+        assert_eq!(
+            WriteError::NotCached.to_string(),
+            "the Vault's Layout was never fetched here"
+        );
+        assert_eq!(WriteError::Offline.to_string(), "the run is offline");
+        assert_eq!(
+            WriteError::Locked {
+                path: "a".to_owned()
+            }
+            .to_string(),
+            "a is locked by another run"
+        );
+        assert_eq!(
+            WriteError::InvalidPath {
+                path: "a".to_owned(),
+                reason: "r".to_owned()
+            }
+            .to_string(),
+            "a: r"
+        );
+        assert_eq!(
+            WriteError::NotFound {
+                what: "a".to_owned()
+            }
+            .to_string(),
+            "a is not there"
+        );
+        assert_eq!(
+            WriteError::Precondition {
+                what: "a".to_owned(),
+                reason: "r".to_owned()
+            }
+            .to_string(),
+            "a: r"
+        );
+        assert_eq!(
+            WriteError::Ownership {
+                path: "a".to_owned(),
+                what: "w".to_owned(),
+                reason: String::new()
+            }
+            .to_string(),
+            "a: ownership w"
+        );
+        assert_eq!(
+            WriteError::Ownership {
+                path: "a".to_owned(),
+                what: "w".to_owned(),
+                reason: "r".to_owned()
+            }
+            .to_string(),
+            "a: ownership w: r"
+        );
+    }
+
+    #[test]
+    fn a_write_failure_with_details_names_the_path_and_reason() {
+        assert_eq!(WriteError::Cancelled.to_string(), "the write was cancelled");
+        assert_eq!(
+            WriteError::Action {
+                reason: "r".to_owned()
+            }
+            .to_string(),
+            "r"
+        );
+        assert_eq!(
+            WriteError::Layout {
+                reason: "r".to_owned()
+            }
+            .to_string(),
+            "r"
+        );
+        assert_eq!(
+            WriteError::Storage {
+                reason: "r".to_owned()
+            }
+            .to_string(),
+            "r"
+        );
+        assert_eq!(
+            WriteError::ReadOnly {
+                path: "a".to_owned()
+            }
+            .to_string(),
+            "a is read-only"
+        );
+        assert_eq!(
+            WriteError::Index {
+                reason: "r".to_owned()
+            }
+            .to_string(),
+            "r"
+        );
+        assert_eq!(
+            WriteError::Io {
+                path: "a".to_owned(),
+                reason: "r".to_owned()
+            }
+            .to_string(),
+            "a: r"
+        );
+        assert_eq!(
+            WriteError::Internal {
+                reason: "r".to_owned()
+            }
+            .to_string(),
+            "r"
+        );
+        assert_eq!(
+            WriteError::Tree {
+                reason: "r".to_owned()
+            }
+            .to_string(),
+            "r"
+        );
+        assert_eq!(
+            WriteError::NotATree {
+                path: "a".to_owned()
+            }
+            .to_string(),
+            "a is not inside a tree"
+        );
+        assert_eq!(
+            WriteError::NoVault.to_string(),
+            "no Vault holds the directory"
+        );
+    }
+
+    /// A store's configuration failure is a storage failure, and keeps what it said.
+    #[test]
+    fn a_store_configuration_failure_is_a_storage_failure() {
+        let error = WriteError::from(StorageConfigError::Malformed {
+            path: "rolast.toml".into(),
+            reason: "not a store".to_owned(),
+        });
+
+        assert!(matches!(error, WriteError::Storage { .. }));
+        assert!(error.to_string().contains("not a store"));
+    }
+}

@@ -55,3 +55,14 @@ impl DaemonExit {
         self.code
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::DaemonExit;
+
+    #[test]
+    fn an_exit_answers_the_code_it_was_made_with() {
+        assert_eq!(DaemonExit::default().code(), 0);
+        assert_eq!(DaemonExit::with_code(4).code(), 4);
+    }
+}

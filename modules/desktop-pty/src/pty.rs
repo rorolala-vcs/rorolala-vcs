@@ -417,11 +417,13 @@ const fn size(cols: u16, rows: u16) -> PtySize {
 #[cfg(test)]
 mod tests {
     use std::ffi::CString;
+    use std::ptr;
+    use std::sync::mpsc::channel;
     use std::time::{Duration, Instant};
 
     use super::{
-        rola_desktop_pty_close, rola_desktop_pty_open, rola_desktop_pty_read,
-        rola_desktop_pty_write,
+        Inner, list, rola_desktop_pty_close, rola_desktop_pty_open, rola_desktop_pty_read,
+        rola_desktop_pty_resize, rola_desktop_pty_write, size, text,
     };
 
     /// A terminal is started, typed into, and read back, which is the whole exchange a view makes.
@@ -455,6 +457,9 @@ mod tests {
         };
 
         assert!(!handle.is_null(), "the terminal could not be opened");
+
+        // SAFETY: the handle is live.
+        assert!(unsafe { rola_desktop_pty_resize(handle, 100, 30) });
 
         // The shell draws its prompt once it has one, so the typing waits for it to be up.
         std::thread::sleep(Duration::from_millis(500));
@@ -505,5 +510,133 @@ mod tests {
         let said = String::from_utf8_lossy(&seen);
 
         assert!(said.contains("marker"), "got {said:?}");
+    }
+
+    /// A terminal needs a program, and one that cannot start leaves no handle behind.
+    #[test]
+    fn a_null_or_missing_program_opens_no_terminal() {
+        // SAFETY: null is the no-program this export refuses.
+        let refused =
+            unsafe { rola_desktop_pty_open(ptr::null(), ptr::null(), ptr::null(), 80, 24) };
+        assert!(refused.is_null());
+
+        let program = CString::new("rola-a-program-that-is-not-there").unwrap();
+        let arguments = [0_u8];
+
+        // SAFETY: the program is a NUL-terminated string and the list is its empty terminator.
+        let missing = unsafe {
+            rola_desktop_pty_open(
+                program.as_ptr(),
+                arguments.as_ptr().cast(),
+                ptr::null(),
+                80,
+                24,
+            )
+        };
+
+        assert!(missing.is_null());
+    }
+
+    /// The bytes a caller did not ask for are refused before any handle is read.
+    #[test]
+    fn polling_with_no_handle_or_nothing_to_fill_answers_nothing() {
+        let mut buffer = [0_u8; 8];
+
+        // SAFETY: every pointer is null or the buffer is writable, and the export refuses first.
+        assert_eq!(
+            unsafe { rola_desktop_pty_read(ptr::null_mut(), buffer.as_mut_ptr(), buffer.len()) },
+            0
+        );
+        // SAFETY: as above.
+        assert_eq!(
+            unsafe { rola_desktop_pty_read(ptr::null_mut(), buffer.as_mut_ptr(), 0) },
+            0
+        );
+    }
+
+    /// Typewritten bytes with no handle or no bytes write nothing.
+    #[test]
+    fn typing_with_no_handle_or_nothing_to_type_writes_nothing() {
+        let data = b"x";
+
+        // SAFETY: every pointer is null or the bytes are readable, and the export refuses first.
+        assert!(!unsafe { rola_desktop_pty_write(ptr::null_mut(), data.as_ptr(), data.len()) });
+        // SAFETY: as above.
+        assert!(!unsafe { rola_desktop_pty_write(ptr::null_mut(), data.as_ptr(), 0) });
+    }
+
+    /// A null handle is neither resized nor closed, and neither reads anything.
+    #[test]
+    fn a_null_handle_is_neither_resized_nor_closed() {
+        // SAFETY: null is what both exports accept as nothing to act on.
+        assert!(!unsafe { rola_desktop_pty_resize(ptr::null_mut(), 80, 24) });
+        // SAFETY: as above.
+        unsafe { rola_desktop_pty_close(ptr::null_mut()) };
+    }
+
+    /// A C string reads as its text, and a null pointer reads as nothing.
+    #[test]
+    fn a_c_string_is_read_and_a_null_is_empty() {
+        let value = CString::new("hello").unwrap();
+
+        // SAFETY: the pointer is a NUL-terminated string.
+        assert_eq!(unsafe { text(value.as_ptr()) }, "hello");
+        // SAFETY: null is the empty string this helper accepts.
+        assert_eq!(unsafe { text(ptr::null()) }, "");
+    }
+
+    /// A double-NUL list reads one word per segment and stops at the empty one.
+    #[test]
+    fn a_double_nul_list_is_read_until_the_empty_entry() {
+        let buffer = b"one\0two three\0\0";
+
+        // SAFETY: the buffer is NUL-separated and ended by an empty entry.
+        assert_eq!(
+            unsafe { list(buffer.as_ptr().cast()) },
+            vec!["one".to_owned(), "two three".to_owned()]
+        );
+        // SAFETY: null is the empty list this helper accepts.
+        assert_eq!(unsafe { list(ptr::null()) }, Vec::<String>::new());
+    }
+
+    /// A size carries the columns and rows it was told and no pixel measure.
+    #[test]
+    fn a_size_carries_columns_and_rows_and_no_pixels() {
+        let size = size(120, 40);
+
+        assert_eq!(size.cols, 120);
+        assert_eq!(size.rows, 40);
+        assert_eq!(size.pixel_width, 0);
+        assert_eq!(size.pixel_height, 0);
+    }
+
+    /// A chunk is handed out as much as the caller asks for, and the end is answered once.
+    #[test]
+    fn taking_hands_out_one_chunk_at_a_time_and_ends_with_the_sender() {
+        let (sender, incoming) = channel();
+        let mut inner = Inner {
+            master: None,
+            writer: None,
+            child: None,
+            incoming,
+            pending: Vec::new(),
+            taken: 0,
+            ended: false,
+        };
+        let mut out = [0_u8; 4];
+
+        assert_eq!(inner.take(&mut out), 0);
+
+        sender.send(b"abcdef".to_vec()).unwrap();
+        assert_eq!(inner.take(&mut out), 4);
+        assert_eq!(&out, b"abcd");
+
+        assert_eq!(inner.take(&mut out), 2);
+        assert_eq!(&out[..2], b"ef");
+        assert_eq!(inner.take(&mut out), 0);
+
+        drop(sender);
+        assert_eq!(inner.take(&mut out), -1);
+        assert_eq!(inner.take(&mut out), -1);
     }
 }

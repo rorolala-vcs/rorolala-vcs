@@ -438,3 +438,30 @@ fn index_failed(error: VCSIndexError) -> ActionError {
         error => ActionError::Store(error.to_string()),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::io;
+
+    use rorolala_protocol::ActionError;
+    use rorolala_storage::Key;
+    use rorolala_vcs::VCSIndexError;
+
+    use super::index_failed;
+
+    /// An index failure is reported as the kind a caller acts on.
+    #[test]
+    fn an_index_failure_is_reported_as_the_kind_it_is() {
+        let file = index_failed(VCSIndexError::Io(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "denied",
+        )));
+        assert!(matches!(file, ActionError::LocalFile(_)));
+
+        let missing = index_failed(VCSIndexError::NotFound(Key::new([7; 32])));
+        assert!(matches!(missing, ActionError::MissingObject));
+
+        let store = index_failed(VCSIndexError::Malformed);
+        assert!(matches!(store, ActionError::Store(_)));
+    }
+}

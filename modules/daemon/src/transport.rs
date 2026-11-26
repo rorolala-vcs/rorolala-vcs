@@ -555,7 +555,14 @@ impl Drop for SshSocket {
 
 #[cfg(test)]
 mod tests {
-    use super::{shell_quote, ssh_arguments};
+    use std::io;
+
+    use crate::exit;
+
+    use super::{
+        ConnectError, NOT_FOUND, SSH_FAILURE, UNKNOWN_COMMAND, ended_message, shell_quote,
+        ssh_arguments,
+    };
 
     #[test]
     fn a_path_is_quoted_so_that_a_shell_reads_it_as_one_word() {
@@ -647,5 +654,40 @@ mod tests {
             .position(|argument| argument == "--")
             .expect("the separator");
         assert_eq!(arguments[dashes + 1], "-oProxyCommand=evil");
+    }
+
+    /// An SSH program's exit code is read as the reason it names.
+    #[test]
+    fn an_ssh_exit_code_is_read_as_the_reason_it_names() {
+        assert!(
+            ended_message(i32::from(SSH_FAILURE))
+                .contains("SSH connection could not be established")
+        );
+        assert!(ended_message(i32::from(exit::NO_IDENTITY)).contains("holds no account"));
+        assert!(ended_message(i32::from(exit::NO_VAULT)).contains("is not a Vault"));
+        assert!(ended_message(i32::from(exit::SESSION_FAILED)).contains("failed the session"));
+        assert!(ended_message(i32::from(exit::SSH_DISABLED)).contains("refuses SSH sessions"));
+        assert!(ended_message(i32::from(exit::PREFERENCE_UNREADABLE)).contains("preference.toml"));
+        assert!(ended_message(i32::from(NOT_FOUND)).contains("has no `rola-daemon` to run"));
+        assert!(
+            ended_message(i32::from(UNKNOWN_COMMAND)).contains("does not know the `serve` command")
+        );
+
+        // A code no program uses is still reported with the number it was.
+        assert!(ended_message(42).contains("exit code 42"));
+        assert!(ended_message(256).contains("no program uses (256)"));
+        assert!(ended_message(-1).contains("no program uses (-1)"));
+    }
+
+    /// A connection failure names the leg that failed, in the words that leg used.
+    #[test]
+    fn a_connection_failure_names_the_leg_that_failed() {
+        let tcp = ConnectError::Tcp(io::Error::new(io::ErrorKind::ConnectionRefused, "refused"));
+        assert_eq!(tcp.to_string(), "the daemon could not be reached: refused");
+
+        let ssh = ConnectError::Ssh {
+            message: "the SSH program could not be started".to_owned(),
+        };
+        assert_eq!(ssh.to_string(), "the SSH program could not be started");
     }
 }

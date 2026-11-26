@@ -370,3 +370,229 @@ impl WriteTreeReset {
         self.paths.get(index).cloned().unwrap_or_default()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::collections::{BTreeMap, BTreeSet};
+    use std::path::PathBuf;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    use rorolala_storage::Key;
+    use rorolala_tree::{FileMode, TreeEntry, TreeStructure, conflict_copy};
+
+    use super::{
+        WriteTreeReset, entries_of, is_directory, put_back, remove_conflict, settle_conflicts,
+        targets, under,
+    };
+
+    fn key(seed: u8) -> Key {
+        Key::new([seed; 32])
+    }
+
+    fn file(path: &str) -> TreeEntry {
+        TreeEntry::file(path, FileMode::Regular, key(1))
+    }
+
+    fn executable(path: &str) -> TreeEntry {
+        TreeEntry::file(path, FileMode::Executable, key(2))
+    }
+
+    fn directory(path: &str) -> TreeEntry {
+        TreeEntry::directory(path)
+    }
+
+    /// A directory of its own, emptied first so a rerun starts clean.
+    fn scratch(label: &str) -> PathBuf {
+        static NEXT: AtomicUsize = AtomicUsize::new(0);
+
+        let dir = std::env::temp_dir().join(format!(
+            "rola-tree-reset-{}-{label}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        ));
+
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        dir
+    }
+
+    /// A scope names itself and everything below it, and nothing that merely starts alike.
+    #[test]
+    fn a_scope_holds_itself_and_everything_under_it() {
+        assert!(under("", "a"));
+        assert!(under("a", "a"));
+        assert!(under("a", "a/b"));
+        assert!(!under("a", "ab"));
+        assert!(!under("a/b", "a"));
+    }
+
+    /// The entries of a structure are keyed by the path they name.
+    #[test]
+    fn the_entries_of_a_structure_are_keyed_by_path() {
+        let structure = TreeStructure::build(None, [file("a.psd"), directory("renders")]).unwrap();
+        let entries = entries_of(&structure);
+
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries["a.psd"], file("a.psd"));
+        assert_eq!(entries["renders"], directory("renders"));
+    }
+
+    /// A path is a directory when either structure says it is one.
+    #[test]
+    fn a_directory_is_one_in_either_structure() {
+        let staged = BTreeMap::from([
+            ("renders".to_owned(), directory("renders")),
+            ("a.psd".to_owned(), file("a.psd")),
+        ]);
+        let recorded = BTreeMap::from([("old".to_owned(), directory("old"))]);
+
+        assert!(is_directory(&staged, &recorded, "renders"));
+        assert!(is_directory(&staged, &recorded, "old"));
+        assert!(!is_directory(&staged, &recorded, "a.psd"));
+        assert!(!is_directory(&staged, &recorded, "missing"));
+    }
+
+    /// A named path stands for itself, a directory over it, or the whole tree.
+    #[test]
+    fn a_named_path_stands_for_itself_a_directory_or_the_whole_tree() {
+        let root = std::env::temp_dir();
+        let cwd = root.clone();
+        let staged = BTreeMap::from([
+            ("a.psd".to_owned(), file("a.psd")),
+            ("renders".to_owned(), directory("renders")),
+            ("renders/b.psd".to_owned(), file("renders/b.psd")),
+        ]);
+        let recorded = BTreeMap::from([("gone.psd".to_owned(), file("gone.psd"))]);
+        let conflicts = vec!["conflict.psd".to_owned()];
+
+        let (selected, named) = targets(
+            &root,
+            &cwd,
+            &["a.psd".to_owned()],
+            &staged,
+            &recorded,
+            &conflicts,
+        )
+        .unwrap();
+        assert_eq!(selected, BTreeSet::from(["a.psd".to_owned()]));
+        assert_eq!(named, ["a.psd".to_owned()]);
+
+        let (selected, _) = targets(
+            &root,
+            &cwd,
+            &["renders".to_owned()],
+            &staged,
+            &recorded,
+            &conflicts,
+        )
+        .unwrap();
+        assert_eq!(
+            selected,
+            BTreeSet::from(["renders".to_owned(), "renders/b.psd".to_owned()])
+        );
+
+        let (selected, named) = targets(
+            &root,
+            &cwd,
+            &[".".to_owned()],
+            &staged,
+            &recorded,
+            &conflicts,
+        )
+        .unwrap();
+        assert_eq!(selected.len(), 5);
+        assert_eq!(named, [".".to_owned()]);
+
+        let absolute = root.join("a.psd");
+        let (_, named) = targets(
+            &root,
+            &cwd,
+            &[absolute.to_string_lossy().into_owned()],
+            &staged,
+            &recorded,
+            &conflicts,
+        )
+        .unwrap();
+        assert_eq!(named, ["a.psd".to_owned()]);
+
+        assert!(
+            targets(
+                &root,
+                &cwd,
+                &["nothing.psd".to_owned()],
+                &staged,
+                &recorded,
+                &conflicts
+            )
+            .is_err()
+        );
+    }
+
+    /// Putting a path back takes the recorded entry, and one no version names is taken out.
+    #[test]
+    fn putting_back_restores_recorded_entries_and_removes_the_others() {
+        let mut entries = BTreeMap::from([
+            ("a.psd".to_owned(), file("a.psd")),
+            ("new.psd".to_owned(), file("new.psd")),
+        ]);
+        let recorded = BTreeMap::from([("a.psd".to_owned(), executable("a.psd"))]);
+        let paths = BTreeSet::from(["a.psd".to_owned(), "new.psd".to_owned()]);
+
+        put_back(&mut entries, &recorded, &paths);
+
+        assert_eq!(entries["a.psd"], executable("a.psd"));
+        assert!(!entries.contains_key("new.psd"));
+    }
+
+    /// A conflict copy a reset covers is removed beside its path, and the rest stay.
+    #[test]
+    fn settling_conflicts_drops_the_ones_a_reset_covers_and_keeps_the_rest() {
+        let root = scratch("settle");
+        let covered = "renders/b.psd";
+        let kept = "other.psd";
+        std::fs::create_dir_all(root.join("renders")).unwrap();
+        let covered_copy = root.join(conflict_copy(covered));
+        let kept_copy = root.join(conflict_copy(kept));
+        std::fs::write(&covered_copy, b"theirs").unwrap();
+        std::fs::write(&kept_copy, b"theirs").unwrap();
+
+        let remaining = settle_conflicts(
+            vec![covered.to_owned(), kept.to_owned()],
+            &BTreeSet::from(["renders".to_owned()]),
+            &root,
+        );
+
+        assert_eq!(remaining, [kept.to_owned()]);
+        assert!(!covered_copy.exists());
+        assert!(kept_copy.exists());
+    }
+
+    /// A conflict copy is removed when it is there, and its absence is not a failure.
+    #[test]
+    fn a_conflict_copy_is_removed_beside_its_path() {
+        let root = scratch("remove");
+        let copy = root.join(conflict_copy("a.psd"));
+        std::fs::write(&copy, b"theirs").unwrap();
+
+        remove_conflict(&root, "a.psd");
+        assert!(!copy.exists());
+
+        remove_conflict(&root, "a.psd");
+    }
+
+    /// A reset answer hands over whether it was whole, how many paths, and each in order.
+    #[test]
+    fn a_reset_answer_hands_over_the_paths_it_was_given() {
+        let answer = WriteTreeReset {
+            whole: false,
+            paths: vec!["a.psd".to_owned(), "renders".to_owned()],
+        };
+
+        assert!(!answer.whole());
+        assert_eq!(answer.path_count(), 2);
+        assert_eq!(answer.path_at(0), "a.psd");
+        assert_eq!(answer.path_at(1), "renders");
+        assert_eq!(answer.path_at(2), "");
+    }
+}

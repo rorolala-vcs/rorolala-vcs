@@ -78,3 +78,79 @@ fn resolve(cwd: &Path, given: &str) -> PathBuf {
         cwd.join(given)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use rorolala_utils_constants::VAULT_LAYOUT_NAME;
+
+    use super::{PathRefusal, is_remote, local_path};
+
+    /// A word that names an entry, a hash or a remote is not a path of this tree.
+    #[test]
+    fn a_uuid_a_hash_and_a_remote_name_are_not_local_paths() {
+        let root = std::env::temp_dir();
+        let cwd = root.clone();
+
+        let uuid = "3f2504e0-4f89-11d3-9a0c-0305e82c3301";
+        assert_eq!(local_path(&root, &cwd, uuid), Err(PathRefusal::NotLocal));
+
+        let hash = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        assert_eq!(local_path(&root, &cwd, hash), Err(PathRefusal::NotLocal));
+
+        assert_eq!(
+            local_path(&root, &cwd, "@remote"),
+            Err(PathRefusal::NotLocal)
+        );
+        assert_eq!(
+            local_path(&root, &cwd, &format!("{VAULT_LAYOUT_NAME}@VAULT")),
+            Err(PathRefusal::NotLocal)
+        );
+    }
+
+    /// A plain name may hold an `@` and stays the path it is.
+    #[test]
+    fn only_the_vault_side_names_are_remote() {
+        assert!(is_remote("@remote"));
+        assert!(is_remote(&format!("{VAULT_LAYOUT_NAME}@vault")));
+        assert!(!is_remote("logo@2x.png"));
+        assert!(!is_remote("renders"));
+        assert!(!is_remote(&format!("{VAULT_LAYOUT_NAME}@")));
+
+        let root = std::env::temp_dir();
+        assert!(local_path(&root, &root, "logo@2x.png").is_ok());
+    }
+
+    /// A path under the Workspace is the Layout path it names, relative or absolute.
+    #[test]
+    fn a_path_inside_the_workspace_is_the_layout_path_it_names() {
+        let root = std::env::temp_dir();
+        let cwd = root.join("work");
+
+        let relative = local_path(&root, &cwd, "renders/a.psd").unwrap();
+        assert_eq!(relative.as_str(), "work/renders/a.psd");
+
+        let absolute = root.join("at.psd");
+        let absolute = local_path(&root, &cwd, &absolute.to_string_lossy()).unwrap();
+        assert_eq!(absolute.as_str(), "at.psd");
+    }
+
+    /// A path that walks out of the Workspace is refused, and so is one in its own data.
+    #[test]
+    fn a_path_outside_the_workspace_or_in_its_data_is_refused() {
+        let root = std::env::temp_dir().join("rola-inside");
+        let outside = std::env::temp_dir().join("rola-outside");
+
+        assert_eq!(
+            local_path(&root, &outside, "a.psd"),
+            Err(PathRefusal::OutsideWorkspace)
+        );
+        assert_eq!(
+            local_path(&root, &root, "../escape.psd"),
+            Err(PathRefusal::OutsideWorkspace)
+        );
+        assert_eq!(
+            local_path(&root, &root, ".rola/index/objects"),
+            Err(PathRefusal::InsideData)
+        );
+    }
+}
