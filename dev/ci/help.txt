@@ -17,6 +17,9 @@ CHECKS:
    dotnet-lint    Lint the .NET side of the workspace, with every analyzer rule
    dotnet-check   Build and test the .NET side of the workspace
 
+REPORTS:
+   coverage       Run the tests and the integration suites under LLVM coverage
+
 RUNS:
    report-collect  Render what this run recorded into .cache/reports/result.md
    report-clean    Remove what a previous run recorded, and the report rendered from it
@@ -25,3 +28,6 @@ RUNS:
 
 `check` runs neither `git-lock` nor `git-unlock`: they are utilities around a run, not steps of one,
 and a run that wraps itself in them is composed outside this program.
+
+`coverage` is not part of `check`: it needs `cargo-llvm-cov` and the `llvm-tools-preview` component,
+and it writes its report under `.cache/reports/coverage/`.

@@ -358,6 +358,65 @@ jobs:
       MUSL: "true"
     steps: *check-steps
 
+  # Coverage is measured rather than gated: it needs the `llvm-tools-preview` component and
+  # `cargo-llvm-cov`, and an instrumented build of the programs and the C ABI. It runs on Linux
+  # because that is the only platform where the C and C++ ABI suites run, and the .NET suites run
+  # there too against the instrumented shared library.
+  coverage:
+    name: Coverage (linux)
+    needs: [fast-check, prewarm-linux]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Use the tree's own line endings
+        shell: bash
+        run: git config --global core.autocrlf false
+
+      - uses: actions/checkout@v7
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        id: toolchain
+        with:
+          cache-shared-key: rola-${{ runner.os }}
+          cache-workspaces: |
+            . -> .cache/rs-target
+          cache-on-failure: true
+          components: llvm-tools-preview
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Cache the NuGet packages
+        uses: actions/cache@v6
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'global.json', 'Directory.Build.props', 'RorolalaSharp.sln') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
+
+      - name: Cache cargo-llvm-cov
+        uses: actions/cache@v6
+        with:
+          path: ~/.cargo/bin/cargo-llvm-cov
+          key: cargo-llvm-cov-0.8.7-${{ runner.os }}-${{ steps.toolchain.outputs.cachekey }}
+
+      - name: Install the pinned cargo-llvm-cov
+        run: cargo install cargo-llvm-cov --version 0.8.7 --locked
+
+      - name: Configure git identity
+        run: |
+          git config --global user.email "ci@rorolala.invalid"
+          git config --global user.name "rola CI"
+
+      - name: Run the coverage
+        run: cargo ci coverage
+
+      - name: Upload the coverage report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-report
+          path: .cache/reports/coverage/
+          if-no-files-found: ignore
+
   # What a person is handed, built on the platform it is for. Windows is given the installer. Linux
   # is given the all-in-one package, the AppImage, and a complete package whose command-line
   # programs are built against musl; the split packages and the meta package stay for repositories.

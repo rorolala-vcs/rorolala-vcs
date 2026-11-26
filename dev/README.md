@@ -35,3 +35,7 @@ Each tool is a workspace of its own rather than a member of the root one.
 `cargo ci check` is the gate. A change to a tool is checked by `cargo ci test` and `cargo ci clippy`
 on the tool's own workspace, and by the step it adds or changes. `cargo ci fmt-check` holds the
 formatting.
+
+`cargo ci coverage` is a run of its own: it collects LLVM coverage from the workspace's tests and the
+integration suites. It is not a step of `cargo ci check`, because it needs `cargo-llvm-cov` and the
+`llvm-tools-preview` component.
