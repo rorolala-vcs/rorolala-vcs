@@ -203,6 +203,8 @@ pub fn handle_layout_tree_diff(
     let result = ResultLayoutTreeDiff::of(&diff, trees_modified, wrong);
 
     if format.is_structured() {
+        mingling::begin_stream::<crate::ThisProgram>();
+
         for path in &result.lost {
             render!(&TreeDiffPathRecord {
                 kind: "lost",
@@ -510,31 +512,19 @@ pub struct TreeDiffFailedRecord {
 
 /// What one path is drawn as, in the plain listing and in the stream's fallback.
 #[renderer(buffer)]
-pub fn render_tree_diff_path(record: TreeDiffPathRecord, format: &ResFormat) {
-    if format.is_structured() {
-        return mingling::RenderResult::default();
-    }
-
+pub fn render_tree_diff_path(record: TreeDiffPathRecord) {
     r_println!("{} {}", record.kind, record.path);
 }
 
 /// What one move is drawn as.
 #[renderer(buffer)]
-pub fn render_tree_diff_rename(record: TreeDiffRenameRecord, format: &ResFormat) {
-    if format.is_structured() {
-        return mingling::RenderResult::default();
-    }
-
+pub fn render_tree_diff_rename(record: TreeDiffRenameRecord) {
     r_println!("rename {} -> {}", record.from, record.to);
 }
 
 /// What one unread path is drawn as.
 #[renderer(buffer)]
-pub fn render_tree_diff_failed(record: TreeDiffFailedRecord, format: &ResFormat) {
-    if format.is_structured() {
-        return mingling::RenderResult::default();
-    }
-
+pub fn render_tree_diff_failed(record: TreeDiffFailedRecord) {
     r_println!("failed {}", record.path);
 }
 

@@ -56,8 +56,8 @@ pub fn run(command: &mut Command) -> Ran {
 
     if std::env::var_os("IT_TRACE").is_some() {
         eprintln!(
-            "RUN {:?} {:?}",
-            program,
+            "RUN {} {:?}",
+            std::path::Path::new(&program).display(),
             command.get_args().collect::<Vec<_>>()
         );
     }

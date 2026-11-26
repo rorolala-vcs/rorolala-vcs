@@ -149,11 +149,7 @@ pub struct ManifestKeyRecord {
 
 /// What one manifest key is drawn as.
 #[renderer(buffer)]
-pub fn render_manifest_key_record(record: ManifestKeyRecord, format: &ResFormat) {
-    if format.is_structured() {
-        return mingling::RenderResult::default();
-    }
-
+pub fn render_manifest_key_record(record: ManifestKeyRecord) {
     r_println!("manifest:{}", record.key.hex());
 }
 

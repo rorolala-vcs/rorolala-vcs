@@ -137,11 +137,7 @@ pub struct ItemVersion {
 
 /// What one version is drawn as, in the plain listing and in the stream's fallback.
 #[renderer(buffer)]
-pub fn render_item_version(item: ItemVersion, format: &ResFormat) {
-    if format.is_structured() {
-        return mingling::RenderResult::default();
-    }
-
+pub fn render_item_version(item: ItemVersion) {
     r_println!(
         "{}:{} -> {}",
         item.version_num

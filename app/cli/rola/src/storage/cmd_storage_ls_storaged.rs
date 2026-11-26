@@ -151,11 +151,7 @@ pub struct ObjectKeyRecord {
 
 /// What one key is drawn as.
 #[renderer(buffer)]
-pub fn render_object_key_record(record: ObjectKeyRecord, format: &ResFormat) {
-    if format.is_structured() {
-        return mingling::RenderResult::default();
-    }
-
+pub fn render_object_key_record(record: ObjectKeyRecord) {
     r_println!("{}", record.key);
 }
 

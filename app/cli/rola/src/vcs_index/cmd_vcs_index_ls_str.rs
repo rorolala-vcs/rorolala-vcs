@@ -147,11 +147,7 @@ pub struct StrHashRecord {
 
 /// What one text hash is drawn as.
 #[renderer(buffer)]
-pub fn render_str_hash_record(record: StrHashRecord, format: &ResFormat) {
-    if format.is_structured() {
-        return mingling::RenderResult::default();
-    }
-
+pub fn render_str_hash_record(record: StrHashRecord) {
     r_println!("{}", record.hash);
 }
 

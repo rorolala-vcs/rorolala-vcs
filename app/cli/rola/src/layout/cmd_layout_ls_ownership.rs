@@ -181,10 +181,6 @@ fn ownership_line(item: &OwnershipItem) -> String {
 
 /// What one entry is drawn as.
 #[renderer(buffer)]
-pub fn render_ownership_item(item: OwnershipItem, format: &ResFormat) {
-    if format.is_structured() {
-        return mingling::RenderResult::default();
-    }
-
+pub fn render_ownership_item(item: OwnershipItem) {
     r_println!("{}", ownership_line(&item));
 }

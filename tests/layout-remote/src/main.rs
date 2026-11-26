@@ -261,7 +261,7 @@ async fn main() {
     ));
     checked.wants(
         "asking after an entry the Layout does not name lists nothing",
-        said.success() && said.stdout.contains("\"entries\":[]"),
+        said.success() && said.stdout.trim().is_empty(),
         &format!(
             "it ended with {:?} and said {:?}",
             said.code,

@@ -1392,6 +1392,8 @@ pub struct StatusRelationRecord {
 
 /// Emits one record a line for a structural run.
 fn emit_status(result: &ResultStatus) {
+    mingling::begin_stream::<crate::ThisProgram>();
+
     for path in &result.lost {
         render!(&StatusPathRecord {
             kind: "lost",
@@ -1490,71 +1492,43 @@ fn emit_status(result: &ResultStatus) {
 
 /// What one path is drawn as, in the plain listing and in the stream's fallback.
 #[renderer(buffer)]
-pub fn render_status_path(record: StatusPathRecord, format: &ResFormat) {
-    if format.is_structured() {
-        return mingling::RenderResult::default();
-    }
-
+pub fn render_status_path(record: StatusPathRecord) {
     r_println!("{} {}", record.kind, record.path);
 }
 
 /// What one move is drawn as.
 #[renderer(buffer)]
-pub fn render_status_rename(record: StatusRenameRecord, format: &ResFormat) {
-    if format.is_structured() {
-        return mingling::RenderResult::default();
-    }
-
+pub fn render_status_rename(record: StatusRenameRecord) {
     r_println!("rename {} -> {}", record.from, record.to);
 }
 
 /// What one structural tree is drawn as.
 #[renderer(buffer)]
-pub fn render_status_tree_structural(record: StatusTreeStructuralRecord, format: &ResFormat) {
-    if format.is_structured() {
-        return mingling::RenderResult::default();
-    }
-
+pub fn render_status_tree_structural(record: StatusTreeStructuralRecord) {
     r_println!("{} {}", record.kind, record.path);
 }
 
 /// What one content tree is drawn as.
 #[renderer(buffer)]
-pub fn render_status_tree_content(record: StatusTreeContentRecord, format: &ResFormat) {
-    if format.is_structured() {
-        return mingling::RenderResult::default();
-    }
-
+pub fn render_status_tree_content(record: StatusTreeContentRecord) {
     r_println!("{} {}", record.kind, record.path);
 }
 
 /// What one waiting variant is drawn as.
 #[renderer(buffer)]
-pub fn render_status_merging(record: StatusMergingRecord, format: &ResFormat) {
-    if format.is_structured() {
-        return mingling::RenderResult::default();
-    }
-
+pub fn render_status_merging(record: StatusMergingRecord) {
     r_println!("merging {}", record.target);
 }
 
 /// What one broken merge is drawn as.
 #[renderer(buffer)]
-pub fn render_status_broken(record: StatusBrokenRecord, format: &ResFormat) {
-    if format.is_structured() {
-        return mingling::RenderResult::default();
-    }
-
+pub fn render_status_broken(record: StatusBrokenRecord) {
     r_println!("{}", record.reason);
 }
 
 /// What one standing beside the Vault is drawn as.
 #[renderer(buffer)]
-pub fn render_status_relation(record: StatusRelationRecord, format: &ResFormat) {
-    if format.is_structured() {
-        return mingling::RenderResult::default();
-    }
-
+pub fn render_status_relation(record: StatusRelationRecord) {
     r_println!("{} {}", record.kind, record.path);
 }
 

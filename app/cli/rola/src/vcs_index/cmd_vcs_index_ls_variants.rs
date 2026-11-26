@@ -132,11 +132,7 @@ pub struct ItemVariant {
 
 /// What one variant is drawn as, in the plain listing and in the stream's fallback.
 #[renderer(buffer)]
-pub fn render_item_variant(item: ItemVariant, format: &ResFormat) {
-    if format.is_structured() {
-        return mingling::RenderResult::default();
-    }
-
+pub fn render_item_variant(item: ItemVariant) {
     r_println!(
         "{} -> {}{}",
         item.variant.hash().hex(),

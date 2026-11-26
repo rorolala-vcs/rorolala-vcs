@@ -293,11 +293,7 @@ fn verdict(stores: &[StoreFsck], ec: &mut ResExitCode) {
 
 /// What one store is drawn as, in the stream's fallback.
 #[renderer(buffer)]
-pub fn render_store_fsck(store: StoreFsck, format: &ResFormat) {
-    if format.is_structured() {
-        return mingling::RenderResult::default();
-    }
-
+pub fn render_store_fsck(store: StoreFsck) {
     r_println!("{}", store.root);
 }
 

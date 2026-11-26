@@ -242,11 +242,7 @@ pub struct EntryItem {
 
 /// What one entry is drawn as, in the plain listing and in the stream's fallback.
 #[renderer(buffer)]
-pub fn render_entry_item(item: EntryItem, format: &ResFormat) {
-    if format.is_structured() {
-        return mingling::RenderResult::default();
-    }
-
+pub fn render_entry_item(item: EntryItem) {
     r_println!("{}  {}  {}", item.path, item.uuid, item.version);
 }
 
