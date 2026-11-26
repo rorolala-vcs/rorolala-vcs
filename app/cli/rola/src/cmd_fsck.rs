@@ -10,8 +10,8 @@ use mingling::{
     Grouped, LazyRes, ShellContext, StructuralData, Suggest,
     consts::UNMATCHED,
     macros::{
-        arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
-        routeify, suggest,
+        arg, buffer, chain, command, completion, empty_result, help, metadata, r_eprintln,
+        r_println, render_each, renderer, routeify, suggest,
     },
     metadata::Description,
     picker::{EntryPicker, PickerArg, value::Flag},
@@ -28,6 +28,7 @@ use crate::Next;
 use crate::complete::{strip_written, typing_flag};
 use crate::exit_codes::{EC_ERR_FSCK, EC_ERR_FSCK_FAILED, EC_ERR_FSCK_NO_STORAGE, EC_HELP};
 use crate::failure::failure;
+use crate::format::ResFormat;
 
 /// Read every object and check it against its key, rather than only looking at the layout.
 const ARG_FULL: PickerArg<'static, Flag> = arg![full: Flag];
@@ -106,7 +107,12 @@ pub struct StateFsck {
 }
 
 #[chain(routeify)]
-pub fn handle_fsck(state: StateFsck, storage: &mut LazyRes<ResStorageSet>) -> Next {
+pub fn handle_fsck(
+    state: StateFsck,
+    storage: &mut LazyRes<ResStorageSet>,
+    format: &ResFormat,
+    ec: &mut ResExitCode,
+) -> Next {
     let Some(set) = storage.get_ref().storage() else {
         return ErrorFsckNoStorage.into();
     };
@@ -150,7 +156,16 @@ pub fn handle_fsck(state: StateFsck, storage: &mut LazyRes<ResStorageSet>) -> Ne
         stores
     });
 
-    ResultFsck { stores }.into()
+    let result = ResultFsck { stores };
+
+    if format.is_structured() {
+        verdict(&result.stores, ec);
+        render_each!(&result.stores);
+
+        return empty_result!();
+    }
+
+    result.into()
 }
 
 /// Result: every store the run can reach was checked.
@@ -161,7 +176,7 @@ pub struct ResultFsck {
 }
 
 /// What was found in one store, and whether the check itself could be carried out.
-#[derive(Serialize)]
+#[derive(Clone, Grouped, StructuralData, Serialize)]
 pub struct StoreFsck {
     /// The root of the store, as the configuration names it.
     pub(crate) root: String,
@@ -178,7 +193,6 @@ pub fn render_result_fsck(result: ResultFsck, ec: &mut ResExitCode) {
     // store that began every line with the path it stands in would be repeating itself.
     let many = result.stores.len() > 1;
     let mut problems = 0;
-    let mut failed = false;
 
     for store in &result.stores {
         if many {
@@ -186,7 +200,6 @@ pub fn render_result_fsck(result: ResultFsck, ec: &mut ResExitCode) {
         }
 
         if let Some(reason) = &store.unreadable {
-            failed = true;
             r_eprintln!(
                 "{}",
                 err_line!(
@@ -257,6 +270,18 @@ pub fn render_result_fsck(result: ResultFsck, ec: &mut ResExitCode) {
 
     // A store that could not be answered for is what a caller has to branch on first: the findings
     // it did hear are true, but the run cannot promise there are no others.
+    verdict(&result.stores, ec);
+}
+
+/// Sets the exit code the findings call for, without drawing any of them.
+fn verdict(stores: &[StoreFsck], ec: &mut ResExitCode) {
+    let failed = stores.iter().any(|store| store.unreadable.is_some());
+    let problems: usize = stores
+        .iter()
+        .filter(|store| store.unreadable.is_none())
+        .map(|store| store.report.problems())
+        .sum();
+
     ec.exit_code = if failed {
         EC_ERR_FSCK_FAILED
     } else if problems > 0 {
@@ -264,6 +289,16 @@ pub fn render_result_fsck(result: ResultFsck, ec: &mut ResExitCode) {
     } else {
         ec.exit_code
     };
+}
+
+/// What one store is drawn as, in the stream's fallback.
+#[renderer(buffer)]
+pub fn render_store_fsck(store: StoreFsck, format: &ResFormat) {
+    if format.is_structured() {
+        return mingling::RenderResult::default();
+    }
+
+    r_println!("{}", store.root);
 }
 
 /// Error: the run is nowhere a store is.

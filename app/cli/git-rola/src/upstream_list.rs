@@ -13,9 +13,11 @@
 #![allow(clippy::needless_pass_by_value)]
 
 use librorolala::layout::EntryKind;
+use std::io::{IsTerminal as _, Write as _};
+
 use mingling::{
     Grouped,
-    macros::{buffer, chain, command, r_println, renderer},
+    macros::{buffer, chain, command, empty_result, r_println, renderer},
 };
 use rola_git_support::Session;
 use rust_i18n::t;
@@ -57,6 +59,11 @@ pub struct StateUpstream {
 #[chain]
 pub fn handle_upstream(state: StateUpstream) -> Next {
     match listing(&state) {
+        Ok(result) if !std::io::stdout().is_terminal() => {
+            write_lines(&result);
+
+            empty_result!()
+        }
         Ok(result) => result.into(),
         Err(message) => crate::Fatal::new(message).into(),
     }
@@ -74,6 +81,18 @@ pub struct ResultUpstream {
 pub fn render_upstream(result: ResultUpstream) {
     for line in &result.lines {
         r_println!("{line}");
+    }
+}
+
+/// Writes each line as it is listed, stopping when the reader has gone.
+fn write_lines(result: &ResultUpstream) {
+    let stdout = std::io::stdout();
+    let mut out = stdout.lock();
+
+    for line in &result.lines {
+        if writeln!(out, "{line}").is_err() {
+            return;
+        }
     }
 }
 

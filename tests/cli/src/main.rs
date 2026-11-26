@@ -619,12 +619,8 @@ fn workspace(rola: &Rola, ws: &Path, checked: &mut Checked) {
     let ran = rola.run(ws, &["status", "--json"]);
     checked.exits("`status --json` ends successfully", &ran, 0);
     checked.wants(
-        "the answer is the five lists a status has",
-        json(&ran).is_some_and(|value| {
-            ["lost", "untagged", "modified", "renamed", "unowned"]
-                .iter()
-                .all(|key| value.get(key).is_some())
-        }),
+        "a clean status writes no record",
+        jsonl(&ran).is_empty(),
         &said(&ran),
     );
 
@@ -632,11 +628,7 @@ fn workspace(rola: &Rola, ws: &Path, checked: &mut Checked) {
     checked.exits("a Layout's entries are listed", &ran, 0);
     checked.wants(
         "an empty Layout lists no entries",
-        json(&ran).is_some_and(|value| {
-            value
-                .get("entries")
-                .is_some_and(serde_json::Value::is_array)
-        }),
+        jsonl(&ran).is_empty(),
         &said(&ran),
     );
 
@@ -862,8 +854,8 @@ fn storage(rola: &Rola, ws: &Path, files: &Path, checked: &mut Checked) {
 
     let ran = rola.run(ws, &["storage", "ls-storaged", "--json"]);
     checked.wants(
-        "the listing is an object of keys",
-        json(&ran).is_some_and(|value| value.get("keys").is_some_and(serde_json::Value::is_array)),
+        "the listing is one key a line",
+        jsonl(&ran) == [serde_json::Value::String(key.clone())],
         &said(&ran),
     );
 
@@ -930,25 +922,19 @@ fn storage(rola: &Rola, ws: &Path, files: &Path, checked: &mut Checked) {
     let ran = rola.run(ws, &["fsck", "--json"]);
     checked.wants(
         "the check answers as data when asked",
-        json(&ran).is_some_and(|value| {
-            value
-                .get("stores")
-                .and_then(serde_json::Value::as_array)
-                .and_then(|stores| stores.first())
-                .is_some_and(|store| {
-                    store
-                        .get("broken_packs")
-                        .is_some_and(serde_json::Value::is_array)
-                        && store
-                            .get("missing_packs")
-                            .is_some_and(serde_json::Value::is_array)
-                        && store
-                            .get("corrupt")
-                            .is_some_and(serde_json::Value::is_array)
-                        && store
-                            .get("checked_packs")
-                            .is_some_and(serde_json::Value::is_number)
-                })
+        jsonl(&ran).first().is_some_and(|store| {
+            store
+                .get("broken_packs")
+                .is_some_and(serde_json::Value::is_array)
+                && store
+                    .get("missing_packs")
+                    .is_some_and(serde_json::Value::is_array)
+                && store
+                    .get("corrupt")
+                    .is_some_and(serde_json::Value::is_array)
+                && store
+                    .get("checked_packs")
+                    .is_some_and(serde_json::Value::is_number)
         }),
         &said(&ran),
     );
@@ -1043,17 +1029,10 @@ fn index(rola: &Rola, ws: &Path, checked: &mut Checked) {
     checked.exits("the inverse index is listed", &ran, 0);
     checked.wants(
         "the root version is listed as the root, numbered before the first",
-        json(&ran).is_some_and(|value| {
-            value
-                .get("objects")
-                .and_then(JsonValue::as_array)
-                .is_some_and(|rows| {
-                    rows.iter().any(|row| {
-                        row.get("hash") == Some(&JsonValue::String(root.clone()))
-                            && row.get("is_root") == Some(&JsonValue::Bool(true))
-                            && row.get("number") == Some(&JsonValue::Null)
-                    })
-                })
+        jsonl(&ran).iter().any(|row| {
+            row.get("hash") == Some(&JsonValue::String(root.clone()))
+                && row.get("is_root") == Some(&JsonValue::Bool(true))
+                && row.get("number") == Some(&JsonValue::Null)
         }),
         &said(&ran),
     );
@@ -1565,14 +1544,7 @@ fn collecting_beside_work(rola: &Rola, chain: &Path, checked: &mut Checked) {
     let listed = |rola: &Rola, checked: &mut Checked, what: &str| {
         let ran = rola.run(chain, &["storage", "ls-storaged", "--json"]);
         checked.exits(what, &ran, 0);
-        json(&ran)
-            .and_then(|value| {
-                value
-                    .get("keys")
-                    .and_then(serde_json::Value::as_array)
-                    .map(|listed| listed.len())
-            })
-            .unwrap_or_default()
+        jsonl(&ran).len()
     };
 
     let dead = chain.join("dead.txt");
@@ -2086,12 +2058,9 @@ fn merging(rola: &Rola, ws: &Path, files: &Path, checked: &mut Checked) {
     let ran = rola.run(ws, &["status", "--json"]);
     checked.wants(
         "the merge is in the data",
-        json(&ran).is_some_and(|value| {
-            value
-                .get("merging")
-                .and_then(serde_json::Value::as_array)
-                .is_some_and(|merging| !merging.is_empty())
-        }),
+        jsonl(&ran)
+            .iter()
+            .any(|item| item.get("kind").and_then(serde_json::Value::as_str) == Some("merging")),
         &said(&ran),
     );
 
@@ -2118,16 +2087,10 @@ fn merging(rola: &Rola, ws: &Path, files: &Path, checked: &mut Checked) {
     let ran = rola.run(ws, &["status", "--json"]);
     checked.wants(
         "the merge follows the moved variant file",
-        json(&ran).is_some_and(|value| {
-            value
-                .get("merging")
-                .and_then(serde_json::Value::as_array)
-                .is_some_and(|merging| {
-                    merging.iter().any(|item| {
-                        item.get("path").and_then(serde_json::Value::as_str)
-                            == Some("merge/moved.bin")
-                    })
-                })
+        jsonl(&ran).iter().any(|item| {
+            item.get("kind").and_then(serde_json::Value::as_str) == Some("merging")
+                && item.get("path").and_then(serde_json::Value::as_str)
+                    == Some("merge/moved.bin")
         }),
         &said(&ran),
     );
@@ -2140,16 +2103,10 @@ fn merging(rola: &Rola, ws: &Path, files: &Path, checked: &mut Checked) {
     let ran = rola.run(ws, &["status", "--json"]);
     checked.wants(
         "a move no command made is found by content",
-        json(&ran).is_some_and(|value| {
-            value
-                .get("merging")
-                .and_then(serde_json::Value::as_array)
-                .is_some_and(|merging| {
-                    merging.iter().any(|item| {
-                        item.get("moved").and_then(serde_json::Value::as_str)
-                            == Some("merge/renamed.bin")
-                    })
-                })
+        jsonl(&ran).iter().any(|item| {
+            item.get("kind").and_then(serde_json::Value::as_str) == Some("merging")
+                && item.get("moved").and_then(serde_json::Value::as_str)
+                    == Some("merge/renamed.bin")
         }),
         &said(&ran),
     );
@@ -2287,12 +2244,9 @@ fn shared_history(rola: &Rola, dir: &Path, files: &Path, checked: &mut Checked) 
     let ran = rola.run(dir, &["status", "--json"]);
     checked.wants(
         "the shared-history merge is in the data",
-        json(&ran).is_some_and(|value| {
-            value
-                .get("merging")
-                .and_then(serde_json::Value::as_array)
-                .is_some_and(|merging| !merging.is_empty())
-        }),
+        jsonl(&ran)
+            .iter()
+            .any(|item| item.get("kind").and_then(serde_json::Value::as_str) == Some("merging")),
         &said(&ran),
     );
 }
@@ -3156,8 +3110,7 @@ fn soft_delete(rola: &Rola, dir: &Path, checked: &mut Checked) {
 /// A field of the entry a Layout records at `path`, from `rola layout entries --json`.
 fn entry_field(rola: &Rola, dir: &Path, path: &str, field: &str) -> Option<String> {
     let ran = rola.run(dir, &["layout", "entries", "--json"]);
-    let value = json(&ran)?;
-    let entries = value.get("entries")?.as_array()?;
+    let entries = jsonl(&ran);
     let entry = entries
         .iter()
         .find(|entry| entry.get("path").and_then(JsonValue::as_str) == Some(path))?;
@@ -3172,18 +3125,9 @@ fn entry_field(rola: &Rola, dir: &Path, path: &str, field: &str) -> Option<Strin
 fn entry_named(rola: &Rola, dir: &Path, uuid: &str) -> bool {
     let ran = rola.run(dir, &["layout", "entries", "--json"]);
 
-    json(&ran)
-        .and_then(|value| {
-            value
-                .get("entries")
-                .and_then(JsonValue::as_array)
-                .map(|entries| {
-                    entries
-                        .iter()
-                        .any(|entry| entry.get("uuid").and_then(JsonValue::as_str) == Some(uuid))
-                })
-        })
-        .unwrap_or(false)
+    jsonl(&ran)
+        .iter()
+        .any(|entry| entry.get("uuid").and_then(JsonValue::as_str) == Some(uuid))
 }
 
 /// Adjusting a chain's history: what the query names, what waits, and what applying rebuilds.
@@ -3806,6 +3750,15 @@ fn names(said: &str, path: &Path) -> bool {
 /// What a run printed, read as JSON, when it printed JSON at all.
 fn json(ran: &Ran) -> Option<serde_json::Value> {
     serde_json::from_str(ran.stdout.trim()).ok()
+}
+
+/// What a run printed, one record a line, when it printed JSON at all.
+fn jsonl(ran: &Ran) -> Vec<serde_json::Value> {
+    ran.stdout
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .filter_map(|line| serde_json::from_str(line.trim()).ok())
+        .collect()
 }
 
 /// The listing's item for the Layout named `name`.

@@ -16,7 +16,7 @@ publish = false
 [dependencies]
 # The command tree and help plumbing. The features are the framework's defaults on purpose: a build
 # tool has a command to dispatch and nothing beside it.
-mingling = { git = "https://github.com/mingling-rs/mingling", rev = "09c2205267fe16686e1ac22d68da14a26005b8c9", default-features = false }
+mingling = { git = "https://github.com/mingling-rs/mingling", rev = "aee0cad566c567530d4379d43b6c479b276791a2", default-features = false }
 
 # The C header is a side effect of the root build script, which a warm Cargo target can keep fresh
 # while the header itself is gone. The build tool writes it itself before handing the ABI over.

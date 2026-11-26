@@ -190,6 +190,10 @@ pub fn render_result_vcs_index_can_retrack_offline(
     format: &ResFormat,
     ec: &mut ResExitCode,
 ) {
+    if format.is_structured() {
+        return mingling::RenderResult::default();
+    }
+
     if let Some(drawn) = format.drawn() {
         match drawn {
             Ok(text) => r_print!("{text}"),

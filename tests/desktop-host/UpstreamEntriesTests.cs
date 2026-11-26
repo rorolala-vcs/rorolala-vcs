@@ -298,15 +298,11 @@ public sealed class UpstreamEntriesTests
     {
         var entries = LayoutEntriesCommand.ParseEntries(
             """
-            {
-              "entries": [
-                { "path": "Assets/hero.psd", "uuid": "a", "version": "0123", "owner": "catilgrass", "description": "the hero", "deprecated": false },
-                { "path": "", "uuid": "b", "version": "4567", "owner": "", "description": "", "deprecated": false },
-                { "path": "Assets/bg.psd", "uuid": "c", "version": "", "owner": "", "description": "" },
-                { "path": "Assets/gone.psd" },
-                "not an entry"
-              ]
-            }
+            { "path": "Assets/hero.psd", "uuid": "a", "version": "0123", "owner": "catilgrass", "description": "the hero", "deprecated": false }
+            { "path": "", "uuid": "b", "version": "4567", "owner": "", "description": "", "deprecated": false }
+            { "path": "Assets/bg.psd", "uuid": "c", "version": "", "owner": "", "description": "" }
+            { "path": "Assets/gone.psd" }
+            "not an entry"
             """
         );
 

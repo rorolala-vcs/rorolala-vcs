@@ -11,8 +11,8 @@ use mingling::{
     Grouped, LazyRes, ShellContext, StructuralData, Suggest,
     consts::UNMATCHED,
     macros::{
-        arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_print, r_println,
-        renderer, suggest,
+        arg, buffer, chain, command, completion, empty_result, help, metadata, r_eprintln, r_print,
+        r_println, render, renderer, suggest,
     },
     metadata::Description,
     picker::{EntryPicker, PickerArg, value::Flag},
@@ -197,35 +197,89 @@ pub fn handle_layout_tree_diff(
         }
     };
 
+    let (trees_modified, wrong) =
+        tree_changes(held, &layout, account, index, storage, include_ignored);
+
+    let result = ResultLayoutTreeDiff::of(&diff, trees_modified, wrong);
+
+    if format.is_structured() {
+        for path in &result.lost {
+            render!(&TreeDiffPathRecord {
+                kind: "lost",
+                path: path.clone(),
+            });
+        }
+        for path in &result.untagged {
+            render!(&TreeDiffPathRecord {
+                kind: "untagged",
+                path: path.clone(),
+            });
+        }
+        for path in &result.modified {
+            render!(&TreeDiffPathRecord {
+                kind: "modified",
+                path: path.clone(),
+            });
+        }
+        for path in &result.trees_modified {
+            render!(&TreeDiffPathRecord {
+                kind: "trees_modified",
+                path: path.clone(),
+            });
+        }
+        for path in &result.wrong {
+            render!(&TreeDiffPathRecord {
+                kind: "wrong",
+                path: path.clone(),
+            });
+        }
+        for rename in &result.renamed {
+            render!(&TreeDiffRenameRecord {
+                kind: "renamed",
+                from: rename.from.clone(),
+                to: rename.to.clone(),
+                strong: rename.strong,
+            });
+        }
+        for failed in &result.failed {
+            render!(&TreeDiffFailedRecord {
+                kind: "failed",
+                path: failed.path.clone(),
+                reason: failed.reason.clone(),
+            });
+        }
+
+        return empty_result!();
+    }
+
     format.set(
         "lost",
-        diff.lost
+        result
+            .lost
             .iter()
-            .map(|path| serde_json::json!(path.as_str()))
+            .map(|path| serde_json::json!(path))
             .collect(),
     );
-    format.set("untagged", {
-        let mut untagged: Vec<&librorolala::layout::LayoutPath> = diff
+    format.set(
+        "untagged",
+        result
             .untagged
             .iter()
-            .chain(diff.untagged_trees.iter().filter(|path| !path.is_root()))
-            .collect();
-        untagged.sort_unstable();
-        untagged
-            .iter()
-            .map(|path| serde_json::json!(path.as_str()))
-            .collect()
-    });
+            .map(|path| serde_json::json!(path))
+            .collect(),
+    );
     format.set(
         "modified",
-        diff.modified
+        result
+            .modified
             .iter()
-            .map(|path| serde_json::json!(path.as_str()))
+            .map(|path| serde_json::json!(path))
             .collect(),
     );
     format.set(
         "renamed",
-        diff.renamed
+        result
+            .renamed
             .iter()
             .map(|rename| {
                 serde_json::json!({
@@ -238,28 +292,30 @@ pub fn handle_layout_tree_diff(
     );
     format.set(
         "failed",
-        diff.failed
+        result
+            .failed
             .iter()
             .map(|failed| serde_json::json!({ "path": failed.path, "reason": failed.reason }))
             .collect(),
     );
-
-    let (trees_modified, wrong) =
-        tree_changes(held, &layout, account, index, storage, include_ignored);
-
     format.set(
         "trees_modified",
-        trees_modified
+        result
+            .trees_modified
             .iter()
             .map(|path| serde_json::json!(path))
             .collect(),
     );
     format.set(
         "wrong",
-        wrong.iter().map(|path| serde_json::json!(path)).collect(),
+        result
+            .wrong
+            .iter()
+            .map(|path| serde_json::json!(path))
+            .collect(),
     );
 
-    ResultLayoutTreeDiff::of(&diff, trees_modified, wrong).into()
+    result.into()
 }
 
 /// The trees whose own work changed, and the ones among them that are wrong changes.
@@ -419,12 +475,79 @@ pub struct FailedItem {
     reason: String,
 }
 
+/// One path a tree-diff found, as a streamed record.
+#[derive(Clone, Grouped, StructuralData, Serialize)]
+pub struct TreeDiffPathRecord {
+    /// Which list it came from.
+    kind: &'static str,
+    /// The path.
+    path: String,
+}
+
+/// One move a tree-diff found, as a streamed record.
+#[derive(Clone, Grouped, StructuralData, Serialize)]
+pub struct TreeDiffRenameRecord {
+    /// Which list it came from.
+    kind: &'static str,
+    /// The path the Layout names it by.
+    from: String,
+    /// The path the tree holds it at.
+    to: String,
+    /// Whether the move is one the two being the same bytes makes.
+    strong: bool,
+}
+
+/// One path a tree-diff could not read, as a streamed record.
+#[derive(Clone, Grouped, StructuralData, Serialize)]
+pub struct TreeDiffFailedRecord {
+    /// Which list it came from.
+    kind: &'static str,
+    /// The path as it was seen.
+    path: String,
+    /// Why it could not be read.
+    reason: String,
+}
+
+/// What one path is drawn as, in the plain listing and in the stream's fallback.
+#[renderer(buffer)]
+pub fn render_tree_diff_path(record: TreeDiffPathRecord, format: &ResFormat) {
+    if format.is_structured() {
+        return mingling::RenderResult::default();
+    }
+
+    r_println!("{} {}", record.kind, record.path);
+}
+
+/// What one move is drawn as.
+#[renderer(buffer)]
+pub fn render_tree_diff_rename(record: TreeDiffRenameRecord, format: &ResFormat) {
+    if format.is_structured() {
+        return mingling::RenderResult::default();
+    }
+
+    r_println!("rename {} -> {}", record.from, record.to);
+}
+
+/// What one unread path is drawn as.
+#[renderer(buffer)]
+pub fn render_tree_diff_failed(record: TreeDiffFailedRecord, format: &ResFormat) {
+    if format.is_structured() {
+        return mingling::RenderResult::default();
+    }
+
+    r_println!("failed {}", record.path);
+}
+
 #[renderer(buffer)]
 pub fn render_result_layout_tree_diff(
     result: ResultLayoutTreeDiff,
     format: &ResFormat,
     ec: &mut ResExitCode,
 ) {
+    if format.is_structured() {
+        return mingling::RenderResult::default();
+    }
+
     if let Some(drawn) = format.drawn() {
         match drawn {
             Ok(text) => r_print!("{text}"),

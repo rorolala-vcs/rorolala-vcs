@@ -8,8 +8,8 @@ use librorolala::vcs::VCSIndexObject;
 use mingling::{
     Grouped, LazyRes, StructuralData, Suggest,
     macros::{
-        buffer, chain, command, completion, help, metadata, r_eprintln, r_print, r_println,
-        renderer, routeify, suggest,
+        buffer, chain, command, completion, empty_result, help, metadata, r_eprintln, r_print,
+        r_println, render_each, renderer, routeify, suggest,
     },
     metadata::Description,
     res::ResExitCode,
@@ -104,6 +104,16 @@ pub fn handle_vcs_index_ls_str(
                 }
             }
 
+            if format.is_structured() {
+                let records: Vec<StrHashRecord> = string_hashes
+                    .into_iter()
+                    .map(|hash| StrHashRecord { hash })
+                    .collect();
+                render_each!(&records);
+
+                return empty_result!();
+            }
+
             format.set(
                 "string_hashes",
                 string_hashes
@@ -127,12 +137,34 @@ pub struct ResultVcsIndexLsStr {
     string_hashes: Vec<String>,
 }
 
+/// One text hash, as a streamed record.
+#[derive(Clone, Grouped, StructuralData, Serialize)]
+#[serde(transparent)]
+pub struct StrHashRecord {
+    /// The hash, as hex.
+    hash: String,
+}
+
+/// What one text hash is drawn as.
+#[renderer(buffer)]
+pub fn render_str_hash_record(record: StrHashRecord, format: &ResFormat) {
+    if format.is_structured() {
+        return mingling::RenderResult::default();
+    }
+
+    r_println!("{}", record.hash);
+}
+
 #[renderer(buffer)]
 pub fn render_result_vcs_index_ls_str(
     result: ResultVcsIndexLsStr,
     format: &ResFormat,
     ec: &mut ResExitCode,
 ) {
+    if format.is_structured() {
+        return mingling::RenderResult::default();
+    }
+
     if let Some(drawn) = format.drawn() {
         match drawn {
             Ok(text) => r_print!("{text}"),

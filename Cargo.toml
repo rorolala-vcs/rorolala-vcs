@@ -114,7 +114,7 @@ rorolala-vcs = { path = "modules/vcs" }
 rorolala-workspace = { path = "modules/workspace" }
 
 # CLI Framework
-mingling = { git = "https://github.com/mingling-rs/mingling", rev = "09c2205267fe16686e1ac22d68da14a26005b8c9", features = [
+mingling = { git = "https://github.com/mingling-rs/mingling", rev = "aee0cad566c567530d4379d43b6c479b276791a2", features = [
     "picker",
     "comp",
     "pathf",

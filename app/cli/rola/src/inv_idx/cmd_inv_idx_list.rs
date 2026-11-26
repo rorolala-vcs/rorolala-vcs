@@ -14,8 +14,8 @@ use mingling::{
     Grouped, LazyRes, ShellContext, StructuralData, Suggest,
     consts::UNMATCHED,
     macros::{
-        arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_print, r_println,
-        renderer, routeify, suggest,
+        arg, buffer, chain, command, completion, empty_result, help, metadata, r_eprintln, r_print,
+        r_println, render_each, renderer, routeify, suggest,
     },
     metadata::Description,
     picker::{EntryPicker, PickerArg},
@@ -180,6 +180,12 @@ pub fn handle_inv_idx_list(
         objects.truncate(limit);
     }
 
+    if format.is_structured() {
+        render_each!(&objects);
+
+        return empty_result!();
+    }
+
     // UNWRAP: a row is plain fields and hex keys, which serialize to JSON without failing.
     let drawn: Vec<serde_json::Value> = objects
         .iter()
@@ -201,7 +207,7 @@ pub struct ResultInvIdxList {
 ///
 /// A field that belongs to the other kind is `null`, so `--json` writes the same names for every row
 /// and a template can draw any of them without knowing which kind a row is.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Clone, Debug, Grouped, StructuralData, Serialize)]
 pub struct InvIdxRow {
     /// The kind of object: `variant` or `version`.
     kind: &'static str,
@@ -227,12 +233,26 @@ pub struct InvIdxRow {
     message: Option<String>,
 }
 
+/// What one row is drawn as, in the plain listing and in the stream's fallback.
+#[renderer(buffer)]
+pub fn render_inv_idx_row(row: InvIdxRow, format: &ResFormat) {
+    if format.is_structured() {
+        return mingling::RenderResult::default();
+    }
+
+    r_println!("{} {}", row.kind, row.hash);
+}
+
 #[renderer(buffer)]
 pub fn render_result_inv_idx_list(
     result: ResultInvIdxList,
     format: &ResFormat,
     ec: &mut ResExitCode,
 ) {
+    if format.is_structured() {
+        return mingling::RenderResult::default();
+    }
+
     if let Some(drawn) = format.drawn() {
         match drawn {
             Ok(text) => r_print!("{text}"),

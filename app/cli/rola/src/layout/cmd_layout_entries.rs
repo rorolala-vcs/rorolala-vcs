@@ -6,8 +6,8 @@ use librorolala::storage::Key;
 use mingling::{
     Grouped, LazyRes, ShellContext, StructuralData, Suggest,
     macros::{
-        arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_print, r_println,
-        renderer, suggest,
+        arg, buffer, chain, command, completion, empty_result, help, metadata, r_eprintln, r_print,
+        r_println, render_each, renderer, suggest,
     },
     metadata::Description,
     picker::{EntryPicker, PickerArg},
@@ -206,6 +206,12 @@ pub fn handle_layout_entries(
             .then_with(|| left.uuid.cmp(&right.uuid))
     });
 
+    if format.is_structured() {
+        render_each!(&entries);
+
+        return empty_result!();
+    }
+
     format.set(
         "entries",
         entries
@@ -218,7 +224,7 @@ pub fn handle_layout_entries(
 }
 
 /// One entry, as `layout entries` shows it.
-#[derive(Serialize)]
+#[derive(Clone, Grouped, StructuralData, Serialize)]
 pub struct EntryItem {
     /// The path it is at, empty when it is at none.
     path: String,
@@ -234,6 +240,16 @@ pub struct EntryItem {
     deprecated: bool,
 }
 
+/// What one entry is drawn as, in the plain listing and in the stream's fallback.
+#[renderer(buffer)]
+pub fn render_entry_item(item: EntryItem, format: &ResFormat) {
+    if format.is_structured() {
+        return mingling::RenderResult::default();
+    }
+
+    r_println!("{}  {}  {}", item.path, item.uuid, item.version);
+}
+
 /// Result: a Layout's entries were listed.
 #[derive(StructuralData, Serialize, Grouped)]
 pub struct ResultLayoutEntries {
@@ -247,6 +263,10 @@ pub fn render_result_layout_entries(
     format: &ResFormat,
     ec: &mut ResExitCode,
 ) {
+    if format.is_structured() {
+        return mingling::RenderResult::default();
+    }
+
     if let Some(drawn) = format.drawn() {
         match drawn {
             Ok(text) => r_print!("{text}"),

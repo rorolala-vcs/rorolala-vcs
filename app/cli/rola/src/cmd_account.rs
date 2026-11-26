@@ -255,6 +255,10 @@ pub struct ResultAccountLs {
 
 #[renderer(buffer)]
 pub fn render_result_account_ls(result: ResultAccountLs, format: &ResFormat, ec: &mut ResExitCode) {
+    if format.is_structured() {
+        return mingling::RenderResult::default();
+    }
+
     if let Some(drawn) = format.drawn() {
         match drawn {
             Ok(text) => r_print!("{text}"),
@@ -335,6 +339,10 @@ pub fn render_result_account_current(
     format: &ResFormat,
     ec: &mut ResExitCode,
 ) {
+    if format.is_structured() {
+        return mingling::RenderResult::default();
+    }
+
     if let Some(drawn) = format.drawn() {
         match drawn {
             Ok(text) => r_print!("{text}"),

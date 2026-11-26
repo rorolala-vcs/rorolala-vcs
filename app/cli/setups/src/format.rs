@@ -65,6 +65,13 @@ impl ResFormat {
         self.template.is_some()
     }
 
+    /// Whether the run asked for a structural renderer, so a result is written as data rather
+    /// than drawn.
+    #[must_use]
+    pub const fn is_structured(&self) -> bool {
+        self.structured
+    }
+
     /// Whether a command has published the data a template is drawn from.
     ///
     /// A command that failed publishes nothing, so its failure is printed by the framework rather
@@ -104,6 +111,12 @@ impl ResFormat {
     /// Publishing a key again adds to what it already holds, so a command that finds more of one
     /// list as it goes says so by publishing more; a key published once is the whole of it.
     pub fn set(&mut self, key: impl Into<String>, values: Vec<serde_json::Value>) {
+        // A structural run draws no template and a run with no template draws nothing, so the
+        // values would be a copy of the listing that nobody reads.
+        if !self.requested() {
+            return;
+        }
+
         let key = key.into();
 
         if let Some((_, held)) = self.data.iter_mut().find(|(name, _)| *name == key) {
@@ -250,5 +263,24 @@ mod tests {
         format.set("x", vec![json!("a")]);
 
         assert!(format.render().is_err());
+    }
+
+    #[test]
+    fn published_values_are_dropped_when_no_template_is_in_force() {
+        let mut format = ResFormat::new(None, true);
+        format.set("entries", vec![json!({ "path": "a" })]);
+
+        assert!(format.is_structured());
+        assert!(!format.published());
+        assert!(format.drawn().is_none());
+    }
+
+    #[test]
+    fn published_values_are_kept_when_a_template_is_in_force() {
+        let mut format = format("{{ entries.path }}");
+        format.set("entries", vec![json!({ "path": "a" })]);
+
+        assert!(!format.is_structured());
+        assert!(format.published());
     }
 }

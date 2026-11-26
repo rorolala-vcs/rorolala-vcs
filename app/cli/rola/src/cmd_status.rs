@@ -35,8 +35,8 @@ use mingling::{
     Grouped, LazyRes, ShellContext, StructuralData, Suggest,
     consts::UNMATCHED,
     macros::{
-        arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
-        routeify, suggest,
+        arg, buffer, chain, command, completion, empty_result, help, metadata, r_eprintln,
+        r_println, render, renderer, routeify, suggest,
     },
     metadata::Description,
     picker::{EntryPicker, PickerArg, value::Flag},
@@ -58,6 +58,7 @@ use crate::complete::{
 };
 use crate::exit_codes::{EC_ERR_LAYOUT_ARGUMENT, EC_HELP};
 use crate::failure::failure;
+use crate::format::ResFormat;
 use crate::graph::{self, Options};
 use crate::hash::resolve as resolve_hash;
 use crate::layout::{
@@ -210,6 +211,7 @@ pub fn handle_status(
     account: &mut LazyRes<ResCurrentAccount>,
     index: &mut LazyRes<ResVCSIndex>,
     storage: &mut LazyRes<ResStorageSet>,
+    format: &ResFormat,
 ) -> Next {
     let layout = match chosen(workspace.get_ref(), vault.get_ref(), None) {
         Ok(layout) => layout,
@@ -322,7 +324,7 @@ pub fn handle_status(
         None => None,
     };
 
-    ResultStatus {
+    let result = ResultStatus {
         trees_structural,
         trees_content,
         lost,
@@ -352,8 +354,15 @@ pub fn handle_status(
             .collect(),
         broken: status.broken.iter().map(broken_said).collect(),
         vault,
+    };
+
+    if format.is_structured() {
+        emit_status(&result);
+
+        return empty_result!();
     }
-    .into()
+
+    result.into()
 }
 
 /// What a merge that cannot go on is said as.
@@ -1292,6 +1301,261 @@ pub struct ResultStatus {
     broken: Vec<String>,
     /// How the entries stand beside the Vault's copy, when its copy is here.
     vault: Option<VaultRelation>,
+}
+
+/// One path a status found, as a streamed record.
+#[derive(Clone, Grouped, StructuralData, Serialize)]
+pub struct StatusPathRecord {
+    /// Which list it came from.
+    kind: &'static str,
+    /// The path.
+    path: String,
+}
+
+/// One move a status found, as a streamed record.
+#[derive(Clone, Grouped, StructuralData, Serialize)]
+pub struct StatusRenameRecord {
+    /// Which list it came from.
+    kind: &'static str,
+    /// The path the Layout names it by.
+    from: String,
+    /// The path the tree holds it at.
+    to: String,
+    /// Whether it was edited as well as moved.
+    modified: bool,
+    /// Whether the move is one the two being the same bytes makes.
+    strong: bool,
+}
+
+/// One tree the Layout and the work disagree about, as a streamed record.
+#[derive(Clone, Grouped, StructuralData, Serialize)]
+pub struct StatusTreeStructuralRecord {
+    /// Which list it came from.
+    kind: &'static str,
+    /// The tree's path.
+    path: String,
+    /// What the disagreement is.
+    change: &'static str,
+}
+
+/// One tree whose own reading finds work to record, as a streamed record.
+#[derive(Clone, Grouped, StructuralData, Serialize)]
+pub struct StatusTreeContentRecord {
+    /// Which list it came from.
+    kind: &'static str,
+    /// The tree's path.
+    path: String,
+    /// How many paths are staged.
+    staged: usize,
+    /// How many paths changed and were not staged.
+    unstaged: usize,
+    /// How many paths the tree holds and nothing staged has.
+    untracked: usize,
+    /// How many paths a merge left in conflict.
+    conflicts: usize,
+}
+
+/// One variant waiting to be joined, as a streamed record.
+#[derive(Clone, Grouped, StructuralData, Serialize)]
+pub struct StatusMergingRecord {
+    /// Which list it came from.
+    kind: &'static str,
+    /// The file it is to be joined into.
+    target: String,
+    /// The variant that was brought in.
+    variant: String,
+    /// The path its file lies at.
+    path: String,
+    /// Where the tree holds its file now, when a move was found.
+    moved: Option<String>,
+}
+
+/// One merge that cannot go on, as a streamed record.
+#[derive(Clone, Grouped, StructuralData, Serialize)]
+pub struct StatusBrokenRecord {
+    /// Which list it came from.
+    kind: &'static str,
+    /// The reason it cannot go on.
+    reason: String,
+}
+
+/// One entry's standing beside the Vault, as a streamed record.
+#[derive(Clone, Grouped, StructuralData, Serialize)]
+pub struct StatusRelationRecord {
+    /// Which list it came from.
+    kind: &'static str,
+    /// The path this Layout names it by.
+    path: String,
+    /// How many versions apart the two are, when the chain says.
+    distance: Option<u64>,
+}
+
+/// Emits one record a line for a structural run.
+fn emit_status(result: &ResultStatus) {
+    for path in &result.lost {
+        render!(&StatusPathRecord {
+            kind: "lost",
+            path: path.clone(),
+        });
+    }
+    for path in &result.untagged {
+        render!(&StatusPathRecord {
+            kind: "untagged",
+            path: path.clone(),
+        });
+    }
+    for path in &result.modified {
+        render!(&StatusPathRecord {
+            kind: "modified",
+            path: path.clone(),
+        });
+    }
+    for rename in &result.renamed {
+        render!(&StatusRenameRecord {
+            kind: "renamed",
+            from: rename.from.clone(),
+            to: rename.to.clone(),
+            modified: rename.modified,
+            strong: rename.strong,
+        });
+    }
+    for path in &result.unowned {
+        render!(&StatusPathRecord {
+            kind: "unowned",
+            path: path.clone(),
+        });
+    }
+    for path in &result.unclaimed {
+        render!(&StatusPathRecord {
+            kind: "unclaimed",
+            path: path.clone(),
+        });
+    }
+    for line in &result.trees_structural {
+        render!(&StatusTreeStructuralRecord {
+            kind: "trees_structural",
+            path: line.path.clone(),
+            change: line.change,
+        });
+    }
+    for line in &result.trees_content {
+        render!(&StatusTreeContentRecord {
+            kind: "trees_content",
+            path: line.path.clone(),
+            staged: line.staged,
+            unstaged: line.unstaged,
+            untracked: line.untracked,
+            conflicts: line.conflicts,
+        });
+    }
+    for item in &result.merging {
+        render!(&StatusMergingRecord {
+            kind: "merging",
+            target: item.target.clone(),
+            variant: item.variant.clone(),
+            path: item.path.clone(),
+            moved: item.moved.clone(),
+        });
+    }
+    for reason in &result.broken {
+        render!(&StatusBrokenRecord {
+            kind: "broken",
+            reason: reason.clone(),
+        });
+    }
+    if let Some(vault) = &result.vault {
+        for item in &vault.ahead {
+            render!(&StatusRelationRecord {
+                kind: "vault_ahead",
+                path: item.path.clone(),
+                distance: item.distance,
+            });
+        }
+        for item in &vault.behind {
+            render!(&StatusRelationRecord {
+                kind: "vault_behind",
+                path: item.path.clone(),
+                distance: item.distance,
+            });
+        }
+        for item in &vault.apart {
+            render!(&StatusRelationRecord {
+                kind: "vault_apart",
+                path: item.path.clone(),
+                distance: item.distance,
+            });
+        }
+    }
+}
+
+/// What one path is drawn as, in the plain listing and in the stream's fallback.
+#[renderer(buffer)]
+pub fn render_status_path(record: StatusPathRecord, format: &ResFormat) {
+    if format.is_structured() {
+        return mingling::RenderResult::default();
+    }
+
+    r_println!("{} {}", record.kind, record.path);
+}
+
+/// What one move is drawn as.
+#[renderer(buffer)]
+pub fn render_status_rename(record: StatusRenameRecord, format: &ResFormat) {
+    if format.is_structured() {
+        return mingling::RenderResult::default();
+    }
+
+    r_println!("rename {} -> {}", record.from, record.to);
+}
+
+/// What one structural tree is drawn as.
+#[renderer(buffer)]
+pub fn render_status_tree_structural(record: StatusTreeStructuralRecord, format: &ResFormat) {
+    if format.is_structured() {
+        return mingling::RenderResult::default();
+    }
+
+    r_println!("{} {}", record.kind, record.path);
+}
+
+/// What one content tree is drawn as.
+#[renderer(buffer)]
+pub fn render_status_tree_content(record: StatusTreeContentRecord, format: &ResFormat) {
+    if format.is_structured() {
+        return mingling::RenderResult::default();
+    }
+
+    r_println!("{} {}", record.kind, record.path);
+}
+
+/// What one waiting variant is drawn as.
+#[renderer(buffer)]
+pub fn render_status_merging(record: StatusMergingRecord, format: &ResFormat) {
+    if format.is_structured() {
+        return mingling::RenderResult::default();
+    }
+
+    r_println!("merging {}", record.target);
+}
+
+/// What one broken merge is drawn as.
+#[renderer(buffer)]
+pub fn render_status_broken(record: StatusBrokenRecord, format: &ResFormat) {
+    if format.is_structured() {
+        return mingling::RenderResult::default();
+    }
+
+    r_println!("{}", record.reason);
+}
+
+/// What one standing beside the Vault is drawn as.
+#[renderer(buffer)]
+pub fn render_status_relation(record: StatusRelationRecord, format: &ResFormat) {
+    if format.is_structured() {
+        return mingling::RenderResult::default();
+    }
+
+    r_println!("{} {}", record.kind, record.path);
 }
 
 /// One entry this side and the Vault do not agree on.

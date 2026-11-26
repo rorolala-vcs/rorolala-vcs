@@ -17,9 +17,11 @@
 // generated wrapper offers.
 #![allow(clippy::needless_pass_by_value)]
 
+use std::io::{IsTerminal as _, Write as _};
+
 use mingling::{
     Grouped,
-    macros::{buffer, chain, command, r_println, renderer},
+    macros::{buffer, chain, command, empty_result, r_println, renderer},
 };
 use rola_define_format::Lock;
 use rola_git_support::Session;
@@ -50,6 +52,11 @@ pub struct StateEntries;
 #[chain]
 pub fn handle_entries(_state: StateEntries) -> Next {
     match inspect() {
+        Ok(result) if !std::io::stdout().is_terminal() => {
+            write_paths(&result);
+
+            empty_result!()
+        }
         Ok(result) => result.into(),
         Err(message) => crate::Fatal::new(message).into(),
     }
@@ -67,6 +74,18 @@ pub struct ResultEntries {
 pub fn render_entries(result: ResultEntries) {
     for path in &result.paths {
         r_println!("{path}");
+    }
+}
+
+/// Writes each path as it is listed, stopping when the reader has gone.
+fn write_paths(result: &ResultEntries) {
+    let stdout = std::io::stdout();
+    let mut out = stdout.lock();
+
+    for path in &result.paths {
+        if writeln!(out, "{path}").is_err() {
+            return;
+        }
     }
 }
 

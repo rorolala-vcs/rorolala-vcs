@@ -10,20 +10,20 @@ A command that finds something can say it in three ways. It can draw the human f
 
 ## The flags
 
-| Flag                  | What is written                                         |
-| --------------------- | ------------------------------------------------------- |
-| none                  | The command's own drawing: rows, columns, or a sentence |
-| `--json`              | The result as one compact JSON value                    |
-| `--json-pretty`       | The same value, indented                                |
-| `--format <TEMPLATE>` | The result drawn through a MiniJinja template           |
+| Flag                  | What is written                                                                   |
+| --------------------- | --------------------------------------------------------------------------------- |
+| none                  | The command's own drawing: rows, columns, or a sentence                           |
+| `--json`              | The result as one compact JSON value, or one record a line for a streamed command |
+| `--json-pretty`       | The same, indented                                                                |
+| `--format <TEMPLATE>` | The result drawn through a MiniJinja template                                     |
 
 `--json`, `--json-pretty` and `--format` are alternatives to the human drawing, not additions to it. A run uses one of them.
 
-They do not reach every command equally. `--json` and `--json-pretty` write the result of every command that has a result to serialize. `--format` replaces a drawing that is made of rows or a reading; a command that answers in one line of its own keeps that line even when `--format` is named.
+They do not reach every command equally. `--json` and `--json-pretty` write the result of every command that has a result to serialize. A list command whose answer can grow with the repository, a tree or its history writes one record a line instead, see JSON Lines below. `--format` replaces a drawing that is made of rows or a reading; a command that answers in one line of its own keeps that line even when `--format` is named.
 
 ## The data is the same
 
-Where a command has both, they read one result. The names a template uses are the names `--json` writes, so a template and a JSON reader say the same things about the same fields.
+Where a command has both, they read one result. A template names the list, `{{ entries.path }}`, while a JSON record carries the element's fields, `{"path": ...}`: the same fields, arranged differently.
 
 The practical order is therefore:
 
@@ -58,6 +58,25 @@ rola account ls --json
 
 A result is one JSON value: an object, an array, or a scalar. A command that only reports an action may have no data to write.
 
+## JSON Lines
+
+A list command whose answer can grow with the repository, a tree or its history writes one record a line under `--json`, rather than one document:
+
+```sh
+rola entries --json
+```
+
+```text
+{"path":"Assets/hero.psd","uuid":"...","version":"...","owner":"...","description":"","deprecated":false}
+{"path":"Assets/bg.psd","uuid":"...","version":"...","owner":"...","description":"","deprecated":false}
+```
+
+One record is the element the document would have held. A command with several lists adds a `kind` field naming the list, which `rola status` and `rola layout tree-diff` do. An empty listing writes no line at all. `--json-pretty` writes each record indented, one after another.
+
+`rola inv-idx list` is the one list whose rows already carry a `kind` of their own, `variant` or `version`; no second `kind` is added.
+
+The commands that stream are `rola entries`, `rola layout entries`, `rola storage ls-storaged`, `rola storage ls-manifests`, `rola inv-idx list`, `rola vcs-index ls-versions`, `rola vcs-index ls-variants`, `rola vcs-index ls-str`, `rola layout ls-ownership`, `rola layout tree-diff`, `rola status` and `rola fsck`. A command not named here writes one document, `rola layout ls`, `rola vault ls` and `rola account ls` among them. `rola status` streams its workspace-wide reading; naming a tree, or `--show-unjoined-variants`, answers with one document.
+
 When `--json` or `--json-pretty` is used, progress is written as one JSON record per line on standard error instead of an interactive bar. The run is being read by a program rather than watched by a person. `--no-progress` silences the records as it silences the bar.
 
 ## Templates
@@ -89,7 +108,7 @@ The reading has the lists `lost`, `untagged`, `modified`, `renamed`, `failed`, `
 
 ### Which shape a command has
 
-If `--json` prints an array under one name, the command is the one-list shape and its template is drawn per item. If it prints an object whose fields are arrays, it is the several-list shape and its template is drawn once. The JSON is the answer for both, which is why it is the place to start.
+A template is drawn from the result, not from the JSON. A command with one list is drawn per item, `{{ entries.path }}`; a command whose parts are lists of their own is drawn once, `{{ lost | length }}`. A streamed command's JSON record carries the element's fields without the list name, so read the template names from the result and the record names from a line: they are the same fields, spelled differently.
 
 ## Which one wins
 
@@ -105,4 +124,4 @@ With none of them, the command draws its own form, which is what a person readin
 
 ## A failed run
 
-A template draws a result. A run that fails has no result, so its error is printed as usual, in the same words it uses without `--format`. `--json` does not turn an error into JSON either: an error is a reason, not a value of the command's result.
+A template draws a result. A run that fails has no result, so under `--format` its error is printed as usual, in the same words it uses without it. Under `--json`, a failure is written as `{"name": ..., "reason": ...}`, the name untranslated, and it appears before any record the command would have streamed.

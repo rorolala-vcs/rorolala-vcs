@@ -9,8 +9,8 @@ use librorolala::storage::Key;
 use mingling::{
     Grouped, LazyRes, StructuralData, Suggest,
     macros::{
-        buffer, chain, command, completion, help, metadata, r_eprintln, r_print, r_println,
-        renderer, routeify, suggest,
+        buffer, chain, command, completion, empty_result, help, metadata, r_eprintln, r_print,
+        r_println, render_each, renderer, routeify, suggest,
     },
     metadata::Description,
     res::ResExitCode,
@@ -109,6 +109,16 @@ pub fn handle_storage_ls_manifests(
 
     match runtime.block_on(store.list_manifest_keys()) {
         Ok(keys) => {
+            if format.is_structured() {
+                let records: Vec<ManifestKeyRecord> = keys
+                    .into_iter()
+                    .map(|key| ManifestKeyRecord { key })
+                    .collect();
+                render_each!(&records);
+
+                return empty_result!();
+            }
+
             format.set(
                 "keys",
                 keys.iter().map(|key| serde_json::json!(key)).collect(),
@@ -129,8 +139,30 @@ pub struct ResultManifests {
     pub(crate) keys: Vec<Key>,
 }
 
+/// One manifest key the store keeps, as a streamed record.
+#[derive(Clone, Grouped, StructuralData, Serialize)]
+#[serde(transparent)]
+pub struct ManifestKeyRecord {
+    /// The key, written as the store writes it.
+    key: Key,
+}
+
+/// What one manifest key is drawn as.
+#[renderer(buffer)]
+pub fn render_manifest_key_record(record: ManifestKeyRecord, format: &ResFormat) {
+    if format.is_structured() {
+        return mingling::RenderResult::default();
+    }
+
+    r_println!("manifest:{}", record.key.hex());
+}
+
 #[renderer(buffer)]
 pub fn render_result_manifests(result: ResultManifests, format: &ResFormat, ec: &mut ResExitCode) {
+    if format.is_structured() {
+        return mingling::RenderResult::default();
+    }
+
     if let Some(drawn) = format.drawn() {
         match drawn {
             Ok(text) => r_print!("{text}"),

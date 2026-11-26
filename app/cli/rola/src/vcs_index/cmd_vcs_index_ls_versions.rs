@@ -8,8 +8,8 @@ use librorolala::vcs::{VCSIndexObject, VCSWrite as _, Variant, Version};
 use mingling::{
     Grouped, LazyRes, StructuralData, Suggest,
     macros::{
-        buffer, chain, command, completion, help, metadata, r_eprintln, r_print, r_println,
-        renderer, routeify, suggest,
+        buffer, chain, command, completion, empty_result, help, metadata, r_eprintln, r_print,
+        r_println, render_each, renderer, routeify, suggest,
     },
     metadata::Description,
     res::ResExitCode,
@@ -98,25 +98,34 @@ pub fn handle_vcs_index_ls_versions(
             .block_on(index.read(Key::new(*version.variant())))
             .ok()
             .and_then(|object| object.expect_variant().ok());
-        published.push(serde_json::json!({
-            "hash": key.hex(),
-            "version_num": number,
-            "version": &version,
-            "variant": &variant,
-        }));
+        if !format.is_structured() {
+            published.push(serde_json::json!({
+                "hash": key.hex(),
+                "version_num": number,
+                "version": &version,
+                "variant": &variant,
+            }));
+        }
         versions.push(ItemVersion {
             version_num: number,
             version,
             variant,
         });
     }
+
+    if format.is_structured() {
+        render_each!(&versions);
+
+        return empty_result!();
+    }
+
     format.set("versions", published);
 
     ResultVcsIndexLsVersions { versions }.into()
 }
 
 /// One version, its number, and the variant it points at when it can be read.
-#[derive(Serialize)]
+#[derive(Clone, Grouped, StructuralData, Serialize)]
 pub struct ItemVersion {
     /// The number worked out for the version, or nothing when the chain could not be traced.
     version_num: Option<u64>,
@@ -124,6 +133,22 @@ pub struct ItemVersion {
     version: Version,
     /// The variant it points at, when one is stored.
     variant: Option<Variant>,
+}
+
+/// What one version is drawn as, in the plain listing and in the stream's fallback.
+#[renderer(buffer)]
+pub fn render_item_version(item: ItemVersion, format: &ResFormat) {
+    if format.is_structured() {
+        return mingling::RenderResult::default();
+    }
+
+    r_println!(
+        "{}:{} -> {}",
+        item.version_num
+            .map_or_else(|| "?".to_owned(), |num| num.to_string()),
+        item.version.hash().hex(),
+        hex(item.version.variant())
+    );
 }
 
 /// Result: the versions the index holds.
@@ -139,6 +164,10 @@ pub fn render_result_vcs_index_ls_versions(
     format: &ResFormat,
     ec: &mut ResExitCode,
 ) {
+    if format.is_structured() {
+        return mingling::RenderResult::default();
+    }
+
     if let Some(drawn) = format.drawn() {
         match drawn {
             Ok(text) => r_print!("{text}"),

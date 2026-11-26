@@ -8,8 +8,8 @@ use mingling::{
     Grouped, LazyRes, ShellContext, StructuralData, Suggest, Wrap,
     consts::UNMATCHED,
     macros::{
-        arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
-        routeify, suggest,
+        arg, buffer, chain, command, completion, empty_result, help, metadata, r_eprintln,
+        r_println, render_each, renderer, routeify, suggest,
     },
     metadata::Description,
     picker::EntryPicker,
@@ -23,6 +23,7 @@ use serde::Serialize;
 use crate::Next;
 use crate::complete::{offer, positional, typing_flag, vault_names};
 use crate::exit_codes::EC_HELP;
+use crate::format::ResFormat;
 use crate::layout::cached_vault_copy;
 
 #[help(buffer)]
@@ -101,6 +102,7 @@ pub fn handle_layout_ls_ownership(
     state: StateLayoutLsOwnership,
     workspace: &mut LazyRes<ResWorkspace>,
     remote: &mut LazyRes<ResCurrentRemoteVault>,
+    format: &ResFormat,
 ) -> Next {
     workspace.get_ref().check()?;
 
@@ -128,11 +130,17 @@ pub fn handle_layout_ls_ownership(
         .collect();
     owners.sort_by(|left, right| left.uuid.cmp(&right.uuid));
 
+    if format.is_structured() {
+        render_each!(&owners);
+
+        return empty_result!();
+    }
+
     ResultLayoutOwnerships { owners }.into()
 }
 
 /// One entry, as `ls-ownership` shows it.
-#[derive(Serialize)]
+#[derive(Clone, Grouped, StructuralData, Serialize)]
 pub struct OwnershipItem {
     /// The `Uuid` the entry is known by.
     uuid: String,
@@ -150,18 +158,33 @@ pub struct ResultLayoutOwnerships {
 #[renderer(buffer)]
 pub fn render_result_layout_ownerships(result: ResultLayoutOwnerships) {
     for item in &result.owners {
-        let uuid = item.uuid.as_str();
-        let said = item.owner.as_deref().map_or_else(
-            || t!("cmd_layout_ls_ownership.result_unowned", uuid = uuid),
-            |owner| {
-                t!(
-                    "cmd_layout_ls_ownership.result_owner",
-                    uuid = uuid,
-                    owner = owner
-                )
-            },
-        );
-
-        r_println!("{}", said.trim());
+        r_println!("{}", ownership_line(item));
     }
+}
+
+/// What one entry is said as, in the plain listing and in the stream's fallback.
+fn ownership_line(item: &OwnershipItem) -> String {
+    let uuid = item.uuid.as_str();
+    let said = item.owner.as_deref().map_or_else(
+        || t!("cmd_layout_ls_ownership.result_unowned", uuid = uuid),
+        |owner| {
+            t!(
+                "cmd_layout_ls_ownership.result_owner",
+                uuid = uuid,
+                owner = owner
+            )
+        },
+    );
+
+    said.trim().to_owned()
+}
+
+/// What one entry is drawn as.
+#[renderer(buffer)]
+pub fn render_ownership_item(item: OwnershipItem, format: &ResFormat) {
+    if format.is_structured() {
+        return mingling::RenderResult::default();
+    }
+
+    r_println!("{}", ownership_line(&item));
 }

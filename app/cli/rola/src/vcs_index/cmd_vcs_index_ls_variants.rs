@@ -10,8 +10,8 @@ use librorolala::vcs::{VCSIndexObject, VCSWrite as _, Variant, Version};
 use mingling::{
     Grouped, LazyRes, StructuralData, Suggest,
     macros::{
-        buffer, chain, command, completion, help, metadata, r_eprintln, r_print, r_println,
-        renderer, routeify, suggest,
+        buffer, chain, command, completion, empty_result, help, metadata, r_eprintln, r_print,
+        r_println, render_each, renderer, routeify, suggest,
     },
     metadata::Description,
     res::ResExitCode,
@@ -100,25 +100,49 @@ pub fn handle_vcs_index_ls_variants(
             .block_on(index.read(Key::new(*variant.base_version())))
             .ok()
             .and_then(|object| object.expect_version().ok());
-        published.push(serde_json::json!({
-            "hash": key.hex(),
-            "variant": &variant,
-            "version": &version,
-        }));
+        if !format.is_structured() {
+            published.push(serde_json::json!({
+                "hash": key.hex(),
+                "variant": &variant,
+                "version": &version,
+            }));
+        }
         variants.push(ItemVariant { variant, version });
     }
+
+    if format.is_structured() {
+        render_each!(&variants);
+
+        return empty_result!();
+    }
+
     format.set("variants", published);
 
     ResultVcsIndexLsVariants { variants }.into()
 }
 
 /// One variant, with the version it is based on when it can be read.
-#[derive(Serialize)]
+#[derive(Clone, Grouped, StructuralData, Serialize)]
 pub struct ItemVariant {
     /// The variant.
     variant: Variant,
     /// The version it is based on, when one is stored.
     version: Option<Version>,
+}
+
+/// What one variant is drawn as, in the plain listing and in the stream's fallback.
+#[renderer(buffer)]
+pub fn render_item_variant(item: ItemVariant, format: &ResFormat) {
+    if format.is_structured() {
+        return mingling::RenderResult::default();
+    }
+
+    r_println!(
+        "{} -> {}{}",
+        item.variant.hash().hex(),
+        hex(item.variant.base_version()),
+        variant_tail(item.variant.storage_hash(), item.variant.join())
+    );
 }
 
 /// Result: the variants the index holds.
@@ -134,6 +158,10 @@ pub fn render_result_vcs_index_ls_variants(
     format: &ResFormat,
     ec: &mut ResExitCode,
 ) {
+    if format.is_structured() {
+        return mingling::RenderResult::default();
+    }
+
     if let Some(drawn) = format.drawn() {
         match drawn {
             Ok(text) => r_print!("{text}"),

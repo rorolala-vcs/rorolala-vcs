@@ -74,7 +74,7 @@ dependencies = [
 [[package]]
 name = "mingling"
 version = "0.6.0"
-source = "git+https://github.com/mingling-rs/mingling?rev=09c2205267fe16686e1ac22d68da14a26005b8c9#09c2205267fe16686e1ac22d68da14a26005b8c9"
+source = "git+https://github.com/mingling-rs/mingling?rev=aee0cad566c567530d4379d43b6c479b276791a2#aee0cad566c567530d4379d43b6c479b276791a2"
 dependencies = [
  "mingling_core",
  "mingling_macros",
@@ -83,7 +83,7 @@ dependencies = [
 [[package]]
 name = "mingling_core"
 version = "0.6.0"
-source = "git+https://github.com/mingling-rs/mingling?rev=09c2205267fe16686e1ac22d68da14a26005b8c9#09c2205267fe16686e1ac22d68da14a26005b8c9"
+source = "git+https://github.com/mingling-rs/mingling?rev=aee0cad566c567530d4379d43b6c479b276791a2#aee0cad566c567530d4379d43b6c479b276791a2"
 dependencies = [
  "just_fmt",
  "might_be_async",
@@ -92,7 +92,7 @@ dependencies = [
 [[package]]
 name = "mingling_macros"
 version = "0.6.0"
-source = "git+https://github.com/mingling-rs/mingling?rev=09c2205267fe16686e1ac22d68da14a26005b8c9#09c2205267fe16686e1ac22d68da14a26005b8c9"
+source = "git+https://github.com/mingling-rs/mingling?rev=aee0cad566c567530d4379d43b6c479b276791a2#aee0cad566c567530d4379d43b6c479b276791a2"
 dependencies = [
  "just_fmt",
  "proc-macro2",

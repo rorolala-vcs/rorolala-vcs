@@ -964,16 +964,10 @@ fn root_tree(rola: &Rola, ws: &Path, checked: &mut Checked) {
     checked.exits("the Layout is read as data", &ran, 0);
     checked.wants(
         "the root tree is recorded at the reserved root path",
-        json(&ran)
-            .and_then(|value| {
-                value
-                    .get("entries")?
-                    .get(0)?
-                    .get("path")?
-                    .as_str()
-                    .map(str::to_owned)
-            })
-            .as_deref()
+        jsonl(&ran)
+            .first()
+            .and_then(|entry| entry.get("path"))
+            .and_then(serde_json::Value::as_str)
             == Some("."),
         "the root tree is not shown at the root path",
     );
@@ -1263,6 +1257,15 @@ fn layout_version(rola: &Rola, ws: &Path) -> Option<String> {
 /// What a run printed, read as JSON, when it printed JSON at all.
 fn json(ran: &Ran) -> Option<serde_json::Value> {
     serde_json::from_str(ran.stdout.trim()).ok()
+}
+
+/// What a run printed, one record a line, when it printed JSON at all.
+fn jsonl(ran: &Ran) -> Vec<serde_json::Value> {
+    ran.stdout
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .filter_map(|line| serde_json::from_str(line.trim()).ok())
+        .collect()
 }
 
 /// What a run did, said the way a check that failed wants to be read.

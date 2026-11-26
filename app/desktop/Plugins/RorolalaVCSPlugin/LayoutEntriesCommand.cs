@@ -339,24 +339,27 @@ internal static class LayoutEntriesCommand
     /// kept, because what it is is an entry this side holds and cannot name: the caller that draws a tree
     /// leaves it out, and the caller that asks whether something is already held needs it.
     /// </remarks>
-    /// <param name="output">What it wrote, which is one JSON object when it was asked for one.</param>
+    /// <param name="output">What it wrote, which is one record a line when it was asked for one.</param>
     /// <returns>The entries it named.</returns>
     /// <exception cref="JsonException">The output is not JSON.</exception>
     internal static IReadOnlyList<LayoutEntry> ParseEntries(string output)
     {
         ArgumentNullException.ThrowIfNull(output);
 
-        using var document = JsonDocument.Parse(output);
+        var found = new List<LayoutEntry>();
 
-        if (Items(document.RootElement, "entries") is not { } items)
+        foreach (var line in output.Split('\n'))
         {
-            return [];
-        }
+            var text = line.Trim();
 
-        var found = new List<LayoutEntry>(items.GetArrayLength());
+            if (text.Length == 0)
+            {
+                continue;
+            }
 
-        foreach (var item in items.EnumerateArray())
-        {
+            using var document = JsonDocument.Parse(text);
+            var item = document.RootElement;
+
             if (Text(item, "uuid") is not { Length: > 0 } uuid)
             {
                 continue;

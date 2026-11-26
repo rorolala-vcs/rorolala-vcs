@@ -9,8 +9,8 @@ use librorolala::storage::Key;
 use mingling::{
     Grouped, LazyRes, StructuralData, Suggest,
     macros::{
-        buffer, chain, command, completion, help, metadata, r_eprintln, r_print, r_println,
-        renderer, routeify, suggest,
+        buffer, chain, command, completion, empty_result, help, metadata, r_eprintln, r_print,
+        r_println, render_each, renderer, routeify, suggest,
     },
     metadata::Description,
     res::ResExitCode,
@@ -109,6 +109,16 @@ pub fn handle_storage_ls_storaged(
 
     match runtime.block_on(store.list_exist_keys()) {
         Ok(keys) => {
+            if format.is_structured() {
+                let records: Vec<ObjectKeyRecord> = keys
+                    .into_iter()
+                    .map(|key| ObjectKeyRecord { key })
+                    .collect();
+                render_each!(&records);
+
+                return empty_result!();
+            }
+
             // Published under the name `--json` writes the list by, so a template and a JSON
             // reader name it the same way.
             format.set(
@@ -131,8 +141,30 @@ pub struct ResultLs {
     pub(crate) keys: Vec<Key>,
 }
 
+/// One key the store holds, as a streamed record.
+#[derive(Clone, Grouped, StructuralData, Serialize)]
+#[serde(transparent)]
+pub struct ObjectKeyRecord {
+    /// The key, written as the store writes it.
+    key: Key,
+}
+
+/// What one key is drawn as.
+#[renderer(buffer)]
+pub fn render_object_key_record(record: ObjectKeyRecord, format: &ResFormat) {
+    if format.is_structured() {
+        return mingling::RenderResult::default();
+    }
+
+    r_println!("{}", record.key);
+}
+
 #[renderer(buffer)]
 pub fn render_result_ls(result: ResultLs, format: &ResFormat, ec: &mut ResExitCode) {
+    if format.is_structured() {
+        return mingling::RenderResult::default();
+    }
+
     if let Some(drawn) = format.drawn() {
         match drawn {
             Ok(text) => r_print!("{text}"),
