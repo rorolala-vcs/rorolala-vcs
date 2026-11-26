@@ -1,5 +1,6 @@
 using RolaSharp;
 using RorolalaDesktop.Contract;
+using RorolalaDesktop.I18n;
 
 namespace RorolalaVCSPlugin;
 
@@ -87,21 +88,34 @@ internal sealed class WriterOwnershipHold : IOwnershipHold
     /// <summary>What every run this plugin makes is gathered in.</summary>
     private readonly IProgressHub _hub;
 
-    /// <summary>Makes the hold over the host and the progress hub.</summary>
+    /// <summary>What says whether the Vault could be reached, which a claim needs.</summary>
+    private readonly VaultFetch _fetch;
+
+    /// <summary>Makes the hold over the host, the progress hub and the fetch.</summary>
     /// <param name="host">The host, for the progress card and the changed files.</param>
     /// <param name="hub">What every run this plugin makes is gathered in.</param>
-    public WriterOwnershipHold(IPluginHost host, IProgressHub hub)
+    /// <param name="fetch">What says whether the Vault could be reached.</param>
+    public WriterOwnershipHold(IPluginHost host, IProgressHub hub, VaultFetch fetch)
     {
         ArgumentNullException.ThrowIfNull(host);
         ArgumentNullException.ThrowIfNull(hub);
+        ArgumentNullException.ThrowIfNull(fetch);
 
         _host = host;
         _hub = hub;
+        _fetch = fetch;
     }
 
     /// <inheritdoc />
     public async Task<OwnershipHoldOutcome> HoldAsync(string path)
     {
+        // What a claim writes is the Vault's own Layout, so there is no offline answer: a hold made while the
+        // last fetch found the Vault unreachable is answered here rather than left to wait on it.
+        if (_fetch.Offline)
+        {
+            return new OwnershipHoldOutcome(false, RolaI18N.Get("rorolala_vcs.offline"));
+        }
+
         var (done, said) = await OwnershipActions.HoldAsync(_host, _hub, path);
 
         return new OwnershipHoldOutcome(done, said);

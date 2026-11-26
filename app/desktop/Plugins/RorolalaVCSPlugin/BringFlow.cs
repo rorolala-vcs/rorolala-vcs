@@ -416,6 +416,9 @@ internal sealed class BringFlow
     /// <summary>What every command this plugin runs reports itself to.</summary>
     private readonly IProgressHub _hub;
 
+    /// <summary>What says whether the Vault could be reached, which a bring of what is here goes on without.</summary>
+    private readonly VaultFetch _fetch;
+
     /// <summary>What the place read of a Layout, which a bring's entries are read from.</summary>
     private readonly Func<UpstreamSource, UpstreamEntriesTree?> _tree;
 
@@ -423,22 +426,26 @@ internal sealed class BringFlow
     /// <param name="host">The host, for the question and for what a failure is shown through.</param>
     /// <param name="log">Where a base that is not a Workspace is judged.</param>
     /// <param name="hub">What every command this plugin runs reports itself to.</param>
+    /// <param name="fetch">What says whether the Vault could be reached.</param>
     /// <param name="tree">What the place read of a Layout.</param>
     public BringFlow(
         IPluginHost host,
         ILog log,
         IProgressHub hub,
+        VaultFetch fetch,
         Func<UpstreamSource, UpstreamEntriesTree?> tree
     )
     {
         ArgumentNullException.ThrowIfNull(host);
         ArgumentNullException.ThrowIfNull(log);
         ArgumentNullException.ThrowIfNull(hub);
+        ArgumentNullException.ThrowIfNull(fetch);
         ArgumentNullException.ThrowIfNull(tree);
 
         _host = host;
         _log = log;
         _hub = hub;
+        _fetch = fetch;
         _tree = tree;
     }
 
@@ -806,6 +813,9 @@ internal sealed class BringFlow
                     Workspace = directory,
                     Account = UserScope.CurrentAccount,
                     Target = WriteTarget.Tracked,
+                    // What the Vault's copy and this side's store already hold is all a cached bring needs, so
+                    // a run made while the Vault cannot be reached goes on offline rather than waiting on it.
+                    Offline = _fetch.Offline,
                     Refs = references,
                     To = plan.Destination,
                     ByName = plan.Destination is { Length: > 0 },
@@ -1005,6 +1015,9 @@ internal sealed class BringFlow
             RolaWriteErrorKind.NoWorkspace => RolaI18N.Get("rorolala_vcs.place.not_workspace"),
             RolaWriteErrorKind.NoTrack => RolaI18N.Get("rorolala_vcs.place.no_track"),
             RolaWriteErrorKind.NoAccount => RolaI18N.Get("rorolala_vcs.place.no_account"),
+            // Offline, the copy a bring is read against is the one a fetch left rather than one this run
+            // would have brought, so a Workspace that never fetched one has nothing to plan against.
+            RolaWriteErrorKind.NotCached => RolaI18N.Get("rorolala_vcs.layout_not_fetched"),
             _ => error.Message is { Length: > 0 } message ? message : error.Kind.ToString(),
         };
 

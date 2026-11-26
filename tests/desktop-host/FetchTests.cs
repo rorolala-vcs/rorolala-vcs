@@ -57,6 +57,37 @@ public sealed class FetchTests
         Assert.False(read);
     }
 
+    /// <summary>Only the leg to the Vault failing is taken as the Vault being unreachable.</summary>
+    /// <remarks>
+    /// A fetch that failed because no account is here or no Vault is tracked says nothing about the leg, so a
+    /// write is not opened offline on it: that would hide a failure the reader can act on.
+    /// </remarks>
+    [Fact]
+    public void OnlyTheLegToTheVaultIsTakenAsUnreachable()
+    {
+        Assert.Equal(Reachability.Reached, VaultFetch.Reach(done: true, code: 0));
+        Assert.Equal(
+            Reachability.Unreachable,
+            VaultFetch.Reach(done: false, Fetch.Transport)
+        );
+        Assert.Equal(Reachability.Unknown, VaultFetch.Reach(done: false, code: 0));
+        Assert.Equal(Reachability.Unknown, VaultFetch.Reach(done: false, code: 1));
+    }
+
+    /// <summary>A fetch that has said nothing yet leaves runs that may reach the Vault online.</summary>
+    [Fact]
+    public void NothingIsOfflineBeforeTheFirstFetch()
+    {
+        var services = Host.Services();
+        var fetch = new VaultFetch(
+            services.For(new PluginId("it.fetch.offline"), 1),
+            services.Progress
+        );
+
+        Assert.Equal(FetchState.Never, fetch.State);
+        Assert.False(fetch.Offline);
+    }
+
     /// <summary>An unchanged copy fingerprints the same, and a changed rule or pointer does not.</summary>
     /// <remarks>
     /// The rules are written whole on every fetch, so their bytes are what says whether they changed; the

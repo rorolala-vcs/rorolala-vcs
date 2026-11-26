@@ -37,11 +37,18 @@ internal static class OwnershipActions
     /// on: the question is asked once per item every time a menu is offered, so it is answered from what a listing has
     /// already read rather than by opening the Layouts again.
     /// </param>
-    public static void Declare(IPluginHost host, IProgressHub hub, OwnershipReadings readings)
+    /// <param name="fetch">What says whether the Vault could be reached, which an ownership move needs.</param>
+    public static void Declare(
+        IPluginHost host,
+        IProgressHub hub,
+        OwnershipReadings readings,
+        VaultFetch fetch
+    )
     {
         ArgumentNullException.ThrowIfNull(host);
         ArgumentNullException.ThrowIfNull(hub);
         ArgumentNullException.ThrowIfNull(readings);
+        ArgumentNullException.ThrowIfNull(fetch);
 
         // Four words for two commands and their forced twins, offered on both kinds of entry: the
         // command line reads a path as a file or as everything under a directory by itself, so the
@@ -50,10 +57,10 @@ internal static class OwnershipActions
         // directory, and the path is what makes the two one entry in the menu.
         foreach (var target in new[] { ContextMenuTarget.File, ContextMenuTarget.Directory })
         {
-            Add(host, hub, readings, target, "menu.entry.claim", Icons.Lock, "hold", false, 10);
-            Add(host, hub, readings, target, "menu.entry.waive", Icons.LockOpen, "giveup", false, 20);
-            Add(host, hub, readings, target, "menu.entry.force_claim", Icons.Lock, "hold", true, 30);
-            Add(host, hub, readings, target, "menu.entry.force_waive", Icons.LockOpen, "giveup", true, 40);
+            Add(host, hub, readings, fetch, target, "menu.entry.claim", Icons.Lock, "hold", false, 10);
+            Add(host, hub, readings, fetch, target, "menu.entry.waive", Icons.LockOpen, "giveup", false, 20);
+            Add(host, hub, readings, fetch, target, "menu.entry.force_claim", Icons.Lock, "hold", true, 30);
+            Add(host, hub, readings, fetch, target, "menu.entry.force_waive", Icons.LockOpen, "giveup", true, 40);
         }
     }
 
@@ -91,6 +98,7 @@ internal static class OwnershipActions
     /// <param name="host">The host.</param>
     /// <param name="hub">What the run's card is begun in.</param>
     /// <param name="readings">What the Vault's copy says about the entries being listed.</param>
+    /// <param name="fetch">What says whether the Vault could be reached.</param>
     /// <param name="target">Which kind of entry it is offered for.</param>
     /// <param name="leaf">The key naming the word, under the ownership category.</param>
     /// <param name="icon">The picture it wears.</param>
@@ -101,6 +109,7 @@ internal static class OwnershipActions
         IPluginHost host,
         IProgressHub hub,
         OwnershipReadings readings,
+        VaultFetch fetch,
         ContextMenuTarget target,
         string leaf,
         string icon,
@@ -113,7 +122,7 @@ internal static class OwnershipActions
             new ContextMenuItem(
                 ["menu.entry.ownership", leaf],
                 order,
-                was => Run(verb, was, force, host, hub),
+                was => Run(verb, was, force, host, hub, fetch),
                 icon,
                 force,
                 was => Knows(was, readings)
@@ -138,12 +147,14 @@ internal static class OwnershipActions
     /// <param name="force">Whether the checks are to be gone past.</param>
     /// <param name="host">The host, for the report and for saying the files may have changed.</param>
     /// <param name="hub">What every run this plugin makes is gathered in, which this run's card is begun in.</param>
+    /// <param name="fetch">What says whether the Vault could be reached.</param>
     private static void Run(
         string verb,
         ContextTarget target,
         bool force,
         IPluginHost host,
-        IProgressHub hub
+        IProgressHub hub,
+        VaultFetch fetch
     )
     {
         if (target.Entries.Count == 0)
@@ -153,6 +164,20 @@ internal static class OwnershipActions
                     RolaI18N.Get("rorolala_vcs.ownership_failed"),
                     RolaI18N.Get("rorolala_vcs.ownership_unknown")
                 )
+            );
+
+            return;
+        }
+
+        // What a claim or a release writes is the Vault's own Layout, so there is no offline answer to give: the
+        // last fetch found the Vault unreachable, and a run now would wait on a leg already known to fail.
+        if (fetch.Offline)
+        {
+            FailureNotice.Show(
+                host.Dialogs,
+                host.Icons,
+                RolaI18N.Get("rorolala_vcs.offline_title"),
+                RolaI18N.Get("rorolala_vcs.offline")
             );
 
             return;

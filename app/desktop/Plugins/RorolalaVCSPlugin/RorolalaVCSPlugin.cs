@@ -119,7 +119,7 @@ public sealed class RorolalaVCSPlugin : IRolaPlugin
 
         // What an entry's menu offers about who holds it: the two ownership commands, plain and forced, each of
         // which reports itself to the hub while it goes.
-        OwnershipActions.Declare(host, hub, ownership);
+        OwnershipActions.Declare(host, hub, ownership, fetch);
 
         // And what a single file asks before the Desktop opens it: whether another account holds it, or
         // whether nobody does, and the hold that would make it the reader's to edit. The question is put
@@ -128,7 +128,7 @@ public sealed class RorolalaVCSPlugin : IRolaPlugin
         host.OpenHooks.Add(
             new OwnershipOpenHook(
                 new RolaOwnershipLookup(host.Log),
-                new WriterOwnershipHold(host, hub),
+                new WriterOwnershipHold(host, hub, fetch),
                 host.Dialogs,
                 host.Log
             )

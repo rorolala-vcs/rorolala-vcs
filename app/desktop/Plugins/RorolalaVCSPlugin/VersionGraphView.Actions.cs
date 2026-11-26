@@ -522,7 +522,7 @@ internal sealed partial class VersionGraphView
 
         _ = Task.Run(() =>
         {
-            var (done, said) = RetrackCommand.Fork(directory, path);
+            var (done, said) = RetrackCommand.Fork(directory, path, _fetch.Offline);
 
             Dispatcher.UIThread.Post(() =>
             {
@@ -562,7 +562,7 @@ internal sealed partial class VersionGraphView
 
         _ = Task.Run(() =>
         {
-            var (done, said) = RetrackCommand.Run(directory, file, uuid, onlyIndex, force);
+            var (done, said) = RetrackCommand.Run(directory, file, uuid, onlyIndex, force, _fetch.Offline);
 
             Dispatcher.UIThread.Post(() =>
             {
@@ -877,7 +877,7 @@ internal sealed partial class VersionGraphView
 
         _ = Task.Run(() =>
         {
-            var (done, said) = JoinCommand.Run(directory, file, variant);
+            var (done, said) = JoinCommand.Run(directory, file, variant, _fetch.Offline);
 
             Dispatcher.UIThread.Post(() =>
             {
@@ -919,7 +919,7 @@ internal sealed partial class VersionGraphView
 
         _ = Task.Run(() =>
         {
-            var (done, said) = RetrackCommand.Run(directory, file, version, onlyIndex, force);
+            var (done, said) = RetrackCommand.Run(directory, file, version, onlyIndex, force, _fetch.Offline);
 
             Dispatcher.UIThread.Post(() =>
             {
@@ -970,6 +970,20 @@ internal sealed partial class VersionGraphView
                 _icons,
                 RolaI18N.Get("rorolala_vcs.version_graph.fetch_failed"),
                 RolaI18N.Get("rorolala_vcs.ownership_unknown")
+            );
+
+            return;
+        }
+
+        // What is not here has to come from the Vault, and the last fetch found it unreachable: a run now
+        // would wait on the leg already known to fail. The loop's next fetch is what finds the Vault again.
+        if (_fetch.Offline)
+        {
+            FailureNotice.Show(
+                _dialogs,
+                _icons,
+                RolaI18N.Get("rorolala_vcs.offline_title"),
+                RolaI18N.Get("rorolala_vcs.offline")
             );
 
             return;

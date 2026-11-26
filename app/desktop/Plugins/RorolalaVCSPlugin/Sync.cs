@@ -139,8 +139,9 @@ internal static class Sync
     /// </summary>
     /// <remarks>
     /// The account is the one the work acts as, read from the user's own file as the command line reads it. The
-    /// Vault is the tracked one, which is what a sync means when it names none. A run is never offline: this
-    /// window has no offline control, and a sync that could not reach the Vault would be a sync that did nothing.
+    /// Vault is the tracked one, which is what a sync means when it names none. A sync is never made offline: it
+    /// is the exchange itself, so the watcher refuses to start one while the Vault is unreachable, and the request
+    /// below is always one that may reach it.
     /// The fetching label is this panel's own, since a bar whose words were the writer's English would look
     /// broken in a window drawn in another language; every other word a sync says is the writer's, as the apply
     /// reports a direction rather than naming a step.
@@ -310,6 +311,9 @@ internal static class Sync
         {
             RolaWriteErrorKind.NoWorkspace => RolaI18N.Get("rorolala_vcs.not_a_workspace"),
             RolaWriteErrorKind.Json => RolaI18N.Get("rorolala_vcs.sync.plan_unreadable"),
+            // A retrack that goes to a version whose content is not here is refused offline rather than left to
+            // wait on the Vault, so the window says what is missing rather than the writer's English.
+            RolaWriteErrorKind.Offline => RolaI18N.Get("rorolala_vcs.offline_content"),
             _ => error.Message,
         };
     }

@@ -23,6 +23,24 @@ internal enum FetchState
     Failed,
 }
 
+/// <summary>What a fetch said about the Vault being reachable.</summary>
+/// <remarks>
+/// It is told apart from <see cref="FetchState"/> because a fetch can fail for a reason that is not the leg to
+/// the Vault: an account that is not here, or a Workspace that names no Vault, says nothing about whether one
+/// could be reached. Only the transport's own status is taken as evidence.
+/// </remarks>
+internal enum Reachability
+{
+    /// <summary>What failed was not the leg to the Vault, so this fetch says nothing about it.</summary>
+    Unknown,
+
+    /// <summary>The Vault answered.</summary>
+    Reached,
+
+    /// <summary>The Vault could not be reached.</summary>
+    Unreachable,
+}
+
 /// <summary>
 /// One fetch of the Vault's Layout at a time, shared by the views that read the work.
 /// </summary>
@@ -71,6 +89,23 @@ internal sealed class VaultFetch
     /// <summary>What the last fetch came to.</summary>
     private FetchState _state = FetchState.Never;
 
+    /// <summary>Whether the last fetch that said anything about the leg to the Vault found it unreachable.</summary>
+    /// <remarks>
+    /// Reads come from the window's thread and from the workers that run a command, so it is written and read
+    /// whole: a stale answer costs one command that could have gone on from what is here, or one that waits on a
+    /// Vault that is not there, and both are the answer the state had a moment ago.
+    /// </remarks>
+    private volatile bool _offline;
+
+    /// <summary>The last fetch's verdict on whether the Vault can be reached, or nothing when it gave none.</summary>
+    /// <param name="done">Whether the fetch ended well.</param>
+    /// <param name="code">The status it ended with.</param>
+    /// <returns>What the fetch said about the Vault.</returns>
+    internal static Reachability Reach(bool done, int code) =>
+        done ? Reachability.Reached
+        : code == global::RorolalaVCSPlugin.Fetch.Transport ? Reachability.Unreachable
+        : Reachability.Unknown;
+
     /// <summary>Makes the fetcher.</summary>
     /// <param name="host">The host, for the run's card and for what a failure is said with.</param>
     /// <param name="hub">What every command this plugin runs reports itself to.</param>
@@ -91,11 +126,26 @@ internal sealed class VaultFetch
     /// <summary>What the last fetch came to, which the status bar draws.</summary>
     public FetchState State => _state;
 
+    /// <summary>Whether the Vault could not be reached at the last check.</summary>
+    /// <remarks>
+    /// It is what the writes that can go on from what is here are opened offline with, and what the ones that
+    /// need the Vault are refused with: a run that waits on a leg already known to fail spends the reader's
+    /// time to learn what the Overview's lamp already says. A fetch that reaches the Vault again clears it.
+    /// </remarks>
+    public bool Offline => _offline;
+
     /// <summary>Whether a foreground change is waiting for the loop's next fetch.</summary>
     public bool Dirty => _dirty;
 
     /// <summary>Raised on the window's thread when <see cref="State"/> or <see cref="Dirty"/> changes.</summary>
     public event Action? Changed;
+
+    /// <summary>Raised on the window's thread when <see cref="Offline"/> changes.</summary>
+    /// <remarks>
+    /// It is kept apart from <see cref="Changed"/>, which fires for a fetch merely going too: a reader of this
+    /// one asks again only where the answer a write is made with has moved.
+    /// </remarks>
+    public event Action? ReachabilityChanged;
 
     /// <summary>
     /// Starts the loop that keeps the Vault's copy current.
@@ -187,6 +237,32 @@ internal sealed class VaultFetch
             return;
         }
 
+        // The Vault was unreachable at the last check, so a second leg to it now would only wait on the
+        // failure already seen. What the copy holds is read instead: the caller's continuation runs, and the
+        // window says why nothing was brought over. The loop's own fetch is not held back, since it is what
+        // finds the Vault again.
+        if (_offline && !quiet)
+        {
+            // Both the continuation and the notice belong to the window's thread, as they do when a fetch
+            // completes, since a caller is free to have asked from a worker.
+            Dispatcher.UIThread.Post(() =>
+            {
+                done();
+
+                if (!silent)
+                {
+                    FailureNotice.Show(
+                        _host.Dialogs,
+                        _host.Icons,
+                        RolaI18N.Get("rorolala_vcs.offline_title"),
+                        RolaI18N.Get("rorolala_vcs.offline")
+                    );
+                }
+            });
+
+            return;
+        }
+
         if (Environment.GetEnvironmentVariable(Sync.Program) is not { Length: > 0 } program)
         {
             done();
@@ -207,7 +283,7 @@ internal sealed class VaultFetch
             var before = quiet ? Fingerprint(directory) : null;
 
             // The static runner is named in full: this class's own Fetch would be the one looked for.
-            var (done_well, said) = global::RorolalaVCSPlugin.Fetch.Run(program, directory);
+            var (done_well, said, code) = global::RorolalaVCSPlugin.Fetch.Run(program, directory);
             var changed =
                 !quiet || !string.Equals(before, Fingerprint(directory), StringComparison.Ordinal);
 
@@ -224,6 +300,8 @@ internal sealed class VaultFetch
 
                 if (done_well)
                 {
+                    Reached(Reachability.Reached);
+
                     // What was fetched is what every reading is made from, so what the columns answered about the
                     // entries is let go of with the files, and the listing and the reading are read again. A quiet
                     // fetch that brought the copy already here has nothing a view would read, and a minute that
@@ -252,6 +330,7 @@ internal sealed class VaultFetch
                 else
                 {
                     SetState(FetchState.Failed);
+                    Reached(Reach(done_well, code));
 
                     if (!silent)
                     {
@@ -375,5 +454,25 @@ internal sealed class VaultFetch
 
         _state = state;
         Changed?.Invoke();
+    }
+
+    /// <summary>Takes the leg to the Vault as the last fetch found it, when it said anything about it.</summary>
+    /// <param name="reachability">What the fetch said.</param>
+    private void Reached(Reachability reachability)
+    {
+        var offline = reachability switch
+        {
+            Reachability.Reached => false,
+            Reachability.Unreachable => true,
+            _ => _offline,
+        };
+
+        if (offline == _offline)
+        {
+            return;
+        }
+
+        _offline = offline;
+        ReachabilityChanged?.Invoke();
     }
 }

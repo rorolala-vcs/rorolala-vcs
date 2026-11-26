@@ -626,7 +626,8 @@ public sealed class VariantGraphTests
             Path.Combine(workspace, "art.txt"),
             other.Uuid,
             onlyIndex: false,
-            force: false
+            force: false,
+            offline: false
         );
 
         Assert.True(done, said);

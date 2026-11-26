@@ -51,6 +51,10 @@ internal sealed class SyncWatcher
         _log = log;
         _hub = hub;
         _fetch = fetch;
+
+        // What a write may do offline moves with the leg to the Vault: when the loop finds the Vault gone or
+        // finds it back, the plan a run would apply is a different answer, and the buttons are told so.
+        fetch.ReachabilityChanged += Reached;
     }
 
     /// <summary>Whether there is work to carry, which is what the three buttons are pressable for.</summary>
@@ -182,6 +186,15 @@ internal sealed class SyncWatcher
             return;
         }
 
+        // A plan is a fetch of the Vault's Layout, and the last one found the Vault unreachable: asking again
+        // now would wait on the same leg. What there is to carry cannot be read without it, so the buttons say
+        // why rather than being left to discover it.
+        if (_fetch.Offline)
+        {
+            Settled(false, RolaI18N.Get("rorolala_vcs.offline"));
+            return;
+        }
+
         if (_planning)
         {
             _planAgain = true;
@@ -290,6 +303,21 @@ internal sealed class SyncWatcher
             return;
         }
 
+        // A sync is the exchange itself: there is no offline answer to carry, and the last fetch found the
+        // Vault unreachable. Nothing is started and the window says why, rather than a run that waits on a
+        // leg already known to fail.
+        if (_fetch.Offline)
+        {
+            FailureNotice.Show(
+                _host.Dialogs,
+                _host.Icons,
+                RolaI18N.Get("rorolala_vcs.offline_title"),
+                RolaI18N.Get("rorolala_vcs.offline")
+            );
+
+            return;
+        }
+
         var scope = SyncSettings.Chosen();
 
         if (SyncWarnings.Key(scope, way) is { } warning)
@@ -381,6 +409,20 @@ internal sealed class SyncWatcher
         Ready = ready;
         Why = why;
         Changed?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>Asks what a sync would carry again, now that the Vault may or may not be reachable.</summary>
+    /// <remarks>
+    /// A plan is asked at once when the leg to the Vault changes: the answer is a different one offline, and a
+    /// button left as the last answer drew it would offer a run with nothing it could do. Nothing is asked
+    /// before the first plan, since no dock has drawn one yet.
+    /// </remarks>
+    private void Reached()
+    {
+        if (_asked)
+        {
+            Plan(_planFor);
+        }
     }
 
     /// <summary>Runs something on the window's thread, wherever it was called from.</summary>

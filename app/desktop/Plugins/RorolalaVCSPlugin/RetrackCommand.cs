@@ -65,13 +65,14 @@ internal static class RetrackCommand
     /// <summary>Runs a fork, answering whether it ended well and what it said.</summary>
     /// <param name="directory">Where the work is rooted, and where the run is made.</param>
     /// <param name="file">The path whose entry is to be given a fresh `Uuid`.</param>
+    /// <param name="offline">Whether the Vault could be reached at the last fetch.</param>
     /// <returns>Whether it ended well, and what to say when it did not.</returns>
-    public static (bool Done, string Said) Fork(string directory, string file)
+    public static (bool Done, string Said) Fork(string directory, string file, bool offline)
     {
         ArgumentNullException.ThrowIfNull(directory);
         ArgumentNullException.ThrowIfNull(file);
 
-        return Run(directory, ForkRequest(file));
+        return Run(directory, ForkRequest(file) with { Offline = offline });
     }
 
     /// <summary>Runs a retrack, answering whether it ended well and what it said.</summary>
@@ -84,20 +85,22 @@ internal static class RetrackCommand
     /// <param name="target">What the path is to record, as the index names it.</param>
     /// <param name="onlyIndex">Whether the record moves and the file on disk is left alone.</param>
     /// <param name="force">Whether unrecorded changes are to be discarded.</param>
+    /// <param name="offline">Whether the Vault could be reached at the last fetch.</param>
     /// <returns>Whether it ended well, and what to say when it did not.</returns>
     public static (bool Done, string Said) Run(
         string directory,
         string file,
         string target,
         bool onlyIndex,
-        bool force
+        bool force,
+        bool offline
     )
     {
         ArgumentNullException.ThrowIfNull(directory);
         ArgumentNullException.ThrowIfNull(file);
         ArgumentNullException.ThrowIfNull(target);
 
-        return Run(directory, Request(file, target, onlyIndex, force));
+        return Run(directory, Request(file, target, onlyIndex, force) with { Offline = offline });
     }
 
     /// <summary>Runs one retrack request, answering whether it ended well and what it said.</summary>

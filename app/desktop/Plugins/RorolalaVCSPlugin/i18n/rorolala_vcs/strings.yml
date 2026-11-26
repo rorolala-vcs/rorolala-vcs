@@ -450,6 +450,23 @@ rorolala_vcs:
     en: The state of the work under the current base directory could not be read
     zh-CN: 无法读取当前基础目录下工作的状态
 
+  # What is said when the leg to the Vault failed rather than the Vault answering: the Overview's own
+  # fetch found it unreachable, so runs that need it are refused here rather than left to wait on it,
+  # and writes that can go on from what is already stored do. The lamp beside the Vault's name says the
+  # same thing without words.
+  offline_title:
+    en: The Vault cannot be reached
+    zh-CN: 无法连接保险库
+  offline:
+    en: This run was not started. It works again once the Vault can be reached.
+    zh-CN: 本次运行没有开始。保险库恢复连接后即可使用。
+  offline_content:
+    en: This version's content is not stored here, and the Vault cannot be reached
+    zh-CN: 本地没有该版本的内容，而无法连接保险库
+  layout_not_fetched:
+    en: The Vault's Layout has not been fetched here
+    zh-CN: 本地没有取回过保险库的布局
+
   # What the Overview draws. These are the panel's own words rather than the command line's: what a
   # command prints is a report meant to be read once and acted on by typing, and what a panel says is
   # meant to be looked at. So there is no mention of a command here, and the reading behind it is the
@@ -1092,7 +1109,6 @@ rorolala_vcs:
     soft_delete_refused_why:
       en: "The Vault still names the entry where it was: `@/removed/` has no room for that path today."
       zh-CN: "保险库仍把条目记在原处：`@/removed/` 下今天没有该路径的位置。"
-
 
     # What the root of the place opens at, and what it says when there is no Vault to open: the work's own upstream is
     # the Vault the Layout being worked in tracks, and the Workspace's default Vault where it tracks none.

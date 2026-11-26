@@ -24,11 +24,13 @@ internal static class JoinCommand
     /// <param name="directory">Where the work is rooted, and where the run is made.</param>
     /// <param name="file">The file the variant is to be joined into.</param>
     /// <param name="variant">The variant to join, as the index names it.</param>
+    /// <param name="offline">Whether the Vault could be reached at the last fetch.</param>
     /// <returns>Whether it ended well, and what to say when it did not.</returns>
     public static (bool Done, string Said) Run(
         string directory,
         string file,
-        string variant
+        string variant,
+        bool offline
     )
     {
         ArgumentNullException.ThrowIfNull(directory);
@@ -45,6 +47,9 @@ internal static class JoinCommand
                 Workspace = directory,
                 Account = UserScope.CurrentAccount,
                 Target = WriteTarget.Tracked,
+                // A variant whose content is stored here is all the merge needs, so a run made while the Vault
+                // cannot be reached joins from what is here rather than waiting on it.
+                Offline = offline,
                 Variant = variant,
                 File = file,
             };
@@ -55,7 +60,7 @@ internal static class JoinCommand
         }
         catch (RolaWriteError error)
         {
-            return (false, Told(error));
+            return (false, Told(error, offline));
         }
         catch (RolaReadError error)
             when (error.Kind is RolaReadErrorKind.NoWorkspace or RolaReadErrorKind.Unavailable)
@@ -76,12 +81,16 @@ internal static class JoinCommand
     /// all: a Vault that is needed and not here.
     /// </remarks>
     /// <param name="error">The failure the writer answered with.</param>
+    /// <param name="offline">Whether the Vault could be reached at the last fetch.</param>
     /// <returns>What to show.</returns>
-    private static string Told(RolaWriteError error) =>
+    private static string Told(RolaWriteError error, bool offline) =>
         error.Kind switch
         {
             RolaWriteErrorKind.NoWorkspace => RolaI18N.Get("rorolala_vcs.not_a_workspace"),
             RolaWriteErrorKind.NoTrack => RolaI18N.Get("rorolala_vcs.version_graph.join_failed"),
+            // Offline, a variant whose content is not here has nowhere to come from: what is missing is said
+            // rather than the writer's English about a content the run was never going to fetch.
+            RolaWriteErrorKind.NotFound when offline => RolaI18N.Get("rorolala_vcs.offline_content"),
             _ => error.Message is { Length: > 0 } message ? message : RolaI18N.Get("rorolala_vcs.version_graph.join_failed"),
         };
 }

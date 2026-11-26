@@ -320,7 +320,7 @@ internal sealed class UpstreamPlace
         _log = log;
         _hub = hub;
         _fetch = fetch;
-        _bring = new BringFlow(host, log, hub, Tree);
+        _bring = new BringFlow(host, log, hub, fetch, Tree);
 
         // What a place answers is a snapshot of the copies, so it is let go of when they may have moved: the files having
         // changed is every command of this plugin's own answer that they have, and the base moving is a different work.
