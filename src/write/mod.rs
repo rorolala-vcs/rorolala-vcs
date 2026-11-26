@@ -34,6 +34,7 @@ pub mod tree_init;
 pub mod tree_remove;
 pub mod tree_reset;
 pub mod tweak;
+pub mod undo;
 pub mod workspace;
 
 pub use cancel::*;
@@ -55,4 +56,5 @@ pub use tree::*;
 pub use tree_init::*;
 pub use tree_remove::*;
 pub use tree_reset::*;
+pub use undo::*;
 pub use workspace::*;
