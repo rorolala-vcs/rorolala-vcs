@@ -26,6 +26,7 @@ internal static class VcsProgress
     private static string IconOf(string titleKey) => titleKey switch
     {
         "rorolala_vcs.progress.sync" => Icons.ArrowsClockwise,
+        "rorolala_vcs.progress.undo" => Icons.ArrowClockwise,
         "rorolala_vcs.progress.fetch" => Icons.CloudArrowDown,
         "rorolala_vcs.progress.bring" => Icons.CloudArrowDown,
         "rorolala_vcs.progress.hold" => Icons.Lock,

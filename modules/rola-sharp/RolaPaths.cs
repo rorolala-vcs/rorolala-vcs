@@ -16,6 +16,30 @@ public static class RolaPaths
     public static string WorkspaceIgnoreRules(string root) =>
         Resolve(root, RorolalaBinding.ROLA_WORKSPACE_IGNORE_RULES_DIR);
 
+    /// <summary>The file a Workspace keeps its own ignore rules in.</summary>
+    /// <param name="root">The Workspace's root.</param>
+    /// <returns>The file's path, as an absolute path.</returns>
+    public static string WorkspaceIgnoreRuleFile(string root)
+    {
+        ArgumentNullException.ThrowIfNull(root);
+
+        var name = NativeText.Taken(RorolalaBinding.ROLA_IGNORE_RULES_WORKSPACE_FILE());
+
+        return Path.Combine(WorkspaceIgnoreRules(root), name);
+    }
+
+    /// <summary>Where a Workspace keeps the ignore rules a Vault handed down.</summary>
+    /// <param name="root">The Workspace's root.</param>
+    /// <returns>The directory, as an absolute path.</returns>
+    public static string WorkspaceIgnoreRuleVaults(string root)
+    {
+        ArgumentNullException.ThrowIfNull(root);
+
+        var relative = NativeText.Taken(RorolalaBinding.ROLA_IGNORE_RULES_VAULTS_DIR());
+
+        return Path.Combine(WorkspaceIgnoreRules(root), relative);
+    }
+
     /// <summary>Where a Vault keeps the ignore rules it hands down.</summary>
     /// <param name="root">The Vault's root.</param>
     /// <returns>The directory the rule files are kept in, as an absolute path.</returns>

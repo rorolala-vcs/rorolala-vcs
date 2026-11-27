@@ -3726,6 +3726,14 @@ internal static partial class RorolalaBinding
     internal static extern void free_string(nint @string);
 
     /// <summary>
+    /// The name a Workspace keeps its default rules under.
+    ///
+    /// A `char *` the caller releases with `free_string`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint ROLA_IGNORE_RULES_WORKSPACE_FILE();
+
+    /// <summary>
     /// Hash salt for Variant
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
@@ -3802,6 +3810,12 @@ internal static partial class RorolalaBinding
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern nint ROLA_WORKSPACE_IGNORE_RULES_DIR();
+
+    /// <summary>
+    /// The directory, inside a Workspace's ignore rules, that a fetched Vault's rules are kept under
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint ROLA_IGNORE_RULES_VAULTS_DIR();
 
     /// <summary>
     /// Path, inside the Vault's root, where the ignore rules it hands down are kept
@@ -3976,6 +3990,9 @@ internal static partial class RorolalaBinding
 
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern void free_rola_history_operation(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_history_change(nint value);
 
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern void free_rola_history_operations(nint value);
@@ -6338,6 +6355,38 @@ internal static partial class RorolalaBinding
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern ulong rola_history_operation_changes(nint self);
+
+    /// <summary>
+    /// One change it holds, in the order the run made it, or null past the end.
+    ///
+    /// Returns an owned `RolaHistoryChange *`, or `NULL` when there is nothing; release it with `free_rola_history_change`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_history_operation_change(nint self, nuint index);
+
+    /// <summary>
+    /// What kind of thing changed: `entry`, `path`, `uuid`, `file` or `file_moved`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_history_change_kind(nint self);
+
+    /// <summary>
+    /// The path before the change, or the path the change is about.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_history_change_from(nint self);
+
+    /// <summary>
+    /// The path after the change, when the change moved something.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_history_change_to(nint self);
+
+    /// <summary>
+    /// What became of it: `added`, `removed`, `changed`, `bound`, `unbound`, `moved` or
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_history_change_state(nint self);
 
     /// <summary>
     /// How many operations the list holds.

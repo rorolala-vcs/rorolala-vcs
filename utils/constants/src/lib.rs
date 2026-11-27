@@ -108,6 +108,7 @@ pub const WORKSPACE_TWEAKING_DIR: &str = "./.rola/info/tweaking/";
 ///
 /// One directory per Vault, named by the name the Workspace bound it under. Being deeper than the
 /// Workspace's own files is what makes a Vault's rule yield to a Workspace's contradicting one.
+#[lazyffi(export = ROLA_IGNORE_RULES_VAULTS_DIR)]
 pub const IGNORE_RULES_VAULTS_DIR: &str = "vaults";
 
 /// Path, inside the Vault's root, where the ignore rules it hands down are kept

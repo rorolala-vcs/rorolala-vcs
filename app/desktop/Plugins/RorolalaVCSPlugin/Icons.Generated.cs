@@ -77,6 +77,30 @@ internal static partial class Icons
     /// <summary>The key the `list-bullets` picture is held under.</summary>
     public const string ListBullets = "rorolala_vcs.list-bullets";
 
+    /// <summary>The key the `dots-six-vertical` picture is held under.</summary>
+    public const string DotsSixVertical = "rorolala_vcs.dots-six-vertical";
+
+    /// <summary>The key the `minus-circle` picture is held under.</summary>
+    public const string MinusCircle = "rorolala_vcs.minus-circle";
+
+    /// <summary>The key the `code` picture is held under.</summary>
+    public const string Code = "rorolala_vcs.code";
+
+    /// <summary>The key the `record` picture is held under.</summary>
+    public const string Record = "rorolala_vcs.record";
+
+    /// <summary>The key the `scissors` picture is held under.</summary>
+    public const string Scissors = "rorolala_vcs.scissors";
+
+    /// <summary>The key the `file` picture is held under.</summary>
+    public const string File = "rorolala_vcs.file";
+
+    /// <summary>The key the `x` picture is held under.</summary>
+    public const string X = "rorolala_vcs.x";
+
+    /// <summary>The key the `arrows-in-line-vertical` picture is held under.</summary>
+    public const string ArrowsInLineVertical = "rorolala_vcs.arrows-in-line-vertical";
+
     /// <summary>The key the `tree` picture is held under.</summary>
     public const string Tree = "rorolala_vcs.tree";
 
@@ -169,6 +193,14 @@ internal static partial class Icons
         (DotsThreeVertical, "dots-three-vertical"),
         (Copy, "copy"),
         (ListBullets, "list-bullets"),
+        (DotsSixVertical, "dots-six-vertical"),
+        (MinusCircle, "minus-circle"),
+        (Code, "code"),
+        (Record, "record"),
+        (Scissors, "scissors"),
+        (File, "file"),
+        (X, "x"),
+        (ArrowsInLineVertical, "arrows-in-line-vertical"),
         (Tree, "tree"),
         (CheckCircle, "check-circle"),
         (RadioButton, "radio-button"),

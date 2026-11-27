@@ -1,7 +1,4 @@
 using Avalonia.Controls;
-using Avalonia.Layout;
-using Avalonia.Media;
-using FileSystemPlugin;
 using RolaSharp;
 using RorolalaDesktop.Contract;
 using RorolalaDesktop.I18n;
@@ -18,13 +15,13 @@ namespace RorolalaVCSPlugin;
 /// the index's own reading of them (see <see cref="VersionGraphDock"/>). The Tree dock is one tree's
 /// staging area and the description of its next version (see <see cref="TreePanelDock"/>), and it is
 /// the only work it does: recording the tree is the Version Graph's, and how the work stands is the
-/// Overview's. The Workspace dock is still to be written, and what it carries while it is is a line
-/// about where the tree is rooted. The Accounts
+/// Overview's. The Workspace dock is the work as a project: the ignore rules it is managed by and the
+/// operations it last recorded (see <see cref="WorkspaceView"/>). The Accounts
 /// dock is the machine's own key pairs, which account the work acts as, and what may be done about
 /// them (see <see cref="AccountsDock"/>), which is not about one work but about the person, and so is
 /// a dock of its own rather than a part of the Overview.
 /// <para>
-/// The base is read through <see cref="BaseDirectory"/>, the File System plugin's published answer,
+/// The base is read through <see cref="FileSystemPlugin.BaseDirectory"/>, the File System plugin's published answer,
 /// because that plugin is the one that owns where the browser works: a dock of this one that went
 /// looking for it itself would be a second answer to the same question, kept in step by hand.
 /// </para>
@@ -72,8 +69,8 @@ internal static class RorolalaDocks
     /// Registers them, each under its own title.
     /// </summary>
     /// <remarks>
-    /// The Workspace is still a line saying that the base is not a Workspace, since what it will hold
-    /// is not written yet; the Overview is the view of the work that is there, the Version Graph is
+    /// The Workspace reads the rules and the log of the Workspace holding the base, and says so while
+    /// the base is not one; the Overview is the view of the work that is there, the Version Graph is
     /// one file's chain, and the Accounts is the machine's own key pairs.
     /// </remarks>
     /// <param name="host">The host, whose dock registry they are registered with.</param>
@@ -108,7 +105,7 @@ internal static class RorolalaDocks
             Icons.ListChecks,
             () => new OverviewDock(host, host.Log, host.Files, hub, sync, fetch)
         );
-        Add(host, owner, WorkspaceNameId, WorkspaceKey, Icons.Briefcase, () => new RorolalaDock(host.Log));
+        Add(host, owner, WorkspaceNameId, WorkspaceKey, Icons.Briefcase, () => new RorolalaDock(host));
         Add(
             host,
             owner,
@@ -156,22 +153,32 @@ internal static class RorolalaDocks
 }
 
 /// <summary>
-/// The Workspace dock: the view, and nothing the header offers.
+/// The Workspace dock: the rules the work is managed by and the operations it last recorded.
 /// </summary>
 internal sealed class RorolalaDock : IDockView
 {
     /// <summary>The control the dock shows.</summary>
-    private readonly WorkspaceNotice _view;
+    private readonly WorkspaceView _view;
 
-    /// <summary>Makes the Workspace view, which is still a line about where the tree is rooted.</summary>
-    /// <param name="log">Where a base that could not be read is said.</param>
-    public RorolalaDock(ILog log) => _view = new WorkspaceNotice(log);
+    /// <summary>Makes the Workspace view.</summary>
+    /// <param name="host">The host, which is what the view reads and reports through.</param>
+    public RorolalaDock(IPluginHost host) => _view = new WorkspaceView(host, host.Log);
 
     /// <inheritdoc />
     public Control View => _view;
 
-    /// <inheritdoc />
-    public IReadOnlyList<DockHeaderItem> Header => [];
+    /// <summary>
+    /// Reading the rules and the log again, which is the one thing a reader asks of this view as a
+    /// whole: the two panes have answers of their own, and what this offers is both of them at once.
+    /// </summary>
+    public IReadOnlyList<DockHeaderItem> Header =>
+        [
+            new DockHeaderCommand(
+                "rorolala_vcs.workspace.refresh",
+                _view.Refresh,
+                IconKey: Icons.ArrowClockwise
+            ),
+        ];
 }
 
 /// <summary>
@@ -202,59 +209,15 @@ internal sealed class AccountsDock : IDockView
 }
 
 /// <summary>
-/// What one of the views that is not the Overview shows: nothing at all while the work is a Workspace,
-/// and the one thing there is to say while it is not.
+/// What a view of the work has to say about a directory the browser is rooted at.
 /// </summary>
 /// <remarks>
-/// The base is read where it changes rather than once, and only while this control is on screen: a
-/// dock that was closed is not a view of anything, and a dock that is on screen has to say the same
-/// thing after the user roots the tree elsewhere as it did before.
+/// Nothing at all while a Workspace holds the base, and the one thing there is to say while none
+/// does. The judgement is shared rather than made by each dock, since every view of the work is read
+/// against the same base and a second answer would be a second thing to keep in step.
 /// </remarks>
-internal sealed class WorkspaceNotice : UserControl
+internal static class WorkspaceNotice
 {
-    /// <summary>
-    /// How wide the line is allowed to read.
-    /// </summary>
-    /// <remarks>
-    /// A view of the work is as wide as the user made its window, and a sentence left to run the whole
-    /// width of a wide one is harder to read than the same sentence wrapped: this is where it wraps.
-    /// </remarks>
-    private const double Widest = 420;
-
-    /// <summary>The line shown while the base is not a Workspace.</summary>
-    private readonly TextBlock _words;
-
-    /// <summary>Where a base that could not be read is said.</summary>
-    private readonly ILog _log;
-
-    /// <summary>Makes the control.</summary>
-    /// <param name="log">Where a base that could not be read is said.</param>
-    public WorkspaceNotice(ILog log)
-    {
-        _log = log;
-
-        _words = new TextBlock
-        {
-            TextWrapping = TextWrapping.Wrap,
-            TextAlignment = TextAlignment.Center,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center,
-            MaxWidth = Widest,
-            Classes = { "muted" },
-        };
-
-        // The line is the dock's only content and stays so: while a Workspace holds the base there
-        // is nothing to say, and what is said then is said by the line not being drawn.
-        Content = _words;
-
-        // Listening while it is on screen rather than for as long as it exists: the catalogue outlives
-        // every dock, and a dock that was closed has no reason to be told where the work moved to.
-        AttachedToVisualTree += (_, _) => { BaseDirectory.Changed += Draw; Draw(); };
-        DetachedFromVisualTree += (_, _) => BaseDirectory.Changed -= Draw;
-
-        Draw();
-    }
-
     /// <summary>
     /// What one of these docks has to say about a directory the browser is rooted at.
     /// </summary>
@@ -282,13 +245,6 @@ internal sealed class WorkspaceNotice : UserControl
         }
 
         return RolaI18N.Get("rorolala_vcs.not_a_workspace");
-    }
-
-    /// <summary>Says what there is to say about where the tree is rooted.</summary>
-    private void Draw()
-    {
-        _words.Text = Notice(BaseDirectory.Current, _log);
-        _words.IsVisible = _words.Text is { Length: > 0 };
     }
 
     /// <summary>Whether a Rorolala Workspace holds a directory.</summary>

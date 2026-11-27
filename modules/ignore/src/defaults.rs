@@ -10,6 +10,8 @@ use std::fs;
 use std::io;
 use std::path::Path;
 
+use rorolala_utils_lazyffi::lazyffi;
+
 /// What a new Workspace or Vault ignores to begin with.
 pub const DEFAULT_RULES: &str = "\
 # What no work carries: the files the platforms keep beside it, which nothing is to be done with.
@@ -53,6 +55,11 @@ System Volume Information/
 ";
 
 /// The name a Workspace keeps its default rules under.
+///
+/// # FFI
+///
+/// A `char *` the caller releases with `free_string`.
+#[lazyffi(export = ROLA_IGNORE_RULES_WORKSPACE_FILE)]
 pub const WORKSPACE_FILE: &str = "default";
 
 /// The name a Vault hands its default rules down under.

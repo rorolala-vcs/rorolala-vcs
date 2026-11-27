@@ -153,6 +153,19 @@ icons = [
     # `list-bullets` is the switch in the Version Graph's corner that reads one file's chain as a list of
     # versions: lines with a bead before each, which is what the drawing becomes.
     "list-bullets",
+    # What the Workspace dock draws with. `dots-six-vertical` is the grip a rule or a comment is dragged by,
+    # `minus-circle` is a rule that ignores and `check-circle` above is one that allows, `code` opens the
+    # rules as their file, `record` is a track in the log, `scissors` a cut of history, `file` one change a
+    # run recorded, `x` cancels a comment being edited, and `arrows-in-line-vertical` is a collapse of
+    # history, two arrows meeting rather than parting.
+    "dots-six-vertical",
+    "minus-circle",
+    "code",
+    "record",
+    "scissors",
+    "file",
+    "x",
+    "arrows-in-line-vertical",
     # `tree` is what a rola-tree's folder icon wears, in the colour the tree's own id names: the set draws one
     # tree, which is what the directory is rather than what is in it.
     "tree",

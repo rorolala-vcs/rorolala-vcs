@@ -137,22 +137,17 @@ public sealed class RorolalaDockTests
     }
 
     /// <summary>
-    /// A dock made while no Workspace holds the base is a control holding something, not an empty one.
+    /// A dock made while no Workspace holds the base says so, rather than drawing two empty panes.
     /// </summary>
     /// <remarks>
-    /// The judgement and the control are two halves, and a dock that decides rightly and carries nothing
-    /// is a window the user reads as an empty work: what is checked here is that what the registration
-    /// makes is a control with content in it. The Workspace dock says the words as its only line; every
-    /// other dock draws its own view, and the Overview's is checked by
+    /// The judgement and the view are two halves, and a view that decides rightly and draws two empty
+    /// panes is a window the user reads as an empty work: what is checked here is that what the
+    /// registration makes is the line for a base no Workspace holds. Every other dock draws its own
+    /// view, and the Overview's is checked by
     /// <see cref="TheOverviewSaysABaseOutsideEveryWorkspaceIsNotOne"/>.
-    /// <para>
-    /// Nothing about a Workspace is asked, since the base published by an earlier test of this run is no
-    /// more a Workspace than a fresh one is, and the line is what a base outside every Workspace comes
-    /// to either way.
-    /// </para>
     /// </remarks>
     [Fact]
-    public void ADockOutsideEveryWorkspaceCarriesSomethingItIsMadeWith()
+    public void AWorkspaceDockOutsideEveryWorkspaceSaysSo()
     {
         var services = Host.Services();
         var plugin = new Vcs();
@@ -167,16 +162,36 @@ public sealed class RorolalaDockTests
             Assert.NotNull(registration.Create().View);
         }
 
-        // The Workspace dock is the one that says where the base is; the other docks show something
-        // of their own, and what they show is checked by their own tests.
         var workspace = services.Docks.Registrations.Single(dock =>
             dock.DockNameId == RorolalaDocks.WorkspaceNameId
         );
-        var dock = Assert.IsAssignableFrom<UserControl>(workspace.Create().View);
-        var line = Assert.IsType<TextBlock>(dock.Content);
+        var view = Assert.IsType<WorkspaceView>(workspace.Create().View);
 
-        Assert.True(line.IsVisible);
-        Assert.False(string.IsNullOrEmpty(line.Text));
+        Assert.True(view.ShowsNotice);
+    }
+
+    /// <summary>The Workspace's header offers to read its rules and its log again.</summary>
+    /// <remarks>
+    /// One command rather than one per pane, because what a reader asks of this view as a whole is
+    /// both answers at once, and the two are read against the same files. The picture is the one the
+    /// Overview's own reading wears, since the two are the same act of reading the work again.
+    /// </remarks>
+    [Fact]
+    public void TheWorkspaceOffersToReadTheRulesAndTheLogAgain()
+    {
+        var services = Host.Services();
+        var plugin = new Vcs();
+
+        plugin.Initialize(services.For(plugin.Manifest.Id, 1));
+
+        var workspace = services.Docks.Registrations.Single(dock =>
+            dock.DockNameId == RorolalaDocks.WorkspaceNameId
+        );
+        var header = Assert.Single(workspace.Create().Header);
+        var command = Assert.IsType<DockHeaderCommand>(header);
+
+        Assert.Equal("rorolala_vcs.workspace.refresh", command.LabelKey);
+        Assert.Equal(global::RorolalaVCSPlugin.Icons.ArrowClockwise, command.IconKey);
     }
 
     /// <summary>

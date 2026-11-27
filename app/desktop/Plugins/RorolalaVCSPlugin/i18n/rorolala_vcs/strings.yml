@@ -1246,6 +1246,9 @@ rorolala_vcs:
     waiting:
       en: Waiting
       zh-CN: 等待前序
+    undo:
+      en: Undoing
+      zh-CN: 正在撤销
 
   # The Accounts dock: which account the work acts as, and what may be done about them. The rows are the
   # accounts `rola account` lists, and what a row offers is a run of `rola`, naming the account the work acts
@@ -1475,6 +1478,181 @@ rorolala_vcs:
   ownership_unknown:
     en: This window was not opened by `rola`, so it does not know which one to run
     zh-CN: 本窗口不是由 `rola` 打开的，因此不知道要运行哪一个
+
+  # The Workspace dock: the ignore rules the work is managed by, and the operations it last recorded. The
+  # rules are the Workspace's own file, read and written here, and the rules a Vault handed down, which
+  # are read only because a fetch writes them. The log is the stack `rola undo` pops, so what a row says
+  # is a run of the program and what opening it shows is the effects that run recorded.
+  workspace:
+    refresh:
+      en: Read the ignore rules and the ops log again
+      zh-CN: 重新读取忽略规则与操作日志
+
+    rules_title:
+      en: Ignore rules
+      zh-CN: 忽略规则
+    rules_text:
+      en: Edit the rules as text
+      zh-CN: 以文本编辑规则
+    rules_empty:
+      en: This Workspace ignores nothing yet. Add a pattern below.
+      zh-CN: 此工作区尚未忽略任何内容，在下方添加规则。
+    rules_unreadable:
+      en: The ignore rules could not be read
+      zh-CN: 无法读取忽略规则
+    rules_write_failed:
+      en: The ignore rules could not be written
+      zh-CN: 无法写入忽略规则
+    rules_add_hint:
+      en: Pattern or # comment
+      zh-CN: 规则或以 # 开头的注释
+    rules_add:
+      en: Add
+      zh-CN: 添加
+    rules_revert:
+      en: Revert
+      zh-CN: 还原
+    rules_save:
+      en: Save
+      zh-CN: 保存
+
+    # What a rule's own buttons say, and what a note's do. The two are the whole of what a row offers,
+    # so the words say what pressing does rather than what the row is.
+    rule_ignore_tip:
+      en: Ignore this path instead
+      zh-CN: 改为忽略此路径
+    rule_allow_tip:
+      en: Allow this path instead
+      zh-CN: 改为不忽略此路径
+    rule_delete_tip:
+      en: Delete this rule
+      zh-CN: 删除此规则
+    rule_drag_tip:
+      en: Drag to reorder
+      zh-CN: 拖动以排序
+    comment_edit_tip:
+      en: Edit the comment
+      zh-CN: 编辑注释
+    comment_delete_tip:
+      en: Delete the comment
+      zh-CN: 删除注释
+    comment_save_tip:
+      en: Save the comment
+      zh-CN: 保存注释
+    comment_cancel_tip:
+      en: Cancel
+      zh-CN: 取消
+
+    # The rules a Vault handed down, which are shown above the Workspace's own and are not edited here.
+    vaults_title:
+      en: From vaults
+      zh-CN: 来自 Vault
+    vaults_read_only:
+      en: "%{count} rules, read only"
+      zh-CN: "%{count} 条规则，只读"
+    vaults_read_only_tip:
+      en: Read only
+      zh-CN: 只读
+
+    # The ops log: what a run is called, what became of each change it recorded, and how long ago it
+    # was. The count is written with the number in it, and the time is said as an interval rather than
+    # as a moment, the exact moment being what the row's tooltip holds.
+    ops_title:
+      en: Ops log
+      zh-CN: 操作日志
+    ops_undo:
+      en: Undo
+      zh-CN: 撤销
+    ops_undo_tip:
+      en: Undo the newest operation
+      zh-CN: 撤销最新一次操作
+    ops_undo_failed:
+      en: The operation could not be undone
+      zh-CN: 无法撤销该操作
+    ops_empty:
+      en: No operation is recorded in this Workspace
+      zh-CN: 此工作区没有记录任何操作
+    ops_unreadable:
+      en: The operations could not be read
+      zh-CN: 无法读取操作记录
+    ops_changes:
+      en: "%{count} change(s)"
+      zh-CN: "%{count} 项改动"
+
+    cmd_fs_cp:
+      en: Copy files
+      zh-CN: 复制文件
+    cmd_fs_mv:
+      en: Move files
+      zh-CN: 移动文件
+    cmd_fs_rm:
+      en: Remove files
+      zh-CN: 删除文件
+    cmd_align:
+      en: Restore
+      zh-CN: 还原
+    cmd_bring:
+      en: Bring in
+      zh-CN: 取入
+    cmd_collapse:
+      en: Collapse history
+      zh-CN: 折叠历史
+    cmd_cut:
+      en: Cut history
+      zh-CN: 裁剪历史
+    cmd_retrack:
+      en: Retrack
+      zh-CN: 重新追踪
+    cmd_sync:
+      en: Sync
+      zh-CN: 同步
+    cmd_track:
+      en: Track
+      zh-CN: 追踪
+    cmd_tweak:
+      en: Tweak
+      zh-CN: 调整
+
+    state_added:
+      en: Added
+      zh-CN: 新增
+    state_removed:
+      en: Removed
+      zh-CN: 移除
+    state_changed:
+      en: Changed
+      zh-CN: 变更
+    state_bound:
+      en: Bound
+      zh-CN: 绑定
+    state_unbound:
+      en: Unbound
+      zh-CN: 解绑
+    state_moved:
+      en: Moved
+      zh-CN: 移动
+    state_reidentified:
+      en: Reidentified
+      zh-CN: 更换身份
+
+    when_now:
+      en: just now
+      zh-CN: 刚刚
+    when_minutes:
+      en: "%{count} min ago"
+      zh-CN: "%{count} 分钟前"
+    when_hours:
+      en: "%{count} hour(s) ago"
+      zh-CN: "%{count} 小时前"
+    when_yesterday:
+      en: yesterday
+      zh-CN: 昨天
+    when_days:
+      en: "%{count} days ago"
+      zh-CN: "%{count} 天前"
+    when_weeks:
+      en: "%{count} week(s) ago"
+      zh-CN: "%{count} 周前"
 
 # What this plugin's entries are called, under the paths that name them. The categories are the File
 # System's and are stated in its own file, since it opens the menu they sit in; a leaf is stated once,

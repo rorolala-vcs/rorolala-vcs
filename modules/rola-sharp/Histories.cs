@@ -63,7 +63,7 @@ internal static class Histories
                         RorolalaBinding.rola_history_operation_number(item),
                         NativeText.Taken(RorolalaBinding.rola_history_operation_command(item)),
                         NativeText.Taken(RorolalaBinding.rola_history_operation_time(item)),
-                        RorolalaBinding.rola_history_operation_changes(item)
+                        ChangesIn(item)
                     )
                 );
             }
@@ -74,6 +74,39 @@ internal static class Histories
         }
 
         return operations;
+    }
+
+    /// <summary>What one operation did, in the order it did it.</summary>
+    private static List<RecordedChange> ChangesIn(nint operation)
+    {
+        var changes = new List<RecordedChange>();
+        var count = RorolalaBinding.rola_history_operation_changes(operation);
+        for (nuint index = 0; index < count; index++)
+        {
+            var item = RorolalaBinding.rola_history_operation_change(operation, index);
+            if (item == 0)
+            {
+                continue;
+            }
+
+            try
+            {
+                changes.Add(
+                    new RecordedChange(
+                        NativeText.Taken(RorolalaBinding.rola_history_change_kind(item)),
+                        NativeText.Taken(RorolalaBinding.rola_history_change_from(item)),
+                        NativeText.Taken(RorolalaBinding.rola_history_change_to(item)),
+                        NativeText.Taken(RorolalaBinding.rola_history_change_state(item))
+                    )
+                );
+            }
+            finally
+            {
+                RorolalaBinding.free_rola_history_change(item);
+            }
+        }
+
+        return changes;
     }
 
     /// <summary>How many files could not be read, as a count this side can hold.</summary>

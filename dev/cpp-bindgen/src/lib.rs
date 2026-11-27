@@ -1394,7 +1394,7 @@ RorolalaResult rola_thing_write(const char *path);
         assert!(counts.handles > 100, "{counts:?}");
         assert_eq!(counts.outcomes, 117, "{counts:?}");
         assert!(counts.error_families > 10, "{counts:?}");
-        assert_eq!(counts.constants, 38, "{counts:?}");
+        assert_eq!(counts.constants, 40, "{counts:?}");
 
         assert!(umbrella.exists());
 
