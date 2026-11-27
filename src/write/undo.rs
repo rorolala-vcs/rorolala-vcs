@@ -15,14 +15,17 @@ use std::path::{Path, PathBuf};
 
 use rorolala_layout::{EntryKind, Layout, LayoutPath, MutableData};
 use rorolala_storage::{Key, StorageSet, key_of_file};
+use rorolala_utils_lazyffi::lazyffi;
 use rorolala_utils_location::Locate as _;
 use rorolala_vcs::VCSIndex;
 use rorolala_workspace::Workspace;
 use uuid::Uuid;
 
 use crate::write::checkout::Checkout;
+use crate::write::error::WriteError;
 use crate::write::journal::{Effect, EntryState, Journal};
 use crate::write::layout::{LayoutOp, apply_recorded, switch_entry};
+use crate::write::request::{Common, WriteCommon};
 
 /// How many operations to undo, and how.
 #[derive(Debug, Clone, Default)]
@@ -796,6 +799,303 @@ fn failed(reason: String) -> UndoRefusal {
     UndoRefusal::Failed {
         command: "undo".to_owned(),
         reason,
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
+// The C ABI
+// ---------------------------------------------------------------------------------------------
+
+/// What a run does with an operation that stands only in part.
+#[lazyffi(export = RolaWriteUndoPartial)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum WriteUndoPartial {
+    /// Leave the operation and the stack below it where they are.
+    #[default]
+    Stop,
+    /// Reverse what still stands and go on to the one before it.
+    Continue,
+}
+
+/// An undo asked for as one value, so a C caller fills the same request a command builds.
+///
+/// # FFI
+///
+/// A `RolaWriteUndoRequest` the caller fills. Every `const char *` is borrowed for the call and
+/// released by the caller, so nothing here is freed when the call returns. `count` is how many
+/// operations to undo, `0` for one; `soft` moves only the Layout; and `on_partial` says what to do
+/// with an operation that stands only in part, since an ABI has no question to ask. `force`, which
+/// writes over a file that changed, is the one every write request carries.
+#[lazyffi(export = RolaWriteUndoRequest, input)]
+#[derive(Debug, Clone, Default)]
+pub struct UndoInput {
+    /// The fields every write request carries.
+    pub common: WriteCommon,
+    /// How many operations to undo, `0` for one.
+    pub count: u32,
+    /// Whether only the Layout moves back.
+    pub soft: bool,
+    /// What to do with an operation that stands only in part.
+    pub on_partial: WriteUndoPartial,
+}
+
+impl From<UndoInput> for UndoRequest {
+    fn from(input: UndoInput) -> Self {
+        Self {
+            common: input.common.into(),
+            count: input.count,
+            soft: input.soft,
+            on_partial: input.on_partial,
+        }
+    }
+}
+
+/// An undo asked for as one value, as the steps of one run read it.
+#[derive(Debug, Clone)]
+pub struct UndoRequest {
+    /// The fields every write request carries.
+    common: Common,
+    /// How many operations to undo, `0` for one.
+    count: u32,
+    /// Whether only the Layout moves back.
+    soft: bool,
+    /// What to do with an operation that stands only in part.
+    on_partial: WriteUndoPartial,
+}
+
+impl UndoRequest {
+    /// The options the stack is read and walked with.
+    fn options(&self) -> UndoOptions {
+        UndoOptions {
+            count: (self.count > 0).then(|| self.count.to_string()),
+            soft: self.soft,
+            force: self.common.force,
+        }
+    }
+
+    /// The Workspace, its Layout and the two resources a run may not need.
+    fn resolved(
+        &self,
+    ) -> Result<(Workspace, Layout, Option<VCSIndex>, Option<StorageSet>), WriteError> {
+        let workspace = self.common.workspace()?;
+        let layout = self.common.layout(&workspace)?;
+        let index = self.common.index(&workspace).ok();
+        let store = self.common.store(&workspace).ok();
+
+        Ok((workspace, layout, index, store))
+    }
+
+    /// Reads the operations a run would undo, newest first, and how each stands.
+    ///
+    /// # Errors
+    ///
+    /// As [`preview`].
+    pub fn preview(&self) -> Result<Vec<UndoGroup>, WriteError> {
+        let (workspace, layout, index, store) = self.resolved()?;
+
+        self::preview(
+            &workspace,
+            &layout,
+            index.as_ref(),
+            store.as_ref(),
+            &self.options(),
+        )
+        .map_err(refused)
+    }
+
+    /// Reverses the operations, newest first, taking `on_partial` for the answer a command asks for.
+    ///
+    /// # Errors
+    ///
+    /// As [`undo`].
+    pub fn run(&self) -> Result<UndoOutcome, WriteError> {
+        let (workspace, layout, index, store) = self.resolved()?;
+        let partial = self.on_partial;
+        let mut decide = |_: &UndoGroup| partial == WriteUndoPartial::Continue;
+
+        self::undo(
+            &workspace,
+            &layout,
+            index.as_ref(),
+            store.as_ref(),
+            &self.options(),
+            &mut decide,
+        )
+        .map_err(refused)
+    }
+}
+
+/// Reads the operations a run would undo, for a C caller that asks its own way first.
+///
+/// # FFI
+///
+/// `input` is a `RolaWriteUndoRequest` the caller fills and keeps; every `const char *` in it is
+/// borrowed for the call and released by the caller. A `RolaWriteUndoPlan *` the caller releases
+/// with `free_rola_write_undo_plan` answers it, each operation released with
+/// `free_rola_write_undo_group`, or a `RolaWriteError *` released with `free_rola_write_error`.
+///
+/// # Errors
+///
+/// Returns the failures [`UndoRequest::preview`] names.
+#[lazyffi(export = rola_write_undo_plan)]
+pub fn undo_plan_at(input: &UndoInput) -> Result<WriteUndoPlan, WriteError> {
+    let request: UndoRequest = input.clone().into();
+    let groups = request.preview()?;
+
+    Ok(WriteUndoPlan {
+        groups: groups
+            .iter()
+            .map(|group| WriteUndoGroup {
+                command: group.command.clone(),
+                standing: word(group.standing).to_owned(),
+            })
+            .collect(),
+    })
+}
+
+/// Reverses the recorded operations, newest first, from a C caller's request.
+///
+/// # FFI
+///
+/// `input` is a `RolaWriteUndoRequest` the caller fills and keeps; every `const char *` in it is
+/// borrowed for the call and released by the caller. A `RolaWriteUndone *` the caller releases with
+/// `free_rola_write_undone` answers it, or a `RolaWriteError *` released with `free_rola_write_error`.
+///
+/// # Errors
+///
+/// Returns the failures [`UndoRequest::run`] names.
+#[lazyffi(export = rola_write_undo)]
+pub fn undo_at(input: &UndoInput) -> Result<WriteUndone, WriteError> {
+    let request: UndoRequest = input.clone().into();
+    let outcome = request.run()?;
+
+    Ok(WriteUndone {
+        commands: outcome.undone,
+    })
+}
+
+/// The word one standing is written as.
+const fn word(standing: UndoStanding) -> &'static str {
+    match standing {
+        UndoStanding::Whole => "whole",
+        UndoStanding::Part => "part",
+        UndoStanding::None => "none",
+    }
+}
+
+/// One operation a run would undo, as the C ABI hands it over.
+///
+/// # FFI
+///
+/// A `RolaWriteUndoGroup *` the caller releases with `free_rola_write_undo_group`. `_command`
+/// returns a `char *` the caller releases with `free_string`, and `_standing` is `whole`, `part` or
+/// `none`.
+#[lazyffi(export = RolaWriteUndoGroup)]
+#[derive(Debug, Clone, Default)]
+pub struct WriteUndoGroup {
+    /// The command that made the changes.
+    command: String,
+    /// How the changes stand: `whole`, `part` or `none`.
+    standing: String,
+}
+
+#[lazyffi(export = rola_)]
+impl WriteUndoGroup {
+    /// The command that made the changes.
+    #[must_use]
+    pub fn command(&self) -> String {
+        self.command.clone()
+    }
+
+    /// How the changes stand: `whole`, `part` or `none`.
+    #[must_use]
+    pub fn standing(&self) -> String {
+        self.standing.clone()
+    }
+}
+
+/// The operations a run would undo, as the C ABI hands them over.
+///
+/// # FFI
+///
+/// A `RolaWriteUndoPlan *` the caller releases with `free_rola_write_undo_plan`. `_count` says how
+/// many operations the run considered, and `_at` answers one, or null past the end, as a
+/// `RolaWriteUndoGroup *` the caller releases with `free_rola_write_undo_group`.
+#[lazyffi(export = RolaWriteUndoPlan)]
+#[derive(Debug, Clone, Default)]
+pub struct WriteUndoPlan {
+    /// Each operation the run considered, newest first.
+    groups: Vec<WriteUndoGroup>,
+}
+
+#[lazyffi(export = rola_)]
+impl WriteUndoPlan {
+    /// How many operations the run considered.
+    #[must_use]
+    pub const fn count(&self) -> usize {
+        self.groups.len()
+    }
+
+    /// One operation, newest first, or null past the end.
+    #[must_use]
+    pub fn at(&self, index: usize) -> Option<WriteUndoGroup> {
+        self.groups.get(index).cloned()
+    }
+}
+
+/// The operations an undo reversed, as the C ABI hands them over.
+///
+/// # FFI
+///
+/// A `RolaWriteUndone *` the caller releases with `free_rola_write_undone`. `_count` says how many
+/// operations were undone, and `_command_at` answers one command to release with `free_string`.
+#[lazyffi(export = RolaWriteUndone)]
+#[derive(Debug, Clone, Default)]
+pub struct WriteUndone {
+    /// The commands whose operations were undone, newest first.
+    commands: Vec<String>,
+}
+
+#[lazyffi(export = rola_)]
+impl WriteUndone {
+    /// How many operations were undone.
+    #[must_use]
+    pub const fn count(&self) -> usize {
+        self.commands.len()
+    }
+
+    /// The command whose operation was undone at `index`, empty past the end.
+    #[must_use]
+    pub fn command_at(&self, index: usize) -> String {
+        self.commands.get(index).cloned().unwrap_or_default()
+    }
+}
+
+/// The failure a refused undo is told as.
+fn refused(refusal: UndoRefusal) -> WriteError {
+    match refusal {
+        UndoRefusal::NoLog => WriteError::NotFound {
+            what: "an operation to undo".to_owned(),
+        },
+        UndoRefusal::Count { written, available } => WriteError::Precondition {
+            what: format!("the count `{written}`"),
+            reason: format!("the Workspace records {available} operation(s)"),
+        },
+        UndoRefusal::Flags => WriteError::Precondition {
+            what: "the flags".to_owned(),
+            reason: "moving only the record and writing over a file were both asked for".to_owned(),
+        },
+        UndoRefusal::Changed { path } => WriteError::Precondition {
+            what: path,
+            reason: "the file changed after the operation was recorded".to_owned(),
+        },
+        UndoRefusal::Absent { path } => WriteError::Precondition {
+            what: path,
+            reason: "the file the operation left is gone".to_owned(),
+        },
+        UndoRefusal::Failed { command, reason } => WriteError::Internal {
+            reason: format!("the operation `{command}` could not be undone: {reason}"),
+        },
     }
 }
 

@@ -69,13 +69,15 @@ This document records all Changelog entries for Rorolala VCS starting from 0.1.0
 36. [`app`] [`RorolalaDesktop`] [`ROLALauncher`] [`theme`] Follow the look's file while the other program is open. [See details](dev/CHANGELOG-DETAILS.md#36-app-rorolaladesktop-rolalauncher-theme-follow-the-looks-file-while-the-other-program-is-open)
 37. [`app`] [`RorolalaDesktop`] [`theme`] Draw the program's motion at the level the look states. [See details](dev/CHANGELOG-DETAILS.md#37-app-rorolaladesktop-theme-draw-the-programs-motion-at-the-level-the-look-states)
 38. [`app`] [`RorolalaDesktop`] [`theme`] State the light look's semantic colours in the bright set. [See details](dev/CHANGELOG-DETAILS.md#38-app-rorolaladesktop-theme-state-the-light-looks-semantic-colours-in-the-bright-set)
-39. [`librorolala`] [`write`] Export the content fetch as rola_write_fetch_with. [See details](dev/CHANGELOG-DETAILS.md#39-librorolala-write-export-the-content-fetch-as-rola_write_fetch_with)
-40. [`librorolala`] [`write`] Move the Layout, storage and index writes into librorolala. [See details](dev/CHANGELOG-DETAILS.md#40-librorolala-write-move-the-layout-storage-and-index-writes-into-librorolala)
-41. [`librorolala`] [`write`] [`layout`] Write a fetched Vault copy and fork an entry. [See details](dev/CHANGELOG-DETAILS.md#41-librorolala-write-layout-write-a-fetched-vault-copy-and-fork-an-entry)
-42. [`modules`] [`rola-sharp`] Add the C# bindings. [See details](dev/CHANGELOG-DETAILS.md#42-modules-rola-sharp-add-the-c-bindings)
-43. [`modules`] [`storage`] Bind a Workspace, a Vault or a git-rola project to separate stores. [See details](dev/CHANGELOG-DETAILS.md#43-modules-storage-bind-a-workspace-a-vault-or-a-git-rola-project-to-separate-stores)
-44. [`modules`] [`storage`] [`fsck`] Answer whether a store holds together. [See details](dev/CHANGELOG-DETAILS.md#44-modules-storage-fsck-answer-whether-a-store-holds-together)
-45. [`utils`] [`constants`] [`abi`] State the ABI version and pin every transparent layout. [See details](dev/CHANGELOG-DETAILS.md#45-utils-constants-abi-state-the-abi-version-and-pin-every-transparent-layout)
+39. [`librorolala`] [`history`] Export the history operations over the C ABI. [See details](dev/CHANGELOG-DETAILS.md#39-librorolala-history-export-the-history-operations-over-the-c-abi)
+40. [`librorolala`] [`write`] Export the content fetch as rola_write_fetch_with. [See details](dev/CHANGELOG-DETAILS.md#40-librorolala-write-export-the-content-fetch-as-rola_write_fetch_with)
+41. [`librorolala`] [`write`] Move the Layout, storage and index writes into librorolala. [See details](dev/CHANGELOG-DETAILS.md#41-librorolala-write-move-the-layout-storage-and-index-writes-into-librorolala)
+42. [`librorolala`] [`write`] [`layout`] Write a fetched Vault copy and fork an entry. [See details](dev/CHANGELOG-DETAILS.md#42-librorolala-write-layout-write-a-fetched-vault-copy-and-fork-an-entry)
+43. [`modules`] [`rola-sharp`] Add the C# bindings. [See details](dev/CHANGELOG-DETAILS.md#43-modules-rola-sharp-add-the-c-bindings)
+44. [`modules`] [`rola-sharp`] [`history`] Run the history operations from RolaSharp. [See details](dev/CHANGELOG-DETAILS.md#44-modules-rola-sharp-history-run-the-history-operations-from-rolasharp)
+45. [`modules`] [`storage`] Bind a Workspace, a Vault or a git-rola project to separate stores. [See details](dev/CHANGELOG-DETAILS.md#45-modules-storage-bind-a-workspace-a-vault-or-a-git-rola-project-to-separate-stores)
+46. [`modules`] [`storage`] [`fsck`] Answer whether a store holds together. [See details](dev/CHANGELOG-DETAILS.md#46-modules-storage-fsck-answer-whether-a-store-holds-together)
+47. [`utils`] [`constants`] [`abi`] State the ABI version and pin every transparent layout. [See details](dev/CHANGELOG-DETAILS.md#47-utils-constants-abi-state-the-abi-version-and-pin-every-transparent-layout)
 
 ## Refactor
 

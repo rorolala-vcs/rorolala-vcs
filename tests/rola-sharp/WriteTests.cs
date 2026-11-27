@@ -1877,7 +1877,10 @@ public sealed class WriteTests
         var at = new DirectoryInfo(AppContext.BaseDirectory);
         while (at is not null)
         {
-            if (Directory.Exists(Path.Combine(at.FullName, ".git")))
+            // A checkout made by `git worktree` keeps `.git` as a file naming the real one, so both
+            // spellings say this is the root.
+            var dot = Path.Combine(at.FullName, ".git");
+            if (Directory.Exists(dot) || File.Exists(dot))
             {
                 return at.FullName;
             }

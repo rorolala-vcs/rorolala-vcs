@@ -458,3 +458,79 @@ internal sealed class SnakeCaseEnumConverter<T> : JsonConverter<T>
             JsonNamingPolicy.SnakeCaseLower.ConvertName(value.ToString())
         );
 }
+
+/// <summary>Folds the local versions above the tracked Vault's version into one.</summary>
+public sealed record CollapseRequest : WriteRequest
+{
+    /// <summary>The one path whose chain is folded, relative to the Workspace root or absolute.</summary>
+    [JsonPropertyName("file")]
+    public required string File { get; init; }
+
+    /// <summary>The first version folded, or empty for the version above the origin.</summary>
+    [JsonPropertyName("target")]
+    public string TargetVersion { get; init; } = string.Empty;
+
+    /// <summary>The versions kept apart from the fold, each a target the command would take.</summary>
+    [JsonPropertyName("keep")]
+    public IReadOnlyList<string> Keep { get; init; } = [];
+
+    /// <summary>Whether a merge version in the range is kept as a checkpoint.</summary>
+    [JsonPropertyName("keep_join")]
+    public bool KeepJoin { get; init; }
+}
+
+/// <summary>Cuts a file's old history away and starts it again at a kept version.</summary>
+public sealed record CutRequest : WriteRequest
+{
+    /// <summary>The one path whose old history is cut away, relative to the Workspace root or absolute.</summary>
+    [JsonPropertyName("file")]
+    public required string File { get; init; }
+
+    /// <summary>The first version kept in the new chain, or empty for the version above the origin.</summary>
+    [JsonPropertyName("target")]
+    public string TargetVersion { get; init; } = string.Empty;
+
+    /// <summary>Whether the entry keeps its `Uuid`, which forks it from the Vault.</summary>
+    [JsonPropertyName("keep_uuid")]
+    public bool KeepUuid { get; init; }
+
+    /// <summary>Whether every merge in the kept range is dropped.</summary>
+    [JsonPropertyName("strip_join")]
+    public bool StripJoin { get; init; }
+}
+
+/// <summary>Puts back what the last recorded operations changed, newest first.</summary>
+public sealed record UndoRequest : WriteRequest
+{
+    /// <summary>How many operations to undo, or zero for one.</summary>
+    [JsonPropertyName("count")]
+    public int Count { get; init; }
+
+    /// <summary>Whether only the Layout moves back and every file is left as it is.</summary>
+    [JsonPropertyName("soft")]
+    public bool Soft { get; init; }
+
+    /// <summary>What to do with an operation that stands only in part.</summary>
+    [JsonPropertyName("on_partial")]
+    public UndoPartial OnPartial { get; init; }
+}
+
+/// <summary>Applies a sheet to a path's chain, rebuilding what follows the point adjusted.</summary>
+public sealed record TweakRequest : WriteRequest
+{
+    /// <summary>The one path whose chain is adjusted, relative to the Workspace root or absolute.</summary>
+    [JsonPropertyName("file")]
+    public required string File { get; init; }
+
+    /// <summary>The sheet, as the editor writes one.</summary>
+    [JsonPropertyName("sheet")]
+    public required string Sheet { get; init; }
+}
+
+/// <summary>Drops the plan waiting for one path.</summary>
+public sealed record TweakCancelRequest : WriteRequest
+{
+    /// <summary>The one path whose pending plan is dropped, relative to the Workspace root or absolute.</summary>
+    [JsonPropertyName("file")]
+    public required string File { get; init; }
+}

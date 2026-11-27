@@ -307,7 +307,7 @@ public sealed partial class WorkspaceWriter : Writer
         using var memory = new NativeRequest();
         var native = memory.Pointer(SyncFields(memory, request));
 
-        var answer = Call(
+        var answer = Calls.Call(
             RorolalaBinding.rola_write_sync_plan,
             native,
             progress,

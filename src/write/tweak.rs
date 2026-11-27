@@ -32,7 +32,8 @@ use rorolala_protocol::VaultAddress;
 use rorolala_status::Relation;
 use rorolala_storage::{Blake3Hash, Key, StorageSet, key_of_file};
 use rorolala_utils_constants::{WORKSPACE_IGNORE_RULES_DIR, WORKSPACE_TWEAKING_DIR};
-use rorolala_utils_location::Locate as _;
+use rorolala_utils_lazyffi::lazyffi;
+use rorolala_utils_location::{Locate as _, normalize};
 use rorolala_utils_progress::Progress;
 use rorolala_vcs::{Creator, Message, VCSIndex, VCSIndexObject, VCSWrite as _, Variant, Version};
 use rorolala_version_search as version_search;
@@ -48,6 +49,10 @@ use crate::tree::{Tree, TreeStructure, compare, conflict_copy, read_structure};
 use crate::write::checkout::remember;
 use crate::write::journal::{Effect, EntryState, Journal};
 use crate::write::layout::set_version;
+use crate::write::path::{PathRefusal, local_path};
+use crate::write::progress::{WriteProgress, watching};
+use crate::write::request::{Common, WriteCommon};
+use crate::write::retrack::tree_above;
 use crate::write::tree::put_back;
 use crate::write::{Cancellation, WriteError};
 
@@ -2216,6 +2221,347 @@ fn runtime() -> Result<tokio::runtime::Runtime, TweakRefusal> {
         })
     })
 }
+
+// ---------------------------------------------------------------------------------------------
+// The C ABI
+// ---------------------------------------------------------------------------------------------
+
+/// A tweak asked for as one value, so a C caller fills the same request the editor fills.
+///
+/// # FFI
+///
+/// A `RolaWriteTweakRequest` the caller fills. Every `const char *` is borrowed for the call and
+/// released by the caller, so nothing here is freed when the call returns. `file` is a path in the
+/// Workspace, relative to its root or absolute, and `sheet` is the sheet the editor would have
+/// given back, read by [`Sheet::parse`].
+#[lazyffi(export = RolaWriteTweakRequest, input)]
+#[derive(Debug, Clone, Default)]
+pub struct TweakInput {
+    /// The fields every write request carries.
+    pub common: WriteCommon,
+    /// The one path whose chain is adjusted.
+    pub file: String,
+    /// The sheet, as the editor writes one.
+    pub sheet: String,
+}
+
+impl From<TweakInput> for TweakRequest {
+    fn from(input: TweakInput) -> Self {
+        Self {
+            common: input.common.into(),
+            file: input.file,
+            sheet: input.sheet,
+        }
+    }
+}
+
+/// A tweak asked for as one value, as the steps of one run read it.
+#[derive(Debug, Clone)]
+pub struct TweakRequest {
+    /// The fields every write request carries.
+    common: Common,
+    /// The one path whose chain is adjusted.
+    file: String,
+    /// The sheet, as the editor writes one.
+    sheet: String,
+}
+
+impl TweakRequest {
+    /// Applies the sheet, answering the path as the Layout names it and what the run wrote.
+    ///
+    /// The sheet is read against the chain before anything is written, so a sheet that does not fit
+    /// it is refused rather than applied to some other range. A sheet that says nothing to change is
+    /// a run with nothing to write, which answers the version the entry records and no rebuild.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`WriteError::NoWorkspace`], [`WriteError::NoLayout`] or [`WriteError::NoIndex`] when
+    /// the request names none, and the failures [`apply_with`] names, through `refused`.
+    pub fn run(
+        &self,
+        progress: &Progress,
+        cancellation: &Cancellation,
+    ) -> Result<Tweaked, WriteError> {
+        let workspace = self.common.workspace()?;
+        let layout = self.common.layout(&workspace)?;
+        let index = self.common.index(&workspace).ok();
+        let Some(vcs) = index.as_ref() else {
+            return Err(WriteError::NoIndex);
+        };
+        let store = self.common.store(&workspace).ok();
+        let account = self.common.account(&workspace).ok();
+        let candidates = self.common.candidates(&workspace).unwrap_or_default();
+        let root = normalize(workspace.get_root());
+        let path = local_path(&root, &root, &self.file)
+            .map_err(|refusal| path_refused(&self.file, refusal))?;
+        let path = tree_above(&layout, &path).unwrap_or(path);
+        let Some(id) = layout.id_of(&path) else {
+            return Err(precondition(
+                &self.file,
+                "the Layout records no entry there",
+            ));
+        };
+        let chain =
+            chain_of(vcs, &layout, &path).map_err(|refusal| refused(&self.file, refusal))?;
+        let sheet = Sheet::parse(&self.sheet)
+            .map_err(|error| precondition(&self.file, error.to_string()))?;
+        let listed = operations(&chain, &sheet).map_err(|refusal| refused(&self.file, refusal))?;
+        let named = path.as_str().to_owned();
+
+        // A sheet with nothing in it is an editor closed without an edit, which is a run with
+        // nothing to write.
+        if listed.is_empty() {
+            let version = layout
+                .entry(id)
+                .map_or_default(|data| Key::new(data.version()).hex());
+
+            return Ok(Tweaked {
+                path: named,
+                version,
+                rebuilt: 0,
+            });
+        }
+
+        let request = Request {
+            workspace: &workspace,
+            layout: &layout,
+            index: index.as_ref(),
+            store: store.as_ref(),
+            account: account.as_ref(),
+            candidates: &candidates,
+            offline: self.common.offline,
+            concurrency: self.common.concurrency,
+        };
+        let mut journal = Journal::open(&workspace, "tweak");
+        let outcome = apply_with(
+            &request,
+            id,
+            &path,
+            &sheet,
+            &ApplyOptions::default(),
+            progress,
+            cancellation,
+            Some(&mut journal),
+        )
+        .map_err(|refusal| refused(&self.file, refusal))?;
+        journal.finish()?;
+
+        Ok(Tweaked {
+            path: named,
+            version: outcome.to,
+            rebuilt: outcome.rebuilt,
+        })
+    }
+}
+
+/// A tweak a request carried out, and the path it did it at.
+#[derive(Debug, Clone)]
+pub struct Tweaked {
+    /// The path, as the Layout names it.
+    pub path: String,
+    /// The version the entry records now, as hex.
+    pub version: String,
+    /// How many versions were written.
+    pub rebuilt: usize,
+}
+
+/// A cancel asked for as one value, so a C caller drops a plan by naming the file.
+///
+/// # FFI
+///
+/// A `RolaWriteTweakCancelRequest` the caller fills. `file` is a path in the Workspace, relative to
+/// its root or absolute, and borrowed for the call.
+#[lazyffi(export = RolaWriteTweakCancelRequest, input)]
+#[derive(Debug, Clone, Default)]
+pub struct TweakCancelInput {
+    /// The fields every write request carries.
+    pub common: WriteCommon,
+    /// The one path whose pending plan is dropped.
+    pub file: String,
+}
+
+impl From<TweakCancelInput> for TweakCancelRequest {
+    fn from(input: TweakCancelInput) -> Self {
+        Self {
+            common: input.common.into(),
+            file: input.file,
+        }
+    }
+}
+
+/// A cancel asked for as one value, as the steps of one run read it.
+#[derive(Debug, Clone)]
+pub struct TweakCancelRequest {
+    /// The fields every write request carries.
+    common: Common,
+    /// The one path whose pending plan is dropped.
+    file: String,
+}
+
+impl TweakCancelRequest {
+    /// Drops the plan waiting for the path.
+    ///
+    /// The plan is the one written against the version the entry records now, which is what a run
+    /// that planned an adjustment against the work as it stands is waiting for.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`WriteError::NotFound`] when no plan waits for the path, and the failures
+    /// [`remove_plan`] names.
+    pub fn run(&self) -> Result<(), WriteError> {
+        let workspace = self.common.workspace()?;
+        let layout = self.common.layout(&workspace)?;
+        let root = normalize(workspace.get_root());
+        let path = local_path(&root, &root, &self.file)
+            .map_err(|refusal| path_refused(&self.file, refusal))?;
+        let path = tree_above(&layout, &path).unwrap_or(path);
+        let Some(id) = layout.id_of(&path) else {
+            return Err(precondition(
+                &self.file,
+                "the Layout records no entry there",
+            ));
+        };
+        let data = layout
+            .entry(id)
+            .ok_or_else(|| precondition(&self.file, "the Layout records no entry there"))?;
+        let local = data.version();
+
+        match read_plan(&root, id, &local) {
+            Ok(Some(sheet)) if !sheet.is_empty() => {
+                remove_plan(&root, id, &local).map_err(|refusal| refused(&self.file, refusal))
+            }
+            Ok(_) => Err(WriteError::NotFound {
+                what: format!("a plan waiting for `{}`", self.file),
+            }),
+            Err(refusal) => Err(refused(&self.file, refusal)),
+        }
+    }
+}
+
+/// Applies a sheet to a path's chain, from a C caller's request.
+///
+/// # FFI
+///
+/// `input` is a `RolaWriteTweakRequest` the caller fills and keeps; every `const char *` in it is
+/// borrowed for the call and released by the caller. A `RolaWriteTweak *` the caller releases with
+/// `free_rola_write_tweak` answers it, or a `RolaWriteError *` the caller releases with
+/// `free_rola_write_error`. `progress` is the handle the caller polls with `rola_progress_next`, and
+/// `cancellation` is the flag it sets with `rola_cancellation_cancel`.
+///
+/// # Errors
+///
+/// Returns the failures [`TweakRequest::run`] names.
+#[lazyffi(export = rola_write_tweak)]
+pub fn tweak_at(
+    input: &TweakInput,
+    progress: &WriteProgress,
+    cancellation: &Cancellation,
+) -> Result<WriteTweak, WriteError> {
+    let request: TweakRequest = input.clone().into();
+    let watched = watching(progress);
+    let tweaked = request.run(&watched, cancellation)?;
+
+    Ok(WriteTweak {
+        file: tweaked.path,
+        version: tweaked.version,
+        adjusted: u64::try_from(tweaked.rebuilt).unwrap_or(u64::MAX),
+    })
+}
+
+/// Drops the plan waiting for a path, from a C caller's request.
+///
+/// # FFI
+///
+/// `input` is a `RolaWriteTweakCancelRequest` the caller fills and keeps; every `const char *` in it
+/// is borrowed for the call and released by the caller. The call answers nothing, or a
+/// `RolaWriteError *` the caller releases with `free_rola_write_error`.
+///
+/// # Errors
+///
+/// Returns the failures [`TweakCancelRequest::run`] names.
+#[lazyffi(export = rola_write_tweak_cancel)]
+pub fn tweak_cancel_at(input: &TweakCancelInput) -> Result<(), WriteError> {
+    let request: TweakCancelRequest = input.clone().into();
+
+    request.run()
+}
+
+/// What a tweak came to, as the C ABI hands it over.
+///
+/// # FFI
+///
+/// A `RolaWriteTweak *` the caller releases with `free_rola_write_tweak`. `_file` and `_version`
+/// each return a `char *` the caller releases with `free_string`, and `_adjusted` says how many
+/// versions the run wrote.
+#[lazyffi(export = RolaWriteTweak)]
+#[derive(Debug, Clone, Default)]
+pub struct WriteTweak {
+    /// The path whose chain was adjusted, as the Layout names it.
+    file: String,
+    /// The version it records now, as hex.
+    version: String,
+    /// How many versions the run wrote.
+    adjusted: u64,
+}
+
+#[lazyffi(export = rola_)]
+impl WriteTweak {
+    /// The path whose chain was adjusted, as the Layout names it.
+    #[must_use]
+    pub fn file(&self) -> String {
+        self.file.clone()
+    }
+
+    /// The version it records now, as hex.
+    #[must_use]
+    pub fn version(&self) -> String {
+        self.version.clone()
+    }
+
+    /// How many versions the run wrote.
+    #[must_use]
+    pub const fn adjusted(&self) -> u64 {
+        self.adjusted
+    }
+}
+
+/// The failure a refused tweak is told as.
+fn refused(file: &str, refusal: TweakRefusal) -> WriteError {
+    match refusal {
+        TweakRefusal::NotRecorded => precondition(file, "the Layout records no entry there"),
+        TweakRefusal::Nothing => precondition(file, "the entry records no version"),
+        TweakRefusal::NotAChain => precondition(file, "the version is not the top of a chain"),
+        TweakRefusal::Merging { variant } => {
+            precondition(file, format!("the variant {variant} waits to be joined"))
+        }
+        TweakRefusal::Target(miss) => precondition(file, miss.to_string()),
+        TweakRefusal::Sheet { reason } => precondition(file, reason),
+        TweakRefusal::Failed(error) => error,
+    }
+}
+
+/// The failure a path outside what a write accepts is told as.
+fn path_refused(file: &str, refusal: PathRefusal) -> WriteError {
+    match refusal {
+        PathRefusal::OutsideWorkspace => WriteError::InvalidPath {
+            path: file.to_owned(),
+            reason: "the path is outside the Workspace".to_owned(),
+        },
+        PathRefusal::InsideData => {
+            precondition(file, "the path is inside the Workspace's own data")
+        }
+        PathRefusal::NotLocal => precondition(file, "the word names no path of this tree"),
+    }
+}
+
+/// A precondition a write refuses on.
+fn precondition(what: &str, reason: impl Into<String>) -> WriteError {
+    WriteError::Precondition {
+        what: what.to_owned(),
+        reason: reason.into(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::fs;
@@ -2231,8 +2577,9 @@ mod tests {
 
     use super::{
         Adjustment, ApplyOptions, Chain, Change, Mark, Operation, Request, Sheet, SheetError,
-        TargetMiss, TweakOutcome, TweakRefusal, adjust, anchor_at_origin, apply, apply_with,
-        cancel, operations, plan_dir, read_plan, remove_plan, resolve, width, write_plan,
+        TargetMiss, TweakInput, TweakOutcome, TweakRefusal, TweakRequest, WriteCommon, adjust,
+        anchor_at_origin, apply, apply_with, cancel, operations, plan_dir, read_plan, remove_plan,
+        resolve, width, write_plan,
     };
     use crate::write::Cancellation;
     use crate::write::track::{TrackOptions, track_file};
@@ -2888,6 +3235,47 @@ mod tests {
         let outcome = applied(&workspace, &dropped);
         assert_eq!(outcome.rebuilt, 1);
         assert_eq!(recorded_version(&workspace), before);
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn a_sheet_applied_through_the_abi_rebuilds_the_chain() {
+        let (dir, workspace) = recorded("abi-sheet", &[("one", "first"), ("two", "second")]);
+        let before = recorded_version(&workspace);
+        let chain = chain_of(&workspace);
+        let top = chain.top().unwrap();
+
+        // The sheet a caller sends is the text an editor would have written: the chain as it is,
+        // with the top version's message replaced.
+        let mut rows = Sheet::plain(&chain, 0).unwrap().rows().to_vec();
+        rows[top].message = "renamed".to_owned();
+        let edited = Sheet::from_rows(&chain, 0, rows).unwrap();
+        let text = edited
+            .render(&chain, &[], ["creator", "message", "content", "join"])
+            .unwrap();
+
+        let input = TweakInput {
+            common: WriteCommon {
+                workspace: dir.to_string_lossy().into_owned(),
+                ..WriteCommon::default()
+            },
+            file: "a.txt".to_owned(),
+            sheet: text,
+        };
+        let request: TweakRequest = input.into();
+        let outcome = request
+            .run(&Progress::silent(), &Cancellation::new())
+            .unwrap();
+
+        assert_eq!(outcome.path, "a.txt");
+        assert_ne!(outcome.version, Key::new(before).hex());
+        assert!(outcome.rebuilt > 0);
+        assert_eq!(
+            Key::new(recorded_version(&workspace)).hex(),
+            outcome.version
+        );
+        assert_eq!(fs::read_to_string(dir.join("a.txt")).unwrap(), "two");
 
         let _ = fs::remove_dir_all(dir);
     }

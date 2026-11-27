@@ -11,6 +11,8 @@ use std::str::FromStr as _;
 
 use rorolala_layout::LayoutPath;
 use rorolala_storage::Key;
+use rorolala_utils_lazyffi::lazyffi;
+use rorolala_utils_location::{Locate as _, normalize};
 use rorolala_utils_progress::Progress;
 use rorolala_vcs::{VCSWrite as _, Version};
 use rorolala_version_search::TargetMiss;
@@ -19,6 +21,10 @@ use uuid::Uuid;
 use crate::status::upstream_version;
 use crate::write::journal::{Effect, EntryState, Journal};
 use crate::write::layout::switch_entry;
+use crate::write::path::{PathRefusal, local_path};
+use crate::write::progress::{WriteProgress, watching};
+use crate::write::request::{Common, WriteCommon};
+use crate::write::retrack::tree_above;
 use crate::write::tweak::{self, ApplyOptions, Request, Row, Sheet, TweakRefusal};
 use crate::write::{Cancellation, WriteError};
 
@@ -210,6 +216,273 @@ pub fn cut(
         uuid: new_id.to_string(),
         kept,
     })
+}
+
+// ---------------------------------------------------------------------------------------------
+// The C ABI
+// ---------------------------------------------------------------------------------------------
+
+/// A cut asked for as one value, so a C caller fills the same request a command builds.
+///
+/// # FFI
+///
+/// A `RolaWriteCutRequest` the caller fills. Every `const char *` is borrowed for the call and
+/// released by the caller, so nothing here is freed when the call returns. `file` is a path in the
+/// Workspace, relative to its root or absolute; `target` is the first version kept in the new chain,
+/// empty for the version above the origin; `keep_uuid` keeps the entry's `Uuid`; and `strip_join`
+/// drops every merge in the kept range.
+#[lazyffi(export = RolaWriteCutRequest, input)]
+#[derive(Debug, Clone, Default)]
+pub struct CutInput {
+    /// The fields every write request carries.
+    pub common: WriteCommon,
+    /// The one path whose old history is cut away.
+    pub file: String,
+    /// The first version kept in the new chain, empty for the version above the origin.
+    pub target: String,
+    /// Whether the entry keeps its `Uuid`.
+    pub keep_uuid: bool,
+    /// Whether every merge in the kept range is dropped.
+    pub strip_join: bool,
+}
+
+impl From<CutInput> for CutRequest {
+    fn from(input: CutInput) -> Self {
+        Self {
+            common: input.common.into(),
+            file: input.file,
+            target: input.target,
+            keep_uuid: input.keep_uuid,
+            strip_join: input.strip_join,
+        }
+    }
+}
+
+/// A cut asked for as one value, as the steps of one run read it.
+#[derive(Debug, Clone)]
+pub struct CutRequest {
+    /// The fields every write request carries.
+    common: Common,
+    /// The one path whose old history is cut away.
+    file: String,
+    /// The first version kept in the new chain.
+    target: String,
+    /// Whether the entry keeps its `Uuid`.
+    keep_uuid: bool,
+    /// Whether every merge in the kept range is dropped.
+    strip_join: bool,
+}
+
+impl CutRequest {
+    /// Cuts the chain, answering the path as the Layout names it and what the cut came to.
+    ///
+    /// The resources are resolved in the order a command resolves them, and the ones a cut may not
+    /// need are read tolerantly. The path is read from the Workspace root, since a C caller has no
+    /// process directory of its own.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`WriteError::NoWorkspace`] or [`WriteError::NoLayout`] when the request names none,
+    /// and the failures [`cut`] names, through `refused`.
+    pub fn run(&self, progress: &Progress, cancellation: &Cancellation) -> Result<Cut, WriteError> {
+        let workspace = self.common.workspace()?;
+        let layout = self.common.layout(&workspace)?;
+        let index = self.common.index(&workspace).ok();
+        let store = self.common.store(&workspace).ok();
+        let account = self.common.account(&workspace).ok();
+        let candidates = self.common.candidates(&workspace).unwrap_or_default();
+        let root = normalize(workspace.get_root());
+        let path = local_path(&root, &root, &self.file)
+            .map_err(|refusal| path_refused(&self.file, refusal))?;
+        let path = tree_above(&layout, &path).unwrap_or(path);
+        let Some(id) = layout.id_of(&path) else {
+            return Err(precondition(
+                &self.file,
+                "the Layout records no entry there",
+            ));
+        };
+        let options = CutOptions {
+            target: (!self.target.is_empty()).then(|| self.target.clone()),
+            keep_uuid: self.keep_uuid,
+            strip_join: self.strip_join,
+        };
+        let request = Request {
+            workspace: &workspace,
+            layout: &layout,
+            index: index.as_ref(),
+            store: store.as_ref(),
+            account: account.as_ref(),
+            candidates: &candidates,
+            offline: self.common.offline,
+            concurrency: self.common.concurrency,
+        };
+        let mut journal = Journal::open(&workspace, "cut");
+        let outcome = cut(
+            &request,
+            id,
+            &path,
+            &options,
+            progress,
+            cancellation,
+            &mut journal,
+        )
+        .map_err(|refusal| self.refused(refusal))?;
+        journal.finish()?;
+
+        Ok(Cut {
+            path: path.as_str().to_owned(),
+            outcome,
+        })
+    }
+
+    /// The failure a refused cut is told as.
+    fn refused(&self, refusal: CutRefusal) -> WriteError {
+        match refusal {
+            CutRefusal::NotRecorded => {
+                precondition(&self.file, "the Layout records no entry there")
+            }
+            CutRefusal::Nothing => precondition(&self.file, "the chain holds no version to cut"),
+            CutRefusal::NotAChain => {
+                precondition(&self.file, "the version is not the top of a chain")
+            }
+            CutRefusal::Merging { variant } => precondition(
+                &self.file,
+                format!("the variant {variant} waits to be joined"),
+            ),
+            CutRefusal::Target(miss) => {
+                precondition(&format!("the target `{}`", self.target), miss.to_string())
+            }
+            CutRefusal::Sheet(reason) => WriteError::Internal { reason },
+            CutRefusal::Failed(error) => error,
+        }
+    }
+}
+
+/// A cut a request carried out, and the path it did it at.
+#[derive(Debug, Clone)]
+pub struct Cut {
+    /// The path, as the Layout names it.
+    pub path: String,
+    /// What the cut came to.
+    pub outcome: CutOutcome,
+}
+
+/// Cuts a file's old history away and starts it again at a kept version, from a C caller's request.
+///
+/// # FFI
+///
+/// `input` is a `RolaWriteCutRequest` the caller fills and keeps; every `const char *` in it is
+/// borrowed for the call and released by the caller. A `RolaWriteCut *` the caller releases with
+/// `free_rola_write_cut` answers it, or a `RolaWriteError *` the caller releases with
+/// `free_rola_write_error`. `progress` is the handle the caller polls with `rola_progress_next`, and
+/// `cancellation` is the flag it sets with `rola_cancellation_cancel`.
+///
+/// # Errors
+///
+/// Returns the failures [`CutRequest::run`] names.
+#[lazyffi(export = rola_write_cut)]
+pub fn cut_at(
+    input: &CutInput,
+    progress: &WriteProgress,
+    cancellation: &Cancellation,
+) -> Result<WriteCut, WriteError> {
+    let request: CutRequest = input.clone().into();
+    let watched = watching(progress);
+    let cut = request.run(&watched, cancellation)?;
+
+    Ok(WriteCut {
+        file: cut.path,
+        from: cut.outcome.from,
+        to: cut.outcome.to,
+        point: cut.outcome.point,
+        uuid: cut.outcome.uuid,
+        kept: u64::try_from(cut.outcome.kept).unwrap_or(u64::MAX),
+    })
+}
+
+/// What a cut came to, as the C ABI hands it over.
+///
+/// # FFI
+///
+/// A `RolaWriteCut *` the caller releases with `free_rola_write_cut`. `_file`, `_from`, `_to`,
+/// `_point` and `_uuid` each return a `char *` the caller releases with `free_string`, and `_kept`
+/// says how many versions the new chain keeps.
+#[lazyffi(export = RolaWriteCut)]
+#[derive(Debug, Clone, Default)]
+pub struct WriteCut {
+    /// The path whose history was cut, as the Layout names it.
+    file: String,
+    /// The version the entry recorded before the cut, as hex.
+    from: String,
+    /// The version it records after the cut, as hex.
+    to: String,
+    /// The first version the new chain keeps, as a name for a person.
+    point: String,
+    /// The `Uuid` the path records after the cut.
+    uuid: String,
+    /// How many versions the new chain keeps.
+    kept: u64,
+}
+
+#[lazyffi(export = rola_)]
+impl WriteCut {
+    /// The path whose history was cut, as the Layout names it.
+    #[must_use]
+    pub fn file(&self) -> String {
+        self.file.clone()
+    }
+
+    /// The version the entry recorded before the cut, as hex.
+    #[must_use]
+    pub fn from(&self) -> String {
+        self.from.clone()
+    }
+
+    /// The version it records after the cut, as hex.
+    #[must_use]
+    pub fn to(&self) -> String {
+        self.to.clone()
+    }
+
+    /// The first version the new chain keeps, as a name for a person.
+    #[must_use]
+    pub fn point(&self) -> String {
+        self.point.clone()
+    }
+
+    /// The `Uuid` the path records after the cut.
+    #[must_use]
+    pub fn uuid(&self) -> String {
+        self.uuid.clone()
+    }
+
+    /// How many versions the new chain keeps.
+    #[must_use]
+    pub const fn kept(&self) -> u64 {
+        self.kept
+    }
+}
+
+/// The failure a path outside what a write accepts is told as.
+fn path_refused(file: &str, refusal: PathRefusal) -> WriteError {
+    match refusal {
+        PathRefusal::OutsideWorkspace => WriteError::InvalidPath {
+            path: file.to_owned(),
+            reason: "the path is outside the Workspace".to_owned(),
+        },
+        PathRefusal::InsideData => {
+            precondition(file, "the path is inside the Workspace's own data")
+        }
+        PathRefusal::NotLocal => precondition(file, "the word names no path of this tree"),
+    }
+}
+
+/// A precondition a write refuses on.
+fn precondition(what: &str, reason: impl Into<String>) -> WriteError {
+    WriteError::Precondition {
+        what: what.to_owned(),
+        reason: reason.into(),
+    }
 }
 
 #[cfg(test)]

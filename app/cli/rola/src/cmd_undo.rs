@@ -2,8 +2,9 @@
 //!
 //! A run pops the newest operations off the stack `rola opslog` lists and reverses them, newest
 //! first. How the tree stands against each operation, and what reversing one does, is
-//! [`librorolala::write::undo`]'s: what is here is the shape of the command, the question it asks
-//! when an operation stands only in part, the words it prints and the exit code it ends on.
+//! [`librorolala::write::undo`](mod@librorolala::write::undo)'s: what is here is the shape of the
+//! command, the question it asks when an operation stands only in part, the words it prints and the
+//! exit code it ends on.
 
 // The confirmation is the resource the injection hands the handler and not something an undo owns:
 // taking a copy would read a state of its own, so it is taken by reference, which is what the

@@ -491,6 +491,74 @@ internal struct RolaWriteBringRequest
     public byte tree_merge;
 }
 
+/// <summary>
+/// A collapse asked for as one value, so a C caller fills the same request a command builds.
+///
+/// A `RolaWriteCollapseRequest` the caller fills. Every `const char *` is borrowed for the call and
+/// released by the caller, so nothing here is freed when the call returns. `file` is a path in the
+/// Workspace, relative to its root or absolute; `target` is the first version folded, empty for the
+/// version above the origin; `keep` is the repeatable `--keep`; and `keep_join` keeps each merge
+/// version in the range as a checkpoint.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaWriteCollapseRequest
+{
+    /// <summary>
+    /// The fields every write request carries.
+    /// </summary>
+    public RolaWriteCommon common;
+    /// <summary>
+    /// The one path whose chain is folded.
+    /// </summary>
+    public nint file;
+    /// <summary>
+    /// The first version folded, empty for the version above the origin.
+    /// </summary>
+    public nint target;
+    /// <summary>
+    /// The versions kept apart from the fold, each a target a run writes.
+    /// </summary>
+    public RolaStrSpan keep;
+    /// <summary>
+    /// Whether a merge version in the range is kept as a checkpoint.
+    /// </summary>
+    public byte keep_join;
+}
+
+/// <summary>
+/// A cut asked for as one value, so a C caller fills the same request a command builds.
+///
+/// A `RolaWriteCutRequest` the caller fills. Every `const char *` is borrowed for the call and
+/// released by the caller, so nothing here is freed when the call returns. `file` is a path in the
+/// Workspace, relative to its root or absolute; `target` is the first version kept in the new chain,
+/// empty for the version above the origin; `keep_uuid` keeps the entry's `Uuid`; and `strip_join`
+/// drops every merge in the kept range.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaWriteCutRequest
+{
+    /// <summary>
+    /// The fields every write request carries.
+    /// </summary>
+    public RolaWriteCommon common;
+    /// <summary>
+    /// The one path whose old history is cut away.
+    /// </summary>
+    public nint file;
+    /// <summary>
+    /// The first version kept in the new chain, empty for the version above the origin.
+    /// </summary>
+    public nint target;
+    /// <summary>
+    /// Whether the entry keeps its `Uuid`.
+    /// </summary>
+    public byte keep_uuid;
+    /// <summary>
+    /// Whether every merge in the kept range is dropped.
+    /// </summary>
+    public byte strip_join;
+}
+
 internal enum RolaWriteErrorTag : int
 {
     /// <summary>
@@ -1566,6 +1634,95 @@ internal struct RolaWriteTrackMessage
     /// The words the subject's version carries.
     /// </summary>
     public nint text;
+}
+
+/// <summary>
+/// A tweak asked for as one value, so a C caller fills the same request the editor fills.
+///
+/// A `RolaWriteTweakRequest` the caller fills. Every `const char *` is borrowed for the call and
+/// released by the caller, so nothing here is freed when the call returns. `file` is a path in the
+/// Workspace, relative to its root or absolute, and `sheet` is the sheet the editor would have
+/// given back, read by [`Sheet::parse`].
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaWriteTweakRequest
+{
+    /// <summary>
+    /// The fields every write request carries.
+    /// </summary>
+    public RolaWriteCommon common;
+    /// <summary>
+    /// The one path whose chain is adjusted.
+    /// </summary>
+    public nint file;
+    /// <summary>
+    /// The sheet, as the editor writes one.
+    /// </summary>
+    public nint sheet;
+}
+
+/// <summary>
+/// A cancel asked for as one value, so a C caller drops a plan by naming the file.
+///
+/// A `RolaWriteTweakCancelRequest` the caller fills. `file` is a path in the Workspace, relative to
+/// its root or absolute, and borrowed for the call.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaWriteTweakCancelRequest
+{
+    /// <summary>
+    /// The fields every write request carries.
+    /// </summary>
+    public RolaWriteCommon common;
+    /// <summary>
+    /// The one path whose pending plan is dropped.
+    /// </summary>
+    public nint file;
+}
+
+/// <summary>
+/// What a run does with an operation that stands only in part.
+/// </summary>
+internal enum RolaWriteUndoPartial : int
+{
+    /// <summary>
+    /// Leave the operation and the stack below it where they are.
+    /// </summary>
+    RolaWriteUndoPartial_Stop = 0,
+    /// <summary>
+    /// Reverse what still stands and go on to the one before it.
+    /// </summary>
+    RolaWriteUndoPartial_Continue = 1,
+}
+
+/// <summary>
+/// An undo asked for as one value, so a C caller fills the same request a command builds.
+///
+/// A `RolaWriteUndoRequest` the caller fills. Every `const char *` is borrowed for the call and
+/// released by the caller, so nothing here is freed when the call returns. `count` is how many
+/// operations to undo, `0` for one; `soft` moves only the Layout; and `on_partial` says what to do
+/// with an operation that stands only in part, since an ABI has no question to ask. `force`, which
+/// writes over a file that changed, is the one every write request carries.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaWriteUndoRequest
+{
+    /// <summary>
+    /// The fields every write request carries.
+    /// </summary>
+    public RolaWriteCommon common;
+    /// <summary>
+    /// How many operations to undo, `0` for one.
+    /// </summary>
+    public uint count;
+    /// <summary>
+    /// Whether only the Layout moves back.
+    /// </summary>
+    public byte soft;
+    /// <summary>
+    /// What to do with an operation that stands only in part.
+    /// </summary>
+    public RolaWriteUndoPartial on_partial;
 }
 
 internal enum RolaAuthErrorTag : int
@@ -3818,6 +3975,12 @@ internal static partial class RorolalaBinding
     internal static extern void free_rola_search_sources(nint value);
 
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_history_operation(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_history_operations(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern void free_rola_layout_error(nint value);
 
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
@@ -3899,10 +4062,16 @@ internal static partial class RorolalaBinding
     internal static extern void free_rola_write_restore(nint value);
 
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_write_collapse(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern void free_rola_write_collect_side(nint value);
 
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern void free_rola_write_collect(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_write_cut(nint value);
 
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern void free_rola_write_error(nint value);
@@ -4020,6 +4189,21 @@ internal static partial class RorolalaBinding
 
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern void free_rola_write_tree_reset(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_write_tweak(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_write_undo_partial(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_write_undo_group(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_write_undo_plan(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_write_undone(nint value);
 
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern void free_rola_write_workspace_cache(nint value);
@@ -4348,6 +4532,19 @@ internal static partial class RorolalaBinding
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern RorolalaResult rola_search_source(nint directory, nint targets, nuint targets_len, nint account);
+
+    /// <summary>
+    /// The operations a Workspace recorded, newest first, as a C caller reads them.
+    ///
+    /// `workspace` is the root of the Workspace, and borrowed for the call. A
+    /// `RolaHistoryOperations *` the caller releases with `free_rola_history_operations` answers it,
+    /// each operation released with `free_rola_history_operation`, or null when there is nothing to
+    /// read: no Workspace holds the directory, or its log cannot be listed.
+    ///
+    /// Returns an owned `RolaHistoryOperations *`, or `NULL` when there is nothing; release it with `free_rola_history_operations`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_history_operations(nint workspace);
 
     /// <summary>
     /// Which Layouts the place holding `directory` has, as `rola layout ls` shows them.
@@ -4781,6 +4978,22 @@ internal static partial class RorolalaBinding
     internal static extern RorolalaResult rola_write_checkout_remember(nint directory, nint path);
 
     /// <summary>
+    /// Folds the local versions above the tracked Vault's version into one, from a C caller's request.
+    ///
+    /// `input` is a `RolaWriteCollapseRequest` the caller fills and keeps; every `const char *` in it is
+    /// borrowed for the call and released by the caller. A `RolaWriteCollapse *` the caller releases
+    /// with `free_rola_write_collapse` answers it, or a `RolaWriteError *` the caller releases with
+    /// `free_rola_write_error`. `progress` is the handle the caller polls with `rola_progress_next`, and
+    /// `cancellation` is the flag it sets with `rola_cancellation_cancel`.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `RolaWriteCollapse *`, owned; release it with `free_rola_write_collapse`
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_collapse(nint input, nint progress, nint cancellation);
+
+    /// <summary>
     /// Reads what a collecting run would take away under a directory.
     ///
     /// A `RolaWriteCollect *` the caller releases with `free_rola_write_collect`, or a
@@ -4807,6 +5020,22 @@ internal static partial class RorolalaBinding
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern RorolalaResult rola_write_collect_apply(nint directory, [MarshalAs(UnmanagedType.U1)] bool storage, [MarshalAs(UnmanagedType.U1)] bool index, ulong grace);
+
+    /// <summary>
+    /// Cuts a file's old history away and starts it again at a kept version, from a C caller's request.
+    ///
+    /// `input` is a `RolaWriteCutRequest` the caller fills and keeps; every `const char *` in it is
+    /// borrowed for the call and released by the caller. A `RolaWriteCut *` the caller releases with
+    /// `free_rola_write_cut` answers it, or a `RolaWriteError *` the caller releases with
+    /// `free_rola_write_error`. `progress` is the handle the caller polls with `rola_progress_next`, and
+    /// `cancellation` is the flag it sets with `rola_cancellation_cancel`.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `RolaWriteCut *`, owned; release it with `free_rola_write_cut`
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_cut(nint input, nint progress, nint cancellation);
 
     /// <summary>
     /// The content fetch a request a C caller fills asks for.
@@ -5461,6 +5690,65 @@ internal static partial class RorolalaBinding
     internal static extern RorolalaResult rola_write_tree_reset(nint directory, nint target, RolaStrSpan paths);
 
     /// <summary>
+    /// Applies a sheet to a path's chain, from a C caller's request.
+    ///
+    /// `input` is a `RolaWriteTweakRequest` the caller fills and keeps; every `const char *` in it is
+    /// borrowed for the call and released by the caller. A `RolaWriteTweak *` the caller releases with
+    /// `free_rola_write_tweak` answers it, or a `RolaWriteError *` the caller releases with
+    /// `free_rola_write_error`. `progress` is the handle the caller polls with `rola_progress_next`, and
+    /// `cancellation` is the flag it sets with `rola_cancellation_cancel`.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `RolaWriteTweak *`, owned; release it with `free_rola_write_tweak`
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_tweak(nint input, nint progress, nint cancellation);
+
+    /// <summary>
+    /// Drops the plan waiting for a path, from a C caller's request.
+    ///
+    /// `input` is a `RolaWriteTweakCancelRequest` the caller fills and keeps; every `const char *` in it
+    /// is borrowed for the call and released by the caller. The call answers nothing, or a
+    /// `RolaWriteError *` the caller releases with `free_rola_write_error`.
+    ///
+    /// Returns a result:
+    /// - `Ok`: nothing; the payload is null
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_tweak_cancel(nint input);
+
+    /// <summary>
+    /// Reads the operations a run would undo, for a C caller that asks its own way first.
+    ///
+    /// `input` is a `RolaWriteUndoRequest` the caller fills and keeps; every `const char *` in it is
+    /// borrowed for the call and released by the caller. A `RolaWriteUndoPlan *` the caller releases
+    /// with `free_rola_write_undo_plan` answers it, each operation released with
+    /// `free_rola_write_undo_group`, or a `RolaWriteError *` released with `free_rola_write_error`.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `RolaWriteUndoPlan *`, owned; release it with `free_rola_write_undo_plan`
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_undo_plan(nint input);
+
+    /// <summary>
+    /// Reverses the recorded operations, newest first, from a C caller's request.
+    ///
+    /// `input` is a `RolaWriteUndoRequest` the caller fills and keeps; every `const char *` in it is
+    /// borrowed for the call and released by the caller. A `RolaWriteUndone *` the caller releases with
+    /// `free_rola_write_undone` answers it, or a `RolaWriteError *` released with `free_rola_write_error`.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `RolaWriteUndone *`, owned; release it with `free_rola_write_undone`
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_undo(nint input);
+
+    /// <summary>
     /// Makes the Layout of the Workspace holding a directory track a Vault.
     ///
     /// An empty string on success, or a `RolaWriteError *` the caller releases with
@@ -6028,6 +6316,50 @@ internal static partial class RorolalaBinding
     internal static extern nint rola_search_source_unreachable_at(nint self, nuint index);
 
     /// <summary>
+    /// Where it sits in the list, counting from the newest.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern ulong rola_history_operation_number(nint self);
+
+    /// <summary>
+    /// The command that made the changes.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_history_operation_command(nint self);
+
+    /// <summary>
+    /// When the run ended, in UTC.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_history_operation_time(nint self);
+
+    /// <summary>
+    /// How many changes it holds.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern ulong rola_history_operation_changes(nint self);
+
+    /// <summary>
+    /// How many operations the list holds.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_history_operations_count(nint self);
+
+    /// <summary>
+    /// How many log files could not be read and were skipped.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern ulong rola_history_operations_unreadable_count(nint self);
+
+    /// <summary>
+    /// One operation, newest first, or null past the end.
+    ///
+    /// Returns an owned `RolaHistoryOperation *`, or `NULL` when there is nothing; release it with `free_rola_history_operation`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_history_operations_at(nint self, nuint index);
+
+    /// <summary>
     /// How many Layouts the place holds.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
@@ -6578,6 +6910,30 @@ internal static partial class RorolalaBinding
     internal static extern nint rola_write_restore_version(nint self);
 
     /// <summary>
+    /// The path whose chain was folded, as the Layout names it.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_collapse_file(nint self);
+
+    /// <summary>
+    /// The version the entry recorded before the fold, as hex.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_collapse_from(nint self);
+
+    /// <summary>
+    /// The version it records after the fold, as hex.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_collapse_to(nint self);
+
+    /// <summary>
+    /// How many versions the fold removed.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern ulong rola_write_collapse_folded(nint self);
+
+    /// <summary>
     /// The index side, or null when the run did not sweep the index.
     ///
     /// Returns an owned `RolaWriteCollectSide *`, or `NULL` when there is nothing; release it with `free_rola_write_collect_side`.
@@ -6617,6 +6973,42 @@ internal static partial class RorolalaBinding
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     [return: MarshalAs(UnmanagedType.U1)]
     internal static extern bool rola_write_collect_side_changed(nint self);
+
+    /// <summary>
+    /// The path whose history was cut, as the Layout names it.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_cut_file(nint self);
+
+    /// <summary>
+    /// The version the entry recorded before the cut, as hex.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_cut_from(nint self);
+
+    /// <summary>
+    /// The version it records after the cut, as hex.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_cut_to(nint self);
+
+    /// <summary>
+    /// The first version the new chain keeps, as a name for a person.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_cut_point(nint self);
+
+    /// <summary>
+    /// The `Uuid` the path records after the cut.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_cut_uuid(nint self);
+
+    /// <summary>
+    /// How many versions the new chain keeps.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern ulong rola_write_cut_kept(nint self);
 
     /// <summary>
     /// How many targets the run fetched.
@@ -7443,6 +7835,62 @@ internal static partial class RorolalaBinding
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern nint rola_write_tree_reset_path_at(nint self, nuint index);
+
+    /// <summary>
+    /// The path whose chain was adjusted, as the Layout names it.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_tweak_file(nint self);
+
+    /// <summary>
+    /// The version it records now, as hex.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_tweak_version(nint self);
+
+    /// <summary>
+    /// How many versions the run wrote.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern ulong rola_write_tweak_adjusted(nint self);
+
+    /// <summary>
+    /// The command that made the changes.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_undo_group_command(nint self);
+
+    /// <summary>
+    /// How the changes stand: `whole`, `part` or `none`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_undo_group_standing(nint self);
+
+    /// <summary>
+    /// How many operations the run considered.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_write_undo_plan_count(nint self);
+
+    /// <summary>
+    /// One operation, newest first, or null past the end.
+    ///
+    /// Returns an owned `RolaWriteUndoGroup *`, or `NULL` when there is nothing; release it with `free_rola_write_undo_group`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_undo_plan_at(nint self, nuint index);
+
+    /// <summary>
+    /// How many operations were undone.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_write_undone_count(nint self);
+
+    /// <summary>
+    /// The command whose operation was undone at `index`, empty past the end.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_undone_command_at(nint self, nuint index);
 
     /// <summary>
     /// How many paths were written down.

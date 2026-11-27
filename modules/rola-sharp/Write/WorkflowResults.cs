@@ -738,3 +738,116 @@ internal static class Ownerships
 
     private static string? Optional(string text) => text.Length == 0 ? null : text;
 }
+
+/// <summary>Reads a collapse's answer.</summary>
+internal static class Collapses
+{
+    /// <summary>Reads what folding a chain wrote.</summary>
+    /// <param name="answer">The answer, which this does not release.</param>
+    /// <returns>The path, the two versions and how many were folded.</returns>
+    public static Collapsed Read(nint answer) =>
+        new(
+            NativeText.Taken(RorolalaBinding.rola_write_collapse_file(answer)),
+            NativeText.Taken(RorolalaBinding.rola_write_collapse_from(answer)),
+            NativeText.Taken(RorolalaBinding.rola_write_collapse_to(answer)),
+            RorolalaBinding.rola_write_collapse_folded(answer)
+        );
+}
+
+/// <summary>Reads a cut's answer.</summary>
+internal static class Cuts
+{
+    /// <summary>Reads what cutting a file's history wrote.</summary>
+    /// <param name="answer">The answer, which this does not release.</param>
+    /// <returns>The path, the two versions, the point kept, the `Uuid` and how many were kept.</returns>
+    public static CutResult Read(nint answer) =>
+        new(
+            NativeText.Taken(RorolalaBinding.rola_write_cut_file(answer)),
+            NativeText.Taken(RorolalaBinding.rola_write_cut_from(answer)),
+            NativeText.Taken(RorolalaBinding.rola_write_cut_to(answer)),
+            NativeText.Taken(RorolalaBinding.rola_write_cut_point(answer)),
+            NativeText.Taken(RorolalaBinding.rola_write_cut_uuid(answer)),
+            RorolalaBinding.rola_write_cut_kept(answer)
+        );
+}
+
+/// <summary>Reads a tweak's answer.</summary>
+internal static class Tweaks
+{
+    /// <summary>Reads what applying a sheet wrote.</summary>
+    /// <param name="answer">The answer, which this does not release.</param>
+    /// <returns>The path, the version it records now, and how many versions were written.</returns>
+    public static Tweaked Read(nint answer) =>
+        new(
+            NativeText.Taken(RorolalaBinding.rola_write_tweak_file(answer)),
+            NativeText.Taken(RorolalaBinding.rola_write_tweak_version(answer)),
+            RorolalaBinding.rola_write_tweak_adjusted(answer)
+        );
+}
+
+/// <summary>Reads an undo plan's answer.</summary>
+internal static class UndoPlans
+{
+    /// <summary>Reads the operations a run would undo.</summary>
+    /// <param name="answer">The answer, which this does not release.</param>
+    /// <returns>Each operation the run considered, newest first.</returns>
+    public static UndoPlanReading Read(nint answer)
+    {
+        var groups = new List<UndoGroupReading>();
+        var count = RorolalaBinding.rola_write_undo_plan_count(answer);
+        for (nuint index = 0; index < count; index++)
+        {
+            var item = RorolalaBinding.rola_write_undo_plan_at(answer, index);
+            if (item == 0)
+            {
+                continue;
+            }
+
+            try
+            {
+                groups.Add(
+                    new UndoGroupReading(
+                        NativeText.Taken(RorolalaBinding.rola_write_undo_group_command(item)),
+                        Standing(NativeText.Taken(RorolalaBinding.rola_write_undo_group_standing(item)))
+                    )
+                );
+            }
+            finally
+            {
+                RorolalaBinding.free_rola_write_undo_group(item);
+            }
+        }
+
+        return new UndoPlanReading(groups);
+    }
+
+    /// <summary>The standing a word names.</summary>
+    private static UndoStanding Standing(string word) =>
+        word switch
+        {
+            "whole" => UndoStanding.Whole,
+            "part" => UndoStanding.Part,
+            _ => UndoStanding.None,
+        };
+}
+
+/// <summary>Reads an undo's answer.</summary>
+internal static class Undos
+{
+    /// <summary>Reads the operations an undo reversed.</summary>
+    /// <param name="answer">The answer, which this does not release.</param>
+    /// <returns>The commands whose operations were undone, newest first.</returns>
+    public static Undone Read(nint answer)
+    {
+        var commands = new List<string>();
+        var count = RorolalaBinding.rola_write_undone_count(answer);
+        for (nuint index = 0; index < count; index++)
+        {
+            commands.Add(
+                NativeText.Taken(RorolalaBinding.rola_write_undone_command_at(answer, index))
+            );
+        }
+
+        return new Undone(commands);
+    }
+}

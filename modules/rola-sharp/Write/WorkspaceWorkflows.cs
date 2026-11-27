@@ -32,7 +32,7 @@ public sealed partial class WorkspaceWriter
             }
         );
 
-        var answer = Call(RorolalaBinding.rola_write_bring, native, progress, cancellation);
+        var answer = Calls.Call(RorolalaBinding.rola_write_bring, native, progress, cancellation);
         try
         {
             return Brings.Read(answer);
@@ -74,7 +74,7 @@ public sealed partial class WorkspaceWriter
             }
         );
 
-        var answer = Call(RorolalaBinding.rola_write_bring, native, progress, cancellation);
+        var answer = Calls.Call(RorolalaBinding.rola_write_bring, native, progress, cancellation);
         try
         {
             return Brings.ReadVariant(answer);
@@ -112,7 +112,7 @@ public sealed partial class WorkspaceWriter
             }
         );
 
-        var answer = Call(RorolalaBinding.rola_write_retrack, native, progress, cancellation);
+        var answer = Calls.Call(RorolalaBinding.rola_write_retrack, native, progress, cancellation);
         try
         {
             return Retracks.Read(answer);
@@ -140,7 +140,7 @@ public sealed partial class WorkspaceWriter
         using var memory = new NativeRequest();
         var native = memory.Pointer(TrackFields(memory, request));
 
-        var answer = Call(RorolalaBinding.rola_write_track_plan, native, progress, cancellation);
+        var answer = Calls.Call(RorolalaBinding.rola_write_track_plan, native, progress, cancellation);
         try
         {
             return Tracks.ReadPlan(answer);
@@ -262,7 +262,7 @@ public sealed partial class WorkspaceWriter
             }
         );
 
-        var answer = Call(RorolalaBinding.rola_write_align, native, progress, cancellation);
+        var answer = Calls.Call(RorolalaBinding.rola_write_align, native, progress, cancellation);
         try
         {
             return Aligns.Read(answer);
@@ -301,7 +301,7 @@ public sealed partial class WorkspaceWriter
             }
         );
 
-        var answer = Call(
+        var answer = Calls.Call(
             RorolalaBinding.rola_write_ownership_plan,
             native,
             progress,
@@ -385,13 +385,6 @@ public sealed partial class WorkspaceWriter
         }
     }
 
-    /// <summary>A native call that takes a request, a progress handle and a cancellation handle.</summary>
-    /// <param name="request">The native request.</param>
-    /// <param name="progress">The progress the run says itself to.</param>
-    /// <param name="cancellation">The flag the run checks.</param>
-    /// <returns>The native answer, which the caller owns.</returns>
-    private delegate RorolalaResult RequestCall(nint request, nint progress, nint cancellation);
-
     /// <summary>A native call that takes a request, an agreed array and both handles.</summary>
     /// <param name="request">The native request.</param>
     /// <param name="agreed">The caller's array.</param>
@@ -426,34 +419,6 @@ public sealed partial class WorkspaceWriter
         nint cancellation
     );
 
-    /// <summary>Runs a request call, making the handles a caller left out.</summary>
-    /// <param name="call">The native call.</param>
-    /// <param name="request">The native request.</param>
-    /// <param name="progress">The caller's progress, or nothing.</param>
-    /// <param name="cancellation">The caller's cancellation, or nothing.</param>
-    /// <returns>The answer handle, which the caller releases with the call's own `free_`.</returns>
-    /// <exception cref="RolaWriteError">The native call answered with a failure this takes over.</exception>
-    private static nint Call(
-        RequestCall call,
-        nint request,
-        Progress? progress,
-        Cancellation? cancellation
-    )
-    {
-        var (watching, stopping, ownedProgress, ownedCancellation) = Handles(progress, cancellation);
-        try
-        {
-            var answer = call(request, watching.Handle, stopping.Handle);
-
-            return Payload(answer);
-        }
-        finally
-        {
-            ownedProgress?.Dispose();
-            ownedCancellation?.Dispose();
-        }
-    }
-
     /// <summary>Runs a call with one agreed array, making the handles a caller left out.</summary>
     /// <param name="call">The native call.</param>
     /// <param name="request">The native request.</param>
@@ -472,12 +437,12 @@ public sealed partial class WorkspaceWriter
         Cancellation? cancellation
     )
     {
-        var (watching, stopping, ownedProgress, ownedCancellation) = Handles(progress, cancellation);
+        var (watching, stopping, ownedProgress, ownedCancellation) = Calls.Handles(progress, cancellation);
         try
         {
             var answer = call(request, agreed, agreedLen, watching.Handle, stopping.Handle);
 
-            return Payload(answer);
+            return Calls.Payload(answer);
         }
         finally
         {
@@ -508,7 +473,7 @@ public sealed partial class WorkspaceWriter
         Cancellation? cancellation
     )
     {
-        var (watching, stopping, ownedProgress, ownedCancellation) = Handles(progress, cancellation);
+        var (watching, stopping, ownedProgress, ownedCancellation) = Calls.Handles(progress, cancellation);
         try
         {
             var answer = call(
@@ -521,7 +486,7 @@ public sealed partial class WorkspaceWriter
                 stopping.Handle
             );
 
-            return Payload(answer);
+            return Calls.Payload(answer);
         }
         finally
         {
@@ -543,37 +508,4 @@ public sealed partial class WorkspaceWriter
             policy = memory.Text(request.Policy),
             include_ignored = NativeRequest.Flag(request.IncludeIgnored),
         };
-
-    /// <summary>The handles a call runs with, making either one a caller left out.</summary>
-    /// <param name="progress">The caller's progress, or nothing.</param>
-    /// <param name="cancellation">The caller's cancellation, or nothing.</param>
-    /// <returns>The two handles and the ones this made and must give back.</returns>
-    private static (Progress Watching, Cancellation Stopping, Progress? OwnedProgress, Cancellation? OwnedCancellation) Handles(
-        Progress? progress,
-        Cancellation? cancellation
-    )
-    {
-        var ownedProgress = progress is null ? Progress.New() : null;
-        var watching = progress ?? ownedProgress!;
-        var ownedCancellation = cancellation is null ? Cancellation.New() : null;
-        var stopping = cancellation ?? ownedCancellation!;
-
-        // The native side refuses a null handle rather than reading it as "no progress", so a
-        // caller that asked for neither still hands in a real one it never reads back.
-        return (watching, stopping, ownedProgress, ownedCancellation);
-    }
-
-    /// <summary>The payload of an answer, or the failure it answered with.</summary>
-    /// <param name="answer">The native answer.</param>
-    /// <returns>The payload handle.</returns>
-    /// <exception cref="RolaWriteError">The answer is a failure.</exception>
-    private static nint Payload(RorolalaResult answer)
-    {
-        if (answer.tag is RorolalaResultTag.RorolalaResult_Err)
-        {
-            throw WriteResults.From(answer.payload);
-        }
-
-        return answer.payload;
-    }
 }
