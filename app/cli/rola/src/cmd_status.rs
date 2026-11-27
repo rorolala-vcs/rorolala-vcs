@@ -1833,7 +1833,7 @@ pub fn render_result_status(result: ResultStatus) {
 
         if content > 0 {
             // A blank line separates the blocks; the first block has none before it.
-            if unowned || merging || structural > 0 {
+            if unowned || unclaimed || merging || structural > 0 {
                 r_println!("");
             }
 
