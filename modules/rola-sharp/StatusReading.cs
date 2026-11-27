@@ -227,6 +227,7 @@ public sealed class StatusReading : IDisposable
         List<string> ignored;
         List<string> modified;
         List<string> unowned;
+        List<string> unclaimed;
         List<string> wrongBase;
         List<string> ahead;
         List<string> behind;
@@ -263,6 +264,11 @@ public sealed class StatusReading : IDisposable
                 handle,
                 RorolalaBinding.rola_status_unowned_count,
                 RorolalaBinding.rola_status_unowned_at
+            );
+            unclaimed = Paths(
+                handle,
+                RorolalaBinding.rola_status_unclaimed_count,
+                RorolalaBinding.rola_status_unclaimed_at
             );
             wrongBase = Paths(
                 handle,
@@ -316,6 +322,7 @@ public sealed class StatusReading : IDisposable
         Ignored = ignored;
         Modified = modified;
         Unowned = unowned;
+        Unclaimed = unclaimed;
         WrongBase = wrongBase;
         Ahead = ahead;
         Behind = behind;
@@ -363,6 +370,15 @@ public sealed class StatusReading : IDisposable
     /// act on the work must not act on these.
     /// </remarks>
     public IReadOnlyList<string> Unowned { get; }
+
+    /// <summary>
+    /// Paths the fetched copy of the Vault's Layout leaves unheld, which changed here.
+    /// </summary>
+    /// <remarks>
+    /// Nobody holds them, so the thing to do about one is to claim it before recording rather than to ask
+    /// another account. They are kept apart from <see cref="Unowned"/> for exactly that reason.
+    /// </remarks>
+    public IReadOnlyList<string> Unclaimed { get; }
 
     /// <summary>
     /// Paths whose content changed while the version recorded for them is not the one upstream is at.
@@ -415,6 +431,7 @@ public sealed class StatusReading : IDisposable
         && Untagged.Count == 0
         && Modified.Count == 0
         && Unowned.Count == 0
+        && Unclaimed.Count == 0
         && Renamed.Count == 0
         && Merging.Count == 0
         && Broken.Count == 0;

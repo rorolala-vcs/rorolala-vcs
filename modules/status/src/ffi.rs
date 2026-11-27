@@ -245,6 +245,29 @@ impl Status {
         at(&self.unowned, index)
     }
 
+    /// How many changed paths the fetched copy of the Vault's Layout leaves unheld.
+    ///
+    /// These are the changes nobody holds, which this account would have to claim before recording. They
+    /// are kept apart from the ones another account holds, since the thing to do about one is to claim it
+    /// rather than to ask somebody about it.
+    #[must_use]
+    #[lazyffi(export = rola_status_unclaimed_count)]
+    pub const fn unclaimed_count(&self) -> usize {
+        self.unclaimed.len()
+    }
+
+    /// The path at `index` among the ones nobody holds.
+    ///
+    /// # FFI
+    ///
+    /// An empty string when there is no such entry. The caller owns the string and releases it with
+    /// `free_string`.
+    #[must_use]
+    #[lazyffi(export = rola_status_unclaimed_at)]
+    pub fn unclaimed_at(&self, index: usize) -> String {
+        at(&self.unclaimed, index)
+    }
+
     /// How many paths moved.
     #[must_use]
     #[lazyffi(export = rola_status_renamed_count)]

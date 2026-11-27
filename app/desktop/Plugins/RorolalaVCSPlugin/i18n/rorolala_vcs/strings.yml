@@ -484,6 +484,21 @@ rorolala_vcs:
       en: Nothing to confirm
       zh-CN: 没有要确认的内容
 
+    # The headings a reading is grouped under, in the order they are read: what a reader has to decide,
+    # what has to be tracked, what a sync would carry, and what the ignore rules govern.
+    group_confirm:
+      en: To confirm
+      zh-CN: 待确认
+    group_track:
+      en: To track
+      zh-CN: 待追踪
+    group_sync:
+      en: To sync
+      zh-CN: 待同步
+    group_ignored:
+      en: Ignored
+      zh-CN: 已忽略
+
     # What the command in the dock's own strip offers: read the work again now, rather than wait for the
     # reading the dock makes by itself, which is what a reader wants after saving in another program. What it
     # brings first is the Vault's Layout, so that what it reads is what upstream holds now.
@@ -583,6 +598,9 @@ rorolala_vcs:
     change_wrong_base:
       en: Its content has changed, but the version it is based on does not match.
       zh-CN: 文件内容产生了变化，但是它的基准版本并不匹配。
+    change_wrong_unclaimed:
+      en: Its content has changed, and nobody holds it yet.
+      zh-CN: 文件内容产生了变化，但还没有人持有它。
 
     # What a merge says in the last column: why a merge cannot go on. A merge has no content change of its
     # own, what settles it is the two files being joined, so the column carries what the row would

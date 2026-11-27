@@ -8656,6 +8656,21 @@ internal static partial class RorolalaBinding
     internal static extern nint rola_status_unowned_at(nint self, nuint index);
 
     /// <summary>
+    /// How many changed paths the fetched copy of the Vault's Layout leaves unheld.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_status_unclaimed_count(nint self);
+
+    /// <summary>
+    /// The path at `index` among the ones nobody holds.
+    ///
+    /// An empty string when there is no such entry. The caller owns the string and releases it with
+    /// `free_string`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_status_unclaimed_at(nint self, nuint index);
+
+    /// <summary>
     /// How many paths moved.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
