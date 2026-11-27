@@ -499,6 +499,11 @@ rorolala_vcs:
       en: Ignored
       zh-CN: 已忽略
 
+    # The button a To track group offers: record every file under it as one version.
+    track_all:
+      en: TRACK ALL
+      zh-CN: 追踪全部
+
     # What the command in the dock's own strip offers: read the work again now, rather than wait for the
     # reading the dock makes by itself, which is what a reader wants after saving in another program. What it
     # brings first is the Vault's Layout, so that what it reads is what upstream holds now.

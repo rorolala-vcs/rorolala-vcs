@@ -13,7 +13,9 @@ using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Media.Transformation;
+using Avalonia.Styling;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using FileSystemPlugin;
 using RolaSharp;
 using RorolalaDesktop.Contract;
@@ -423,6 +425,9 @@ internal sealed class OverviewView : UserControl
 
     /// <summary>Whether a redraw is already posted, so a burst of changes is one drawing.</summary>
     private bool _redrawAsked;
+
+    /// <summary>Whether a track begun from the To track group is going, so a second Enter starts no second run.</summary>
+    private bool _tracking;
 
     /// <summary>The one fetch of the Vault's Layout, shared with the Version Graph.</summary>
     private readonly VaultFetch _fetch;
@@ -1167,12 +1172,64 @@ internal sealed class OverviewView : UserControl
             VerticalAlignment = VerticalAlignment.Center,
         };
 
+        if (Recordable(row) is { } file)
+        {
+            // The row's own track, to the left of what is done about it: a run of one file, where the heading's
+            // button runs every file the group holds.
+            operations.Children.Add(view.NewTrackButton(file, host));
+        }
+
         foreach (var operation in row.Operations)
         {
             operations.Children.Add(view.NewButton(operation, row, at, host));
         }
 
         return operations;
+    }
+
+    /// <summary>The path a track from a row would record, or nothing when the row is not one a track records.</summary>
+    /// <param name="row">The row.</param>
+    /// <returns>The path, or nothing.</returns>
+    private static string? Recordable(TableRow row) =>
+        row.From is { Length: > 0 } file
+        && row.Pills.Any(pill => pill.State is State.Modified or State.Untagged)
+            ? file
+            : null;
+
+    /// <summary>A row's own track, as the picture button it wears.</summary>
+    /// <remarks>
+    /// It stands before what the row offers to put right, since recording the change is what a reader means
+    /// first; it opens the same message field the heading's button does, for the one file it is on.
+    /// </remarks>
+    /// <param name="file">The file the run records.</param>
+    /// <param name="host">The host, which is what a failure is shown through.</param>
+    /// <returns>The button.</returns>
+    private Button NewTrackButton(string file, IPluginHost host)
+    {
+        var button = new Button
+        {
+            Content = Glyph(host, Icons.RadioButtonBold, RorolalaColours.Front, ActionGlyph),
+            Width = ActionSize,
+            Height = ActionSize,
+            Padding = new Thickness(0),
+            HorizontalContentAlignment = HorizontalAlignment.Center,
+            VerticalContentAlignment = VerticalAlignment.Center,
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(0),
+            Margin = new Thickness(0, 0, ButtonGap, 0),
+            IsEnabled = !_busy,
+        };
+        button[!TemplatedControl.BackgroundProperty] = new DynamicResourceExtension(PaletteKeys.Dark);
+        button[!TemplatedControl.BorderBrushProperty] = new DynamicResourceExtension(
+            PaletteKeys.Splitter
+        );
+
+        ToolTip.SetTip(button, RolaI18N.Get("rorolala_vcs.version_graph.track_tip"));
+        button.Click += (_, _) => AskTrack([file], host, button);
+
+        _buttons.Add((button, false, false));
+
+        return button;
     }
 
     /// <summary>
@@ -2126,6 +2183,25 @@ internal sealed class OverviewView : UserControl
             Children = { caret, label, count },
         };
 
+        // The files a track from this group would record: the changes that have one, not a loss a track
+        // cannot bring back nor a move that is confirmed rather than recorded.
+        var track = group.Key == "track"
+            ? group.Rows.Select(Recordable).OfType<string>().ToArray()
+            : [];
+
+        Control heading = inner;
+        Button? trackButton = null;
+
+        if (track.Length > 0)
+        {
+            trackButton = TrackButton(track, host, view);
+
+            var bar = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+            Place(bar, inner, 0);
+            Place(bar, trackButton, 1);
+            heading = bar;
+        }
+
         var motion = new Transitions
         {
             new DoubleTransition
@@ -2161,7 +2237,7 @@ internal sealed class OverviewView : UserControl
             {
                 Padding = new Thickness(20, 0),
                 HorizontalAlignment = HorizontalAlignment.Stretch,
-                Child = inner,
+                Child = heading,
             },
             Height = 36,
             Background = Brushes.Transparent,
@@ -2180,6 +2256,13 @@ internal sealed class OverviewView : UserControl
         head.PointerPressed += (_, pressed) =>
         {
             if (!pressed.GetCurrentPoint(head).Properties.IsLeftButtonPressed)
+            {
+                return;
+            }
+
+            // The track button is the group's own, not the heading's: a press on it asks for a track rather
+            // than folding the rows.
+            if (trackButton is not null && Within(pressed.Source, trackButton))
             {
                 return;
             }
@@ -2207,6 +2290,194 @@ internal sealed class OverviewView : UserControl
         framed[!Border.BorderBrushProperty] = new DynamicResourceExtension(EdgeInk);
 
         return framed;
+    }
+
+    /// <summary>The button a To track group offers, which records every file under it as one version.</summary>
+    /// <remarks>
+    /// A plain button in the look's own dark face rather than a filled black one: it stands in a heading and
+    /// is read beside the words it belongs to, so it wears the same face and line as the row buttons below.
+    /// </remarks>
+    /// <param name="files">The files a track would record.</param>
+    /// <param name="host">The host, which is what a failure is shown through.</param>
+    /// <param name="view">The control the prompt is opened from.</param>
+    /// <returns>The button.</returns>
+    private static Button TrackButton(IReadOnlyList<string> files, IPluginHost host, OverviewView view)
+    {
+        var word = new TextBlock
+        {
+            Text = RolaI18N.Get("rorolala_vcs.status.track_all"),
+            FontSize = 11,
+            FontWeight = FontWeight.SemiBold,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        word[!TextBlock.ForegroundProperty] = new DynamicResourceExtension(PaletteKeys.Front);
+
+        var button = new Button
+        {
+            Content = word,
+            Width = 72,
+            Height = 24,
+            Padding = new Thickness(0),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(0),
+            VerticalAlignment = VerticalAlignment.Center,
+            HorizontalContentAlignment = HorizontalAlignment.Center,
+            VerticalContentAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(12, 0, 0, 0),
+        };
+        button[!TemplatedControl.BackgroundProperty] = new DynamicResourceExtension(PaletteKeys.Dark);
+        button[!TemplatedControl.BorderBrushProperty] = new DynamicResourceExtension(
+            PaletteKeys.Splitter
+        );
+
+        ToolTip.SetTip(button, RolaI18N.Get("rorolala_vcs.version_graph.track_tip"));
+        button.Click += (_, _) => view.AskTrack(files, host, button);
+
+        return button;
+    }
+
+    /// <summary>Asks for the message a track from the To track group records the group's files with.</summary>
+    /// <remarks>
+    /// The field is the bubble a name is typed in rather than a window of its own: Enter records and Escape
+    /// leaves, and a field that has been left is the same answer as Escape. Nothing is forced here: this is
+    /// the ordinary track, and a change that would be refused is said rather than recorded anyway.
+    /// </remarks>
+    /// <param name="files">The files the run records.</param>
+    /// <param name="host">The host, which is what a failure is shown through.</param>
+    /// <param name="anchor">The button the prompt stands under.</param>
+    internal void AskTrack(IReadOnlyList<string> files, IPluginHost host, Control anchor)
+    {
+        if (files.Count == 0 || BaseDirectory.Current is not { Length: > 0 } directory)
+        {
+            return;
+        }
+
+        var box = new TextBox
+        {
+            Width = 260,
+            MinHeight = 34,
+            Padding = new Thickness(12, 0),
+            BorderThickness = new Thickness(0),
+            CornerRadius = new CornerRadius(0),
+            Background = Brushes.Transparent,
+            PlaceholderText = RolaI18N.Get("rorolala_vcs.version_graph.track_hint"),
+        };
+
+        // The flyout's presenter is the one frame: a field with a border and a ring of its own would be a
+        // field inside the bubble rather than a message in it.
+        box.Styles.Add(
+            new Style(selector => selector.Class(":focus").Template().Name("border"))
+            {
+                Setters =
+                {
+                    new Setter(Border.BorderThicknessProperty, new Thickness(0)),
+                    new Setter(Border.BoxShadowProperty, default(BoxShadows)),
+                },
+            }
+        );
+
+        var flyout = new Flyout { Placement = PlacementMode.Bottom, Content = box };
+        var closed = false;
+
+        void Close()
+        {
+            if (!closed)
+            {
+                closed = true;
+                flyout.Hide();
+            }
+        }
+
+        // Taken on the way down, before the field reads them: a field that took Enter for itself would be a
+        // message nobody could finish, and the same for the key that leaves it.
+        box.AddHandler(
+            InputElement.KeyDownEvent,
+            (_, pressed) =>
+            {
+                if (pressed.Key == Avalonia.Input.Key.Enter)
+                {
+                    pressed.Handled = true;
+
+                    var message = box.Text?.Trim() ?? string.Empty;
+
+                    if (message.Length == 0)
+                    {
+                        return;
+                    }
+
+                    Close();
+                    RunTrack(directory, files, message, host);
+                }
+                else if (pressed.Key == Avalonia.Input.Key.Escape)
+                {
+                    pressed.Handled = true;
+                    Close();
+                }
+            },
+            RoutingStrategies.Tunnel
+        );
+
+        box.LostFocus += (_, _) => Close();
+        flyout.ShowAt(anchor);
+
+        // The field is focused after the flyout has made its own window, so that the keyboard is in it.
+        Dispatcher.UIThread.Post(() => box.Focus());
+    }
+
+    /// <summary>Records the group's files as one version, with the message that was typed.</summary>
+    /// <param name="directory">Where the work is rooted.</param>
+    /// <param name="files">The files to record.</param>
+    /// <param name="message">What the version says.</param>
+    /// <param name="host">The host, which is what a failure is shown through.</param>
+    private void RunTrack(string directory, IReadOnlyList<string> files, string message, IPluginHost host)
+    {
+        if (_tracking)
+        {
+            return;
+        }
+
+        _tracking = true;
+
+        var run = _hub.Begin("rorolala_vcs.progress.track");
+
+        _ = Task.Run(() =>
+        {
+            var (done, said) = TrackCommand.Run(directory, files, message);
+
+            Dispatcher.UIThread.Post(() =>
+            {
+                _tracking = false;
+                _hub.End(run);
+                host.Files.Touch();
+
+                if (!done)
+                {
+                    FailureNotice.Show(
+                        host.Dialogs,
+                        host.Icons,
+                        RolaI18N.Get("rorolala_vcs.version_graph.track_failed"),
+                        said
+                    );
+                }
+            });
+        });
+    }
+
+    /// <summary>Whether a pressed visual is the track button or something inside it.</summary>
+    /// <param name="source">Where the press landed.</param>
+    /// <param name="ancestor">What it may be inside.</param>
+    /// <returns>Whether it is.</returns>
+    private static bool Within(object? source, Visual ancestor)
+    {
+        for (var at = source as Visual; at is not null; at = at.GetVisualParent())
+        {
+            if (at == ancestor)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>Folds a group's rows away or open, animating the height they take and their ink.</summary>
