@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using Avalonia;
 using Avalonia.Animation;
 using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
 using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Selection;
 using Avalonia.Controls.Templates;
@@ -3453,18 +3454,6 @@ internal sealed class GridBrowser<TItem> : EntryView<TItem>, IGridTileSource
     /// </remarks>
     private const int Around = 12;
 
-    /// <summary>
-    /// How much room is left around each tile, and so between one and the next.
-    /// </summary>
-    /// <remarks>
-    /// The room is not only looks: a frame is begun where no entry is, so a grid whose tiles met
-    /// edge to edge would be a grid a frame could never start in, every point would be on a tile. It is left
-    /// on the **item** rather than on the tile drawn inside it, because it is the item's own area that answers
-    /// the pointer: room left on what the item holds is room the item still covers, and a frame begun there
-    /// would be a frame begun on the entry.
-    /// </remarks>
-    private const int Gap = 12;
-
     /// <summary>How many pixels wide and tall a tile's icon is, and so how wide its name is too.</summary>
     private readonly int _icon;
 
@@ -3493,9 +3482,13 @@ internal sealed class GridBrowser<TItem> : EntryView<TItem>, IGridTileSource
         // around it and stays put however wide the dock is, the room a line has to spare is spent between
         // its tiles rather than at its ends, and the last line keeps that same room so a short one stands in
         // the columns above. A grid that never wrapped reads from its start (see JustifiedLayout).
+        //
+        // The room the panel leaves is nothing: a tile's own room around its picture is the space between
+        // two pictures, and the cells a tile is drawn in meet at their edges, so that the wash of a chosen
+        // cell runs into the one beside it rather than stopping at a strip of the ground.
         List.ItemsPanel = new FuncTemplate<Panel?>(() =>
         {
-            _panel = new JustifiedVirtualizingPanel { Gap = Gap, Source = this };
+            _panel = new JustifiedVirtualizingPanel { Gap = 0, Source = this };
 
             return _panel;
         });
@@ -3512,38 +3505,62 @@ internal sealed class GridBrowser<TItem> : EntryView<TItem>, IGridTileSource
         List.BorderThickness = new Thickness(0);
 
         // A tile at rest is its icon and its name on the dock's own ground: the surface a tile wears is what the
-        // choice draws, so it arrives with the selection and leaves with it. What is left on the
-        // item is the room above and below a tile, the room across is the panel's, which is what makes the
-        // outermost room the grid's own padding and nothing else (see JustifiedLayout), and the corner the
-        // surface is rounded by, which is kept for every state so that a choice does not change the shape of
-        // what it is drawn on.
+        // choice draws, so it arrives with the selection and leaves with it. The item takes no room of its own:
+        // the room around a picture is the tile's, and what the panel leaves between two cells is nothing (see
+        // JustifiedLayout), so the outermost room is the grid's own inset and the cells meet at their edges.
+        //
+        // The face is square and meets the faces beside it: a chosen tile is a cell of the grid rather than a
+        // card laid on it, so neither a corner nor an edge is drawn around it, and a line of chosen tiles
+        // reads as one band rather than as a row of boxes.
         List.Styles.Add(
             new Style(selector => selector.OfType<ListBoxItem>())
             {
                 Setters =
                 {
                     new Setter(TemplatedControl.PaddingProperty, new Thickness(0)),
-                    new Setter(Layoutable.MarginProperty, new Thickness(0, Gap / 2.0, 0, Gap / 2.0)),
+                    new Setter(Layoutable.MarginProperty, new Thickness(0)),
                     new Setter(Layoutable.MinHeightProperty, 0.0),
-                    new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(1)),
-                    new Setter(TemplatedControl.CornerRadiusProperty, new CornerRadius(8)),
+                    new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(0)),
+                    new Setter(TemplatedControl.CornerRadiusProperty, new CornerRadius(0)),
                 },
             }
         );
 
-        // The card a chosen tile is drawn as: the fill is the theme's own wash over a chosen row, the same
-        // colour a chosen row of the table is filled with, and the edge is the one this view draws around it.
-        // The fill is the toolkit's and cannot be set from here: what a chosen item is filled with is written
-        // into the theme's own template for it, which reaches the surface the tile is drawn on rather than the
-        // item, so setting a background here would be a colour nothing is drawn with.
+        // The wash a tile's cell wears while it is chosen and under the pointer. Both reach the template's own
+        // presenter rather than the item, because the base theme paints the presenter and a background set on
+        // the item is a value that surface only binds from. The wash is named against the look rather than made
+        // here, so that a colour the user changes reaches a tile that is already drawn, and the pointer's wash
+        // is stated last so that it is the answer while the pointer is on a chosen tile: what the pointer is on
+        // is the live answer, and a choice is the quiet one.
         List.Styles.Add(
-            new Style(selector => selector.OfType<ListBoxItem>().Class(":selected"))
+            new Style(selector => selector
+                .OfType<ListBoxItem>()
+                .Class(":selected")
+                .Template()
+                .Name("PART_ContentPresenter"))
             {
                 Setters =
                 {
                     new Setter(
-                        TemplatedControl.BorderBrushProperty,
-                        new DynamicResourceExtension(PaletteKeys.Splitter)
+                        ContentPresenter.BackgroundProperty,
+                        new DynamicResourceExtension(PaletteKeys.TileSelection)
+                    ),
+                },
+            }
+        );
+
+        List.Styles.Add(
+            new Style(selector => selector
+                .OfType<ListBoxItem>()
+                .Class(":pointerover")
+                .Template()
+                .Name("PART_ContentPresenter"))
+            {
+                Setters =
+                {
+                    new Setter(
+                        ContentPresenter.BackgroundProperty,
+                        new DynamicResourceExtension(PaletteKeys.TileHover)
                     ),
                 },
             }

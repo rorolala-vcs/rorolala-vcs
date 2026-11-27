@@ -830,6 +830,12 @@ internal sealed class RorolalaTheme
             [SplitterAcrossHover] = Hairline(vertical: false, _accent),
 
             [Selection] = Fill(selection),
+            // A tile is a cell of a grid, and its wash is the ink rather than the primary: it covers the
+            // whole cell, and the primary over part of one would read as a chosen surface laid on the
+            // grid rather than as the cell the entry stands in. The pointer's wash is the stronger of the
+            // two, because what the pointer is on is the live answer and a choice is the quiet one.
+            [Contract.PaletteKeys.TileHover] = Fill(WithAlpha(grounds.Fg, 0x33)),
+            [Contract.PaletteKeys.TileSelection] = Fill(WithAlpha(grounds.Fg, 0x1A)),
             [Shadow] = grounds.Raised,
             [Ring] = _ring,
             // The semantic states, in the set the look states. What a state is coloured is not a preference, and

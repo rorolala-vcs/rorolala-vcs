@@ -91,6 +91,71 @@ public sealed class JustifiedPanelTests
         }
     }
 
+    /// <summary>The cells of one line meet at one edge, even where the line's room is not a whole pixel.</summary>
+    /// <remarks>
+    /// A cell's face is a wash of the look, thin enough to see through, so a fraction of a pixel of overlap
+    /// between two cells is a line brighter than either. What is checked is that the cells of a line share
+    /// their edges, and that the line below starts on the edge this one ends on: the widths, the offsets and
+    /// the heights are laid on the pixels the window draws at, which is what the layout itself rounds on.
+    /// </remarks>
+    [Fact]
+    public void TheCellsOfOneLineMeetAtOneEdgeBetweenPixels()
+    {
+        var panel = new JustifiedVirtualizingPanel { Gap = 0, Source = new FixedSource(100, 40.3) };
+        var list = new ListBox
+        {
+            Width = 902,
+            ItemsSource = Enumerable.Range(0, 60).Select(at => new Box(at)).ToArray(),
+            ItemsPanel = new FuncTemplate<Panel?>(() => panel),
+            ItemTemplate = new FuncDataTemplate<Box>(
+                (_, _) => new Border { Width = 100, Height = 40.3 },
+                supportsRecycling: true
+            ),
+        };
+
+        list.Styles.Add(
+            new Style(selector => selector.OfType<ListBoxItem>())
+            {
+                Setters =
+                {
+                    new Setter(TemplatedControl.PaddingProperty, new Thickness(0)),
+                    new Setter(Layoutable.MarginProperty, new Thickness(0)),
+                    new Setter(Layoutable.MinHeightProperty, 0.0),
+                    new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(0)),
+                },
+            }
+        );
+
+        ScrollViewer.SetHorizontalScrollBarVisibility(list, ScrollBarVisibility.Disabled);
+
+        var window = new Window { Width = 1000, Height = 600, Content = list };
+
+        window.Show();
+        window.SetRenderScaling(1.25);
+
+        try
+        {
+            Pump();
+
+            var columns = panel.Columns;
+            var items = Enumerable.Range(0, columns + 1).Select(panel.RealizedAt).ToArray();
+
+            Assert.True(columns > 1, $"the line holds {columns} cells");
+            Assert.All(items, item => Assert.NotNull(item));
+
+            for (var at = 1; at < columns; at++)
+            {
+                Assert.Equal(items[at - 1]!.Bounds.Right, items[at]!.Bounds.X, 0.01);
+            }
+
+            Assert.Equal(items[0]!.Bounds.Bottom, items[columns]!.Bounds.Y, 0.01);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
     /// <summary>Lets the layout and the drawing catch up.</summary>
     private static void Pump()
     {

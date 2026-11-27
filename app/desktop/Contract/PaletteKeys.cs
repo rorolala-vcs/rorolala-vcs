@@ -62,6 +62,18 @@ public static class PaletteKeys
     /// <inheritdoc cref="Primary" />
     public const string Selection = "rorolala.selection";
 
+    /// <summary>The front ink laid thin, which the cell of a tile is washed with under the pointer.</summary>
+    /// <remarks>
+    /// A tile is a cell of a grid rather than a row of a list, and its wash is the ink rather than the
+    /// primary: the wash covers the whole cell, and the primary over a whole one would read as a chosen
+    /// surface laid on the grid rather than as the cell the entry stands in. This one is stronger than
+    /// <see cref="TileSelection"/>, because what the pointer is on is the live answer.
+    /// </remarks>
+    public const string TileHover = "rorolala.tile.hover";
+
+    /// <inheritdoc cref="TileHover" />
+    public const string TileSelection = "rorolala.tile.selection";
+
     /// <summary>What is written on the primary, which only a mark drawn on it needs to name.</summary>
     public const string PrimaryText = "rorolala.primary.text";
 

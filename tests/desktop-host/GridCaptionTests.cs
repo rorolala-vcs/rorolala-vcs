@@ -11,13 +11,14 @@ using FileSystem = global::FileSystemPlugin.FileSystemPlugin;
 namespace RorolalaDesktopHost.IntegrationTests;
 
 /// <summary>
-/// A grid tile's name: wrapped rather than cut off, and the tile and its line grown by the lines the name takes.
+/// A grid tile's name: wrapped rather than cut off, and the line grown by the lines the name takes.
 /// </summary>
 /// <remarks>
 /// A name cut short is a name the reader has to open the entry to read, so what does not fit under the picture is
 /// carried onto the next line. What that costs is height, and it is paid where it is owed: the tile is as tall as
-/// its name needs, and the line it stands on is as tall as its tallest tile, which is checked here by the two
-/// tiles of one line being of two heights and standing on one height.
+/// its name needs, and the line it stands on is as tall as its tallest tile. A tile is drawn in a cell of that
+/// height rather than in a box of its own, because the face a chosen tile wears is the whole cell: the two tiles
+/// of one line are checked here to be of one height while their names are not.
 /// </remarks>
 public sealed class GridCaptionTests
 {
@@ -83,15 +84,22 @@ public sealed class GridCaptionTests
                 $"the long name stands on {namedCaption.Bounds.Height} against {briefCaption.Bounds.Height}"
             );
 
-            // The tile is as tall as its name needs, so the item it is drawn in is taller as well, and the two
-            // still stand on one line, which is what makes the whole line taller rather than the one tile.
+            // The tile is as tall as its name needs, so the line it stands on is taller as well, and every
+            // tile of that line is drawn in a cell of the line's height rather than in a box of its own: the
+            // face a chosen tile wears is the cell, and the cells of one line are one height.
             var briefItem = Item(list, brief);
             var namedItem = Item(list, named);
+            var grid = Assert.IsType<GridBrowser<Entry>>(view);
+            var briefEntry = Assert.IsType<Entry>(briefItem.DataContext);
+            var namedEntry = Assert.IsType<Entry>(namedItem.DataContext);
 
             Assert.True(
-                namedItem.Bounds.Height > briefItem.Bounds.Height,
-                $"the long tile stands {namedItem.Bounds.Height} against {briefItem.Bounds.Height}"
+                grid.HeightOf(namedEntry) > grid.HeightOf(briefEntry),
+                $"the long tile stands {grid.HeightOf(namedEntry)} against {grid.HeightOf(briefEntry)}"
             );
+
+            Assert.Equal(grid.HeightOf(namedEntry), namedItem.Bounds.Height, 0.5);
+            Assert.Equal(briefItem.Bounds.Height, namedItem.Bounds.Height, 0.5);
             Assert.Equal(briefItem.Bounds.Y, namedItem.Bounds.Y, 0.5);
         }
         finally

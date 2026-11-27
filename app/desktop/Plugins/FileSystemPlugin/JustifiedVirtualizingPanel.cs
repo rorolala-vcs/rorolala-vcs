@@ -4,6 +4,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Generators;
 using Avalonia.Input;
+using Avalonia.Layout;
 
 namespace FileSystemPlugin;
 
@@ -117,7 +118,18 @@ internal sealed class JustifiedVirtualizingPanel : VirtualizingPanel
 
         var sizes = new Func<int, Size>(index => new Size(Source.TileWidth, Source.HeightOf(index)));
 
-        _lines = JustifiedLayout.Lines(Items.Count, sizes, width, Gap);
+        // Every line's height is rounded up to the pixels the window draws at, so that two lines share the
+        // edge they meet at rather than one of them covering a pixel of the other. The faces of two cells
+        // beside each other are laid thin enough to see through, and two of them over one pixel read as a
+        // line brighter than either, which is what a fraction of a pixel of overlap is.
+        var scale = TopLevel.GetTopLevel(this)?.RenderScaling ?? 1.0;
+
+        _lines =
+        [
+            .. JustifiedLayout
+                .Lines(Items.Count, sizes, width, Gap)
+                .Select(line => line with { Height = LayoutHelper.RoundLayoutValueUp(line.Height, scale) }),
+        ];
         _width = width;
         Columns = _lines.Count == 0 ? 1 : _lines[0].Count;
         _tops = new double[_lines.Count];
@@ -145,6 +157,7 @@ internal sealed class JustifiedVirtualizingPanel : VirtualizingPanel
 
         var y = 0.0;
         var step = Gap;
+        var scale = TopLevel.GetTopLevel(this)?.RenderScaling ?? 1.0;
 
         for (var lineIndex = 0; lineIndex < _lines.Count; lineIndex++)
         {
@@ -155,20 +168,33 @@ internal sealed class JustifiedVirtualizingPanel : VirtualizingPanel
                 step = line.Count > 1
                     ? Gap + ((finalSize.Width - line.Width) / (line.Count - 1))
                     : Gap;
+
+                // Rounded to the pixels the window draws at, so that two cells of a line start and end on
+                // the same edge rather than one of them covering a pixel of the other. A face is thin
+                // enough to see through, and two of them over one pixel are a brighter line between them.
+                step = LayoutHelper.RoundLayoutValue(step, scale);
             }
 
             var x = 0.0;
+
+            // The room between two tiles belongs to the cell in front of it: the face a tile is washed
+            // with under the pointer and while it is chosen fills the cell, so the cells of a line meet
+            // at their edges rather than leaving a strip of the ground between them.
+            var cell = Source.TileWidth + step;
 
             for (var at = line.Start; at < line.Start + line.Count; at++)
             {
                 if (_realized.TryGetValue(at, out var child))
                 {
-                    var size = child.DesiredSize;
+                    // Every cell of a line is the line's height, not the tile's own: a short caption
+                    // would otherwise leave the chosen wash a different height from the tile beside it.
+                    // The last cell ends where the line or the row does rather than one room past it.
+                    var width = Math.Min(cell, Math.Max(0, finalSize.Width - x));
 
-                    child.Arrange(new Rect(x, y, size.Width, size.Height));
+                    child.Arrange(new Rect(x, y, width, line.Height));
                 }
 
-                x += Source.TileWidth + step;
+                x += cell;
             }
 
             y += line.Height;
