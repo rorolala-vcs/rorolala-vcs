@@ -29,30 +29,22 @@ namespace RorolalaDesktopHost.IntegrationTests;
 /// </remarks>
 public sealed class SyncStripTests
 {
-    /// <summary>The reading is drawn first, then the three as one group, and the dropdown last.</summary>
+    /// <summary>The reading, the three, and the dropdown are one row of buttons.</summary>
     /// <remarks>
-    /// The group is what the reader asked for: three buttons that belong together are drawn inside one rule, so
-    /// that what they are about is one thing rather than three, and the button that opens what a run leaves out
-    /// stands outside it, since what it is about is the run and not the work.
+    /// The three stand beside the reading rather than inside a rule of their own, so the strip is one row of
+    /// marks: what they are about is the work, and the button that opens what a run leaves out is about what a
+    /// run is told, so it is last.
     /// </remarks>
     [Fact]
-    public void TheReadingStandsBeforeTheThreeAsOneGroup()
+    public void TheRefreshTheThreeAndTheDropdownAreOneRow()
     {
         var (strip, _, _) = Drawn();
 
-        Assert.Equal(3, strip.Children.Count);
-
-        // The reading.
-        Assert.IsType<Button>(strip.Children[0]);
-
-        var group = Assert.IsType<Border>(strip.Children[1]);
-        var inside = Assert.IsType<StackPanel>(group.Child);
-
-        Assert.Equal(3, inside.Children.Count);
-        Assert.All(inside.Children, child => Assert.IsType<Button>(child));
+        Assert.Equal(5, strip.Children.Count);
+        Assert.All(strip.Children, child => Assert.IsType<Button>(child));
 
         // The dropdown is the last button of the row, and it is the one with something to open.
-        var more = Assert.IsType<Button>(strip.Children[2]);
+        var more = Assert.IsType<Button>(strip.Children[4]);
 
         var flyout = Assert.IsType<Flyout>(more.Flyout);
         var boxes = Assert.IsType<StackPanel>(flyout.Content);
@@ -69,16 +61,14 @@ public sealed class SyncStripTests
             }
         );
 
-        // The three marks are the three pictures this plugin contributes for them, and the last is the one that
-        // opens something rather than running anything.
-        Assert.Equal(3, Assert.IsType<StackPanel>(group.Child).Children.Count);
-
         // Nothing has been asked of the Vault yet, so there is nothing known to carry: the three are drawn
         // unpressable rather than offering a run nobody has said there is work for.
-        Assert.All(inside.Children, child => Assert.False(Assert.IsType<Button>(child).IsEnabled));
+        foreach (var at in new[] { 1, 2, 3 })
+        {
+            Assert.False(Assert.IsType<Button>(strip.Children[at]).IsEnabled);
+        }
 
-        // The reading and the dropdown are pressable whatever the three are: they are about the work, which
-        // does not wait on there being something to carry.
+        // The reading and the dropdown are pressable whatever the three are.
         Assert.True(Assert.IsType<Button>(strip.Children[0]).IsEnabled);
         Assert.True(more.IsEnabled);
     }
@@ -88,9 +78,9 @@ public sealed class SyncStripTests
     /// </summary>
     /// <remarks>
     /// A run made with the key held changes history rather than refusing, which is the one thing a reader has to
-    /// see before pressing rather than after: the strip says so by turning the three and the rule around them
-    /// the colour the look states for a forced run. What is checked is the colour actually drawn on
-    /// screen, which is the look's answer and not this test's.
+    /// see before pressing rather than after: the strip says so by turning the three the colour the look states
+    /// for a forced run. What is checked is the colour actually drawn on screen, which is the look's answer and
+    /// not this test's.
     /// </remarks>
     [Fact]
     public void TheThreeTurnToTheForceColourWhileTheKeyThatChangesARunIsHeld()
@@ -98,19 +88,14 @@ public sealed class SyncStripTests
         var (strip, window, resources) = Drawn();
 
         var plain = Fill(resources, PaletteKeys.Front);
-        var rule = Fill(resources, PaletteKeys.Splitter);
         var held = Fill(resources, PaletteKeys.Force);
 
         Assert.NotEqual(plain, held);
-
-        var around = Assert.IsType<Border>(strip.Children[1]);
 
         foreach (var mark in Marks(strip))
         {
             Assert.Equal(plain, Colour(mark.Background));
         }
-
-        Assert.Equal(rule, Colour(around.BorderBrush));
 
         // The key being held is what the strip watches for, wherever the pointer is: it is told by the window
         // rather than by one of its own buttons having the keyboard.
@@ -128,8 +113,6 @@ public sealed class SyncStripTests
             Assert.Equal(held, Colour(mark.Background));
         }
 
-        Assert.Equal(held, Colour(around.BorderBrush));
-
         // And letting it go draws them as they were, since the next run is an ordinary one again.
         window.RaiseEvent(
             new KeyEventArgs
@@ -144,8 +127,6 @@ public sealed class SyncStripTests
         {
             Assert.Equal(plain, Colour(mark.Background));
         }
-
-        Assert.Equal(rule, Colour(around.BorderBrush));
     }
 
     /// <summary>A capsule is drawn for every command, and the whole bar adds up its own phases.</summary>
@@ -274,11 +255,10 @@ public sealed class SyncStripTests
     /// <returns>The marks.</returns>
     private static IReadOnlyList<Border> Marks(SyncStrip strip)
     {
-        var group = Assert.IsType<Border>(strip.Children[1]);
-        var inside = Assert.IsType<StackPanel>(group.Child);
-
-        return inside
+        return strip
             .Children.OfType<Button>()
+            .Skip(1)
+            .Take(3)
             .Select(button => Assert.IsType<Border>(button.Content))
             .ToArray();
     }

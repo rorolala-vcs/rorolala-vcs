@@ -27,16 +27,13 @@ namespace RorolalaVCSPlugin;
 /// </remarks>
 internal sealed class SyncStrip : StackPanel
 {
-    /// <summary>What the marks and the group's rule are drawn in, and what they turn to when a key is held.</summary>
+    /// <summary>What the marks are drawn in, and what they turn to when a key is held.</summary>
     /// <remarks>
     /// The look's own names rather than colours of this plugin's, so that a strip of marks is drawn in whatever
     /// the look draws every other mark in, and a held key is drawn in the colour the look spends on what must
     /// not be done rather than in a red of this plugin's.
     /// </remarks>
     private const string Ink = PaletteKeys.Front;
-
-    /// <summary>The rule around the group, which is the look's own line between two things.</summary>
-    private const string Rule = PaletteKeys.Splitter;
 
     /// <summary>What the three are drawn in while the key that changes what a run does is held.</summary>
     private const string Held = PaletteKeys.Force;
@@ -58,9 +55,6 @@ internal sealed class SyncStrip : StackPanel
 
     /// <summary>The boxes of what is carried, so that a change made elsewhere is drawn here too.</summary>
     private readonly List<(CheckBox Box, string Setting)> _boxes = [];
-
-    /// <summary>The rule around the three, which is drawn in the held colour as well.</summary>
-    private readonly Border _group;
 
     /// <summary>The host, which is what the buttons reach to ask, run and report.</summary>
     private readonly IPluginHost _host;
@@ -96,23 +90,10 @@ internal sealed class SyncStrip : StackPanel
 
         Children.Add(Button(Glyph(Icons.ArrowClockwise), "rorolala_vcs.status.refresh", refresh));
 
-        _group = new Border
-        {
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(5),
-            Padding = new Thickness(1),
-            Margin = new Thickness(2, 0),
-            VerticalAlignment = VerticalAlignment.Center,
-        };
+        Add(SyncWay.Up, Icons.CloudArrowUp, "rorolala_vcs.sync.up");
+        Add(SyncWay.Down, Icons.CloudArrowDown, "rorolala_vcs.sync.down");
+        Add(SyncWay.Both, Icons.ArrowsClockwise, "rorolala_vcs.sync.both");
 
-        var inside = new StackPanel { Orientation = Orientation.Horizontal };
-
-        Add(inside, SyncWay.Up, Icons.CloudArrowUp, "rorolala_vcs.sync.up");
-        Add(inside, SyncWay.Down, Icons.CloudArrowDown, "rorolala_vcs.sync.down");
-        Add(inside, SyncWay.Both, Icons.ArrowsClockwise, "rorolala_vcs.sync.both");
-
-        _group.Child = inside;
-        Children.Add(_group);
         Children.Add(More());
 
         _sync.Changed += (_, _) => Paint();
@@ -123,17 +104,16 @@ internal sealed class SyncStrip : StackPanel
     }
 
     /// <summary>Draws one of the three, and keeps what pressing it does.</summary>
-    /// <param name="inside">Where to put it.</param>
     /// <param name="way">Which way it carries.</param>
     /// <param name="key">The key of the picture it wears.</param>
     /// <param name="label">The key of what it is called.</param>
-    private void Add(StackPanel inside, SyncWay way, string key, string label)
+    private void Add(SyncWay way, string key, string label)
     {
         var mark = Glyph(key);
         var button = Button(mark, label, () => Pressed(way));
 
         _ways.Add((button, mark, label, way));
-        inside.Children.Add(button);
+        Children.Add(button);
     }
 
     /// <summary>
@@ -217,8 +197,6 @@ internal sealed class SyncStrip : StackPanel
 
             ToolTip.SetTip(button, Sentence(label, said, way));
         }
-
-        _group[!Border.BorderBrushProperty] = new DynamicResourceExtension(_shifted ? Held : Rule);
 
         // What is carried is read again here, because it is changed in the preference panel as well as in this
         // strip's own dropdown: a box drawing what it last wrote would disagree with the next run.
