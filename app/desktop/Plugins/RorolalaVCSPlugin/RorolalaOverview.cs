@@ -413,10 +413,16 @@ internal sealed class OverviewView : UserControl
     /// <remarks>
     /// One flag rather than one per row, because what it is about is the tree: every operation button of the
     /// table acts on the work under the base, and two modes over one work at once would be two runs the second
-    /// of which acts on what the first has half done. The buttons are drawn from it, so it is enough to draw the
-    /// table again when it changes.
+    /// of which acts on what the first has half done. The buttons on screen are told when it changes rather
+    /// than the table being built again, so that a run costs the list no scroll and no flash.
     /// </remarks>
     private bool _busy;
+
+    /// <summary>The operation buttons on screen, so that a run holds them without the list being built again.</summary>
+    private readonly List<(Button Button, bool Begun, bool Candidate)> _buttons = [];
+
+    /// <summary>Whether a redraw is already posted, so a burst of changes is one drawing.</summary>
+    private bool _redrawAsked;
 
     /// <summary>The one fetch of the Vault's Layout, shared with the Version Graph.</summary>
     private readonly VaultFetch _fetch;
@@ -1257,6 +1263,8 @@ internal sealed class OverviewView : UserControl
         ToolTip.SetTip(button, RolaI18N.Get(Label(operation, begun, candidate)));
         ToolTip.SetShowDelay(button, 0);
 
+        _buttons.Add((button, begun, candidate));
+
         button.Click += (_, _) =>
         {
             if (pairing)
@@ -1504,7 +1512,15 @@ internal sealed class OverviewView : UserControl
         }
 
         _busy = busy;
-        Redraw();
+
+        // The buttons are told rather than drawn again: an operation going changes whether they answer and
+        // nothing else, and rebuilding the list for it is a scroll lost and a frame spent for one flag.
+        var running = _connecting is not null;
+
+        foreach (var (button, begun, candidate) in _buttons)
+        {
+            button.IsEnabled = !_busy && (!running || begun || candidate);
+        }
     }
 
     /// <summary>
@@ -1666,14 +1682,12 @@ internal sealed class OverviewView : UserControl
         {
             BaseDirectory.Changed += Touched;
             _files.Changed += Touched;
-            _files.Redrawn += Redraw;
             _again.Start();
         }
         else
         {
             BaseDirectory.Changed -= Touched;
             _files.Changed -= Touched;
-            _files.Redrawn -= Redraw;
             _again.Stop();
         }
 
@@ -1706,10 +1720,24 @@ internal sealed class OverviewView : UserControl
     /// </remarks>
     private void Redraw()
     {
-        if (_shown is { } shown)
+        if (_redrawAsked)
         {
-            Show(shown.Said, shown.Groups, _reading);
+            return;
         }
+
+        _redrawAsked = true;
+
+        // A burst of redraws is one drawing: a command that restores many files says each of them changed,
+        // and rebuilding the list for each would be one flash per file.
+        Dispatcher.UIThread.Post(() =>
+        {
+            _redrawAsked = false;
+
+            if (_shown is { } shown)
+            {
+                Show(shown.Said, shown.Groups, _reading);
+            }
+        });
     }
 
     /// <summary>Reads the work again and draws it, on the thread the control belongs to.</summary>
@@ -1920,26 +1948,11 @@ internal sealed class OverviewView : UserControl
         _notice.Text = said;
         _notice.IsVisible = said is { Length: > 0 };
 
+        _buttons.Clear();
+
         if (rows.Count > 0)
         {
-            var table = Table(groups, BaseDirectory.Current ?? string.Empty, _host, this);
-
-            // A reading that changes the work is a list that changes, and the reading rebuilds it whole:
-            // what a resolved row leaves behind is the list as it now is, so the change is shown by the
-            // list fading in rather than by a row fading out.
-            table.Opacity = 0;
-            table.Transitions = new Transitions
-            {
-                new DoubleTransition
-                {
-                    Property = Visual.OpacityProperty,
-                    Duration = TimeSpan.FromMilliseconds(140),
-                    Easing = new CubicEaseOut(),
-                },
-            };
-
-            _tableCell.Children.Add(table);
-            Dispatcher.UIThread.Post(() => table.Opacity = 1);
+            _tableCell.Children.Add(Table(groups, BaseDirectory.Current ?? string.Empty, _host, this));
         }
     }
 
