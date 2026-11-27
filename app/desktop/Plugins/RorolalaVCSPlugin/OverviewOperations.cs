@@ -119,6 +119,7 @@ internal static class OverviewOperations
             State.Modified => [Operation.RestoreContent],
             State.Stale => [Operation.RestoreContent],
             State.NotMine => [Operation.RestoreContent, Operation.TakeOwnership],
+            State.Unclaimed => [Operation.TakeOwnership, Operation.RestoreContent],
             State.Merging or State.Broken => [Operation.CancelMerge],
             _ => [],
         };

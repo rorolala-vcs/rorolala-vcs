@@ -186,6 +186,9 @@ icons = [
     { key = "git-merge-bold", name = "git-merge", weight = "bold" },
     { key = "pencil-bold", name = "pencil", weight = "bold" },
     { key = "lock-bold", name = "lock", weight = "bold" },
+    # What a restore wears in the Overview: putting the local copy back is discarding the change, and the
+    # trash says so. Bold because it is drawn small, on the action buttons beside the rows.
+    { key = "trash-bold", name = "trash", weight = "bold" },
 ]
 
 [[set]]

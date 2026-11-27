@@ -77,6 +77,25 @@ internal static class RorolalaColours
     /// </remarks>
     public static Color Mid => _palette?.Mid ?? ThemePalette.DefaultDark.Mid;
 
+    /// <summary>The face a bead stands on, which its ground is tinted from.</summary>
+    public static Color Bright => _palette?.Bright ?? ThemePalette.DefaultDark.Bright;
+
+    /// <summary>Whether the look in force is the dark one, which a bead's ring and picture are shaded towards.</summary>
+    public static bool DarkLook => Brightness(Mid) < 0.5;
+
+    /// <summary>One colour mixed towards another, which is how a bead's shades are worked out.</summary>
+    /// <param name="from">The colour to start from.</param>
+    /// <param name="to">The colour to move towards.</param>
+    /// <param name="amount">How far towards it, from nothing to all of it.</param>
+    /// <returns>The mixed colour.</returns>
+    public static Color Blend(Color from, Color to, double amount) =>
+        Color.FromArgb(
+            from.A,
+            (byte)Math.Round(from.R + ((to.R - from.R) * amount)),
+            (byte)Math.Round(from.G + ((to.G - from.G) * amount)),
+            (byte)Math.Round(from.B + ((to.B - from.B) * amount))
+        );
+
     /// <summary>The ink things are written in, which the park's own picture is drawn in.</summary>
     public static Color Front => _palette?.Front ?? ThemePalette.DefaultDark.Front;
 

@@ -303,7 +303,7 @@ public sealed class RorolalaDockTests
             Apart: []
         );
 
-        var rows = OverviewView.Rows(facts);
+        var rows = Flat(OverviewView.Rows(facts));
 
         Assert.Equal(7, rows.Count);
 
@@ -346,17 +346,15 @@ public sealed class RorolalaDockTests
     }
 
     /// <summary>
-    /// What the ignore rules govern is left out of the table unless the switch asks for it, and what is
-    /// shown of it is drawn as what is not the work.
+    /// What the ignore rules govern is a group of its own, which the view folds shut by default.
     /// </summary>
     /// <remarks>
-    /// The reading keeps the two apart (what the tree gained as work, and what the rules govern) so which
-    /// of them a table is built from is the view's answer. A row of the governed is read like an untagged one
-    /// and offers nothing to do with it: a recording refuses a path the rules govern, and a button that could
-    /// only refuse is a row pretending to be work.
+    /// The reading keeps the two apart (what the tree gained as work, and what the rules govern), and the
+    /// governed are a group rather than a switch: their rows are read like untagged ones and offer nothing
+    /// to do with them, since a recording refuses a path the rules govern.
     /// </remarks>
     [Fact]
-    public void WhatTheIgnoreRulesGovernIsDrawnOnlyWhenAskedFor()
+    public void WhatTheIgnoreRulesGovernIsAGroupOfItsOwn()
     {
         _ = Host.Services();
 
@@ -375,22 +373,19 @@ public sealed class RorolalaDockTests
             Apart: []
         );
 
-        // Not asked for: the table is the work, and what the rules govern is not among it.
-        var quiet = OverviewView.Rows(facts);
+        var groups = OverviewView.Rows(facts);
 
-        var gain = Assert.Single(quiet);
+        Assert.Equal(["track", "ignored"], groups.Select(group => group.Key));
+
+        var gain = Assert.Single(groups[0].Rows);
         Assert.False(gain.Ignored);
         Assert.Equal(("new.txt", string.Empty), (gain.From, gain.To));
 
-        // Asked for: the governed path is a row of its own, last, marked as not the work's and with nothing
-        // to press, the ink it is drawn in is the row's flag, which the drawing reads.
-        var shown = OverviewView.Rows(facts, showIgnored: true);
-
-        Assert.Equal(2, shown.Count);
-        Assert.True(shown[1].Ignored);
-        Assert.Equal(("scratch.mb", string.Empty), (shown[1].From, shown[1].To));
-        Assert.Empty(shown[1].Operations);
-        Assert.Equal(["A"], shown[1].Pills.Select(pill => pill.Letters));
+        var governed = Assert.Single(groups[1].Rows);
+        Assert.True(governed.Ignored);
+        Assert.Equal(("scratch.mb", string.Empty), (governed.From, governed.To));
+        Assert.Empty(governed.Operations);
+        Assert.Equal("A", Pills(governed));
     }
 
     /// <summary>A path a sync would move is a row of the last group, with no button of its own.</summary>
@@ -422,7 +417,7 @@ public sealed class RorolalaDockTests
         );
 
         // The edited path is in the reading as a change as well, and the change is the row it is read on.
-        var rows = OverviewView.Rows(facts with { Modified = ["edited.psd"] });
+        var rows = Flat(OverviewView.Rows(facts with { Modified = ["edited.psd"] }));
 
         // The change is one group above, and the three the reading says nothing else about are the last.
         Assert.Equal(
@@ -469,7 +464,7 @@ public sealed class RorolalaDockTests
             Apart: []
         );
 
-        var rows = OverviewView.Rows(facts);
+        var rows = Flat(OverviewView.Rows(facts));
 
         Assert.Equal(2, rows.Count);
 
@@ -487,7 +482,7 @@ public sealed class RorolalaDockTests
 
         // The pill is the merge's own, and the whole of what it means is which variant is waiting: the head of
         // the hash, which is what a person recognises a variant by and what the row's columns do not carry.
-        Assert.Equal("J", Assert.Single(rows[0].Pills).Letters);
+        Assert.Equal("J", Letter(Assert.Single(rows[0].Pills).State));
         Assert.Equal(
             RolaI18N.Get("rorolala_vcs.variant.pending", VariantFiles.Head("1a2b3c4d5e6f")),
             Assert.Single(rows[0].Pills).Hint
@@ -529,7 +524,7 @@ public sealed class RorolalaDockTests
             Apart: []
         );
 
-        var rows = OverviewView.Rows(facts);
+        var rows = Flat(OverviewView.Rows(facts));
 
         Assert.Equal(2, rows.Count);
         Assert.Equal("b.txt", rows[0].To);
@@ -562,7 +557,7 @@ public sealed class RorolalaDockTests
             Apart: []
         );
 
-        var row = Assert.Single(OverviewView.Rows(facts));
+        var row = Assert.Single(Flat(OverviewView.Rows(facts)));
 
         // A move whose file was edited is two states on one row, because the move and what became of its
         // content are two things to know.
@@ -600,7 +595,7 @@ public sealed class RorolalaDockTests
             Apart: []
         );
 
-        var rows = OverviewView.Rows(facts);
+        var rows = Flat(OverviewView.Rows(facts));
 
         Assert.Equal(2, rows.Count);
 
@@ -611,7 +606,7 @@ public sealed class RorolalaDockTests
         // A merge is one state whatever became of it, so the row wears one pill: the colour is what says that
         // this merge is a thing gone wrong, and the reason is in the note, where there is room to say it.
         Assert.Single(rows[0].Pills);
-        Assert.Equal("J", rows[0].Pills[0].Letters);
+        Assert.Equal("J", Letter(rows[0].Pills[0].State));
         Assert.StartsWith(
             RolaI18N.Get("rorolala_vcs.status.merge_broken"),
             Assert.Single(rows[0].Notes),
@@ -689,8 +684,34 @@ public sealed class RorolalaDockTests
     {
         ArgumentNullException.ThrowIfNull(row);
 
-        return string.Join(" + ", row.Pills.Select(pill => pill.Letters));
+        return string.Join(" + ", row.Pills.Select(pill => Letter(pill.State)));
     }
+
+    /// <summary>The rows of a reading, in the order they are drawn.</summary>
+    /// <param name="groups">The groups.</param>
+    /// <returns>Every row under them.</returns>
+    private static IReadOnlyList<TableRow> Flat(IReadOnlyList<RowGroup> groups) =>
+        [.. groups.SelectMany(group => group.Rows)];
+
+    /// <summary>What a state was known by when a row's states were letters.</summary>
+    /// <param name="state">The state.</param>
+    /// <returns>The letter it is read by in these tests.</returns>
+    private static string Letter(State state) =>
+        state switch
+        {
+            State.Untagged => "A",
+            State.Lost => "D",
+            State.NotMine or State.Stale => "E",
+            State.Unclaimed => "U",
+            State.Renamed => "R",
+            State.RenamedLikely => "R?",
+            State.Modified => "M",
+            State.Merging or State.Broken => "J",
+            State.Send => "S↑",
+            State.Receive => "S↓",
+            State.Create => "S+",
+            _ => "Sx",
+        };
 
     /// <summary>What a row's notes say, in the order they are drawn.</summary>
     /// <param name="row">The row.</param>

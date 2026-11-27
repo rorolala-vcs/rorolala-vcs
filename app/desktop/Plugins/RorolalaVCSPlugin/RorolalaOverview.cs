@@ -1,19 +1,24 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using Avalonia;
+using Avalonia.Animation;
+using Avalonia.Animation.Easings;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
-using Avalonia.Controls.Templates;
+using Avalonia.Controls.Shapes;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Media;
-using Avalonia.Styling;
+using Avalonia.Media.Imaging;
+using Avalonia.Media.Transformation;
 using Avalonia.Threading;
 using FileSystemPlugin;
 using RolaSharp;
 using RorolalaDesktop.Contract;
 using RorolalaDesktop.I18n;
+using Path = Avalonia.Controls.Shapes.Path;
 
 namespace RorolalaVCSPlugin;
 
@@ -111,6 +116,7 @@ internal sealed record OverviewReading(StatusFacts? Facts, string? Said, StatusR
 /// <param name="Sends">Paths a sync would send the version of, being further on than the Vault.</param>
 /// <param name="Receives">Paths a sync would bring the Vault's version down to.</param>
 /// <param name="Apart">Paths whose two chains have each moved on, which only a forced sync sends.</param>
+/// <param name="Unclaimed">Paths the fetched copy leaves unheld, which changed here.</param>
 internal sealed record StatusFacts(
     IReadOnlyList<string> Lost,
     IReadOnlyList<string> Untagged,
@@ -123,7 +129,8 @@ internal sealed record StatusFacts(
     IReadOnlyList<BrokenReason> Broken,
     IReadOnlyList<string> Sends,
     IReadOnlyList<string> Receives,
-    IReadOnlyList<string> Apart
+    IReadOnlyList<string> Apart,
+    IReadOnlyList<string>? Unclaimed = null
 )
 {
     /// <summary>Takes the facts out of a reading.</summary>
@@ -149,7 +156,8 @@ internal sealed record StatusFacts(
             // a file nobody touched but the Vault has moved past is a receive too, and would otherwise have no row.
             [.. status.Ahead],
             [.. status.Behind],
-            [.. status.Apart]
+            [.. status.Apart],
+            Unclaimed: status.Unclaimed
         );
     }
 }
@@ -178,6 +186,9 @@ internal enum State
 
     /// <summary>What is not this account's to record.</summary>
     NotMine,
+
+    /// <summary>What this account may record once it claims it, which nobody holds yet.</summary>
+    Unclaimed,
 
     /// <summary>What is this account's to record but stands on a version upstream has moved past.</summary>
     Stale,
@@ -224,13 +235,13 @@ internal enum State
 /// </para>
 /// </remarks>
 /// <param name="State">Which state it is.</param>
-/// <param name="Letters">What the state is known by, which is what the pill carries.</param>
+/// <param name="IconKey">The key of the picture the badge draws.</param>
 /// <param name="Fill">What the pill is coloured, which is this plugin's colour rather than the look's.</param>
 /// <param name="Hint">
 /// What the pointer resting on the pill says: the state's name and the whole of what it means, since the
-/// letters say only which state it is.
+/// picture says only which state it is.
 /// </param>
-internal sealed record StatusPill(State State, string Letters, Color Fill, string Hint);
+internal sealed record StatusPill(State State, string IconKey, Color Fill, string Hint);
 
 /// <summary>One row of the table: what the reading says about one path.</summary>
 /// <param name="Pills">
@@ -257,6 +268,10 @@ internal sealed record StatusPill(State State, string Letters, Color Fill, strin
 /// row is only drawn when the ignored are being shown, and its two path columns are drawn in the ink kept
 /// for what is not the work, which is what tells a reader at a glance that nothing is to be done with it.
 /// </param>
+/// <param name="Tally">
+/// Whether the row is one a sync would move, which shows how far apart the two versions are instead of a
+/// note.
+/// </param>
 internal sealed record TableRow(
     IReadOnlyList<StatusPill> Pills,
     IReadOnlyList<string> Notes,
@@ -264,6 +279,19 @@ internal sealed record TableRow(
     string To,
     IReadOnlyList<Operation> Operations,
     string? Act = null,
+    bool Ignored = false,
+    bool Tally = false
+);
+
+/// <summary>One group of a reading: its heading, and the rows under it.</summary>
+/// <param name="Key">The stable name the group is remembered by, which collapse is kept against.</param>
+/// <param name="Label">What its heading says.</param>
+/// <param name="Rows">The rows under it.</param>
+/// <param name="Ignored">Whether the group is the paths the ignore rules govern.</param>
+internal sealed record RowGroup(
+    string Key,
+    string Label,
+    IReadOnlyList<TableRow> Rows,
     bool Ignored = false
 );
 
@@ -286,35 +314,7 @@ internal sealed class OverviewView : UserControl
     /// <summary>How wide the line said in place of a reading is allowed to read.</summary>
     private const double Widest = 420;
 
-    /// <summary>How tall a row is, which is the height the browser gives one.</summary>
-    private const double RowHeight = 28.0;
 
-    /// <summary>How far a band and its rows are inset, which the browser insets its own by.</summary>
-    private const double Inset = 12.0;
-
-    /// <summary>
-    /// How much of the table's width each column takes, in the order they are read.
-    /// </summary>
-    /// <remarks>
-    /// What a state is a width and the two paths are shares of what is left: a state is one or two letters in a
-    /// pill of a fixed size, so the room it wants is a measure rather than a share, three pills and the room
-    /// between them, which is what a row of states comes to before it wraps. A path is read in full, so the rest
-    /// is given to the two of them as shares rather than as widths, and a wider dock is a longer path rather than
-    /// a wider column of states.
-    /// <para>
-    /// The operations are a measure of their own, and the widest measure in the table: a button is a word, and
-    /// the words are the command's own, 「还原内容」 and 「获取所有权」 are not shorter for being a table's. They
-    /// are the last column rather than the first because they are what a reader does <em>after</em> reading what
-    /// a row says: the state, then the paths, then what may be done about them.
-    /// </para>
-    /// </remarks>
-    private static readonly GridLength[] Columns =
-    [
-        new(StateColumn, GridUnitType.Pixel),
-        new(1, GridUnitType.Star),
-        new(1, GridUnitType.Star),
-        new(OperationsColumn, GridUnitType.Pixel),
-    ];
 
     /// <summary>The colour a mark of one kind is filled with, which is the look's semantic state.</summary>
     /// <remarks>
@@ -356,9 +356,6 @@ internal sealed class OverviewView : UserControl
 
     /// <summary>The theme resource a line told apart from the next is drawn in.</summary>
     private const string EdgeInk = PaletteKeys.Splitter;
-
-    /// <summary>The theme resource a band is drawn on, which is the ground a heading sits on.</summary>
-    private const string BandGround = PaletteKeys.Dark;
 
     /// <summary>How often the work is read again while the dock is on screen.</summary>
     /// <remarks>
@@ -467,17 +464,8 @@ internal sealed class OverviewView : UserControl
     /// <summary>What is on screen now, so that a reading saying the same thing is not drawn again.</summary>
     private Shown? _shown;
 
-    /// <summary>What the reading on screen came to, so that showing or hiding the ignored is one redraw.</summary>
-    /// <remarks>
-    /// Kept beside the rows rather than read from them: the switch changes which rows a reading comes to,
-    /// and asking the work to be read again for it would be a walk of the tree spent on what the reading
-    /// already holds. The facts are the reading's own lists, so what is drawn after a switch is the table
-    /// the last reading would have been read as.
-    /// </remarks>
-    private StatusFacts? _facts;
-
-    /// <summary>Whether the paths the ignore rules govern are among the rows.</summary>
-    private bool _showIgnored;
+    /// <summary>The groups the reader has folded shut, by their stable key.</summary>
+    private readonly HashSet<string> _collapsed = new(StringComparer.Ordinal) { "ignored" };
 
     /// <summary>
     /// The directory and the sync-relevant standings the last plan was asked over, so a reading that moves
@@ -528,14 +516,7 @@ internal sealed class OverviewView : UserControl
         // The sync's own state, which the strip in the dock's header draws from; what the runs of every command
         // say is gathered in the hub, which the floating capsules draw from and which every place a command
         // may be run from (the strip, an entry's menu) writes to.
-        _strip = new SyncStrip(
-            _host,
-            _sync,
-            () => BaseDirectory.Current,
-            Refresh,
-            () => _showIgnored,
-            ToggleIgnored
-        );
+        _strip = new SyncStrip(_host, _sync, () => BaseDirectory.Current, Refresh);
 
         var root = new Grid { RowDefinitions = new RowDefinitions("*,35") };
 
@@ -700,36 +681,6 @@ internal sealed class OverviewView : UserControl
     }
 
     /// <summary>
-    /// Shows the paths the ignore rules govern, or stops showing them, from the table already read.
-    /// </summary>
-    /// <remarks>
-    /// It is a redraw of the reading on screen rather than a reading again: which rows a reading comes to
-    /// is the view's answer, and the reading holds both lists. A work no reading has been made of yet is
-    /// left as it is, since there is nothing to show either way until one is.
-    /// </remarks>
-    private void ToggleIgnored()
-    {
-        _showIgnored = !_showIgnored;
-
-        if (_facts is not { } facts)
-        {
-            return;
-        }
-
-        var rows = Rows(facts, _showIgnored);
-
-        // Only the ignored were on screen, and they are not any more: a table of nothing is a work with
-        // nothing to confirm, which is what the line says. A reading that failed still says why.
-        var said = rows.Count > 0
-            ? null
-            : _shown?.Said is { Length: > 0 } line
-                ? line
-                : RolaI18N.Get("rorolala_vcs.status.clean");
-
-        Show(said, rows, _reading);
-    }
-
-    /// <summary>
     /// What the Overview makes of a directory the tree is rooted at.
     /// </summary>
     /// <remarks>
@@ -822,16 +773,12 @@ internal sealed class OverviewView : UserControl
     /// </para>
     /// <para>
     /// A path the ignore rules govern is not work, the reading keeps the two lists apart, so its row is
-    /// read last, after every group that is to be acted on, and only when the table is asked to show it.
+    /// read in its own group, which the view folds shut by default.
     /// </para>
     /// </remarks>
     /// <param name="facts">The reading.</param>
-    /// <param name="showIgnored">
-    /// Whether the paths the ignore rules govern are among the rows. They are left out unless asked for;
-    /// what is shown of them is marked as not the work's, so that it is read past rather than acted on.
-    /// </param>
     /// <returns>The rows to show.</returns>
-    internal static IReadOnlyList<TableRow> Rows(StatusFacts facts, bool showIgnored = false)
+    internal static IReadOnlyList<RowGroup> Rows(StatusFacts facts)
     {
         ArgumentNullException.ThrowIfNull(facts);
 
@@ -861,10 +808,17 @@ internal sealed class OverviewView : UserControl
         moving.UnionWith(destinations);
         moving.UnionWith(facts.Modified);
         moving.UnionWith(facts.Unowned);
+        moving.UnionWith(facts.Unclaimed ?? []);
 
         wrong.AddRange(
             facts.Unowned.Select(path =>
                 new TableRow([Pill(State.NotMine)], [], path, string.Empty, OverviewOperations.Of(State.NotMine))
+            )
+        );
+
+        wrong.AddRange(
+            (facts.Unclaimed ?? []).Select(path =>
+                new TableRow([Pill(State.Unclaimed)], [], path, string.Empty, OverviewOperations.Of(State.Unclaimed))
             )
         );
 
@@ -980,16 +934,54 @@ internal sealed class OverviewView : UserControl
         // work. It is drawn last, because it is not work: a reader scans past it rather than acting on
         // it, and a row that stood among the changes would read as one of them. Nothing is offered to
         // do with it, a recording refuses a path the rules govern, so the row carries no buttons.
-        if (showIgnored)
+        governed.AddRange(
+            facts.Ignored.Select(path =>
+                new TableRow([Pill(State.Untagged)], [], path, string.Empty, [], Ignored: true)
+            )
+        );
+
+        List<RowGroup> groups = [];
+
+        if (wrong.Count + merges.Count > 0)
         {
-            governed.AddRange(
-                facts.Ignored.Select(path =>
-                    new TableRow([Pill(State.Untagged)], [], path, string.Empty, [], Ignored: true)
+            groups.Add(
+                new RowGroup(
+                    "confirm",
+                    RolaI18N.Get("rorolala_vcs.status.group_confirm"),
+                    [.. wrong, .. merges]
                 )
             );
         }
 
-        return [.. wrong, .. merges, .. structural, .. changes, .. syncing, .. governed];
+        if (structural.Count + changes.Count > 0)
+        {
+            groups.Add(
+                new RowGroup(
+                    "track",
+                    RolaI18N.Get("rorolala_vcs.status.group_track"),
+                    [.. structural, .. changes]
+                )
+            );
+        }
+
+        if (syncing.Count > 0)
+        {
+            groups.Add(new RowGroup("sync", RolaI18N.Get("rorolala_vcs.status.group_sync"), syncing));
+        }
+
+        if (governed.Count > 0)
+        {
+            groups.Add(
+                new RowGroup(
+                    "ignored",
+                    RolaI18N.Get("rorolala_vcs.status.group_ignored"),
+                    governed,
+                    Ignored: true
+                )
+            );
+        }
+
+        return groups;
 
         // One path of what a sync would move, as a row of its own. It offers no button: what is to be done about it
         // is the sync the strip in the header runs, and a button here would be a second way to ask for the same
@@ -1007,7 +999,8 @@ internal sealed class OverviewView : UserControl
                 [],
                 path,
                 string.Empty,
-                []
+                [],
+                Tally: true
             );
 
         // Whether a move's content is a change that has to be acted on rather than one that is simply to be
@@ -1051,18 +1044,20 @@ internal sealed class OverviewView : UserControl
     private static StatusPill Pill(State state) =>
         state switch
         {
-            State.Untagged => new StatusPill(state, "A", AppearedFill, RolaI18N.Get("rorolala_vcs.status.kind_untagged")),
-            State.Lost => new StatusPill(state, "D", WrongFill, RolaI18N.Get("rorolala_vcs.status.kind_lost")),
-            State.NotMine => new StatusPill(state, "E", WrongFill, RolaI18N.Get("rorolala_vcs.status.change_wrong_unowned")),
-            State.Stale => new StatusPill(state, "E", WrongFill, RolaI18N.Get("rorolala_vcs.status.change_wrong_base")),
-            State.Renamed => new StatusPill(state, "R", MovedFill, RolaI18N.Get("rorolala_vcs.status.kind_rename_strong")),
-            State.RenamedLikely => new StatusPill(state, "R?", MovedFill, RolaI18N.Get("rorolala_vcs.status.kind_rename_weak")),
-            State.Modified => new StatusPill(state, "M", UnsettledFill, RolaI18N.Get("rorolala_vcs.status.change_modified")),
-            State.Send => new StatusPill(state, "S↑", AppearedFill, RolaI18N.Get("rorolala_vcs.status.kind_send")),
-            State.Receive => new StatusPill(state, "S↓", AppearedFill, RolaI18N.Get("rorolala_vcs.status.kind_receive")),
-            State.Create => new StatusPill(state, "S+", AppearedFill, RolaI18N.Get("rorolala_vcs.status.kind_create")),
-            State.Diverged => new StatusPill(state, "Sx", WrongFill, RolaI18N.Get("rorolala_vcs.status.kind_diverged")),
-            _ => new StatusPill(state, "J", WrongFill, RolaI18N.Get("rorolala_vcs.status.kind_merge")),
+            State.Untagged => new StatusPill(state, Icons.PlusBold, AppearedFill, RolaI18N.Get("rorolala_vcs.status.kind_untagged")),
+            State.Lost => new StatusPill(state, Icons.ExclamationMarkBold, WrongFill, RolaI18N.Get("rorolala_vcs.status.kind_lost")),
+            State.NotMine => new StatusPill(state, Icons.LockBold, RorolalaColours.Disallow, RolaI18N.Get("rorolala_vcs.status.change_wrong_unowned")),
+            State.Unclaimed => new StatusPill(state, Icons.LockOpen, RorolalaColours.Allow, RolaI18N.Get("rorolala_vcs.status.change_wrong_unclaimed")),
+            State.Stale => new StatusPill(state, Icons.WarningCircle, WrongFill, RolaI18N.Get("rorolala_vcs.status.change_wrong_base")),
+            State.Renamed => new StatusPill(state, Icons.ArrowRightBold, MovedFill, RolaI18N.Get("rorolala_vcs.status.kind_rename_strong")),
+            State.RenamedLikely => new StatusPill(state, Icons.ArrowRightBold, MovedFill, RolaI18N.Get("rorolala_vcs.status.kind_rename_weak")),
+            State.Modified => new StatusPill(state, Icons.NotePencilBold, UnsettledFill, RolaI18N.Get("rorolala_vcs.status.change_modified")),
+            State.Merging => new StatusPill(state, Icons.GitMergeBold, MergeFill, RolaI18N.Get("rorolala_vcs.status.kind_merge")),
+            State.Broken => new StatusPill(state, Icons.ExclamationMarkBold, WrongFill, RolaI18N.Get("rorolala_vcs.status.kind_merge")),
+            State.Send => new StatusPill(state, Icons.ArrowUpBold, AppearedFill, RolaI18N.Get("rorolala_vcs.status.kind_send")),
+            State.Receive => new StatusPill(state, Icons.ArrowDownBold, AppearedFill, RolaI18N.Get("rorolala_vcs.status.kind_receive")),
+            State.Create => new StatusPill(state, Icons.PlusBold, AppearedFill, RolaI18N.Get("rorolala_vcs.status.kind_create")),
+            _ => new StatusPill(state, Icons.GitForkBold, WrongFill, RolaI18N.Get("rorolala_vcs.status.kind_diverged")),
         };
 
     /// <summary>
@@ -1127,7 +1122,7 @@ internal sealed class OverviewView : UserControl
     private static StatusPill MergePill(string variant) =>
         new(
             State.Merging,
-            "J",
+            Icons.GitMergeBold,
             MergeFill,
             RolaI18N.Get("rorolala_vcs.variant.pending", VariantFiles.Head(variant))
         );
@@ -1214,26 +1209,53 @@ internal sealed class OverviewView : UserControl
         var candidate = pairing
             && _connecting is { Length: > 0 } from
             && from != path
-            && OverviewOperations.Pairs(Choices(row), StatesAt(from, _shown?.Rows ?? []));
+            && OverviewOperations.Pairs(Choices(row), StatesAt(from, _shown is { } seen ? Flat(seen.Groups) : []));
         var running = _connecting is not null;
+
+        var (icon, danger) = OperationIcon(operation);
+        var ink = danger ? RorolalaColours.Error : RorolalaColours.Front;
 
         var button = new Button
         {
-            Content = RolaI18N.Get(Label(operation, begun, candidate)),
-            Classes = { "ghost" },
-            VerticalAlignment = VerticalAlignment.Center,
-            // One width for every button, whatever it says and whether or not it is part of a connection. A
-            // button sized by its words is a button that changes size when its words do, and the words of the
-            // two sides of a connection are the ones that change: the whole column would jump sideways at the
-            // press, and the two rows being paired would jump by different amounts.
-            Width = ButtonWidth,
+            Content = Glyph(host, icon, ink, ActionGlyph),
+            Width = ActionSize,
+            Height = ActionSize,
+            Padding = new Thickness(0),
             HorizontalContentAlignment = HorizontalAlignment.Center,
-            Margin = new Thickness(0, 2, ButtonGap, 2),
+            VerticalContentAlignment = VerticalAlignment.Center,
+            BorderThickness = new Thickness(begun || candidate ? 2 : 1),
+            CornerRadius = new CornerRadius(0),
+            Margin = new Thickness(0, 0, ButtonGap, 0),
             // Everything is pressable while nothing is being connected or run; while a connection is in
             // hand, only the two sides of it are, which is the row's own button again, so that a second
             // press takes it back; and while an operation is going, nothing answers at all.
             IsEnabled = !_busy && (!running || begun || candidate),
         };
+
+        if (danger)
+        {
+            button.Background = new SolidColorBrush(WithAlpha(RorolalaColours.Error, 0x24));
+            button.BorderBrush = new SolidColorBrush(RorolalaColours.Error);
+        }
+        else
+        {
+            button[!TemplatedControl.BackgroundProperty] = new DynamicResourceExtension(PaletteKeys.Dark);
+            button[!TemplatedControl.BorderBrushProperty] = new DynamicResourceExtension(PaletteKeys.Splitter);
+        }
+
+        // The two sides of a connection are not told apart by their words any more, so the line around
+        // them says it: amber where the connection began, green where it can be finished.
+        if (begun)
+        {
+            button.BorderBrush = new SolidColorBrush(RorolalaColours.Warning);
+        }
+        else if (candidate)
+        {
+            button.BorderBrush = new SolidColorBrush(RorolalaColours.Success);
+        }
+
+        ToolTip.SetTip(button, RolaI18N.Get(Label(operation, begun, candidate)));
+        ToolTip.SetShowDelay(button, 0);
 
         button.Click += (_, _) =>
         {
@@ -1247,6 +1269,118 @@ internal sealed class OverviewView : UserControl
         };
 
         return button;
+    }
+
+    /// <summary>What an operation wears: the picture of the button, and whether it discards the local copy.</summary>
+    /// <param name="operation">The operation.</param>
+    /// <returns>The picture's key, and whether it is the wrong-colour one.</returns>
+    private static (string Icon, bool Danger) OperationIcon(Operation operation) =>
+        operation switch
+        {
+            Operation.RestoreContent or Operation.RestoreMove => (Icons.TrashBold, true),
+            Operation.Rebuild => (Icons.ArrowClockwise, false),
+            Operation.ConfirmRename or Operation.ConfirmLost => (Icons.CheckCircleBold, false),
+            Operation.TakeOwnership => (Icons.LockBold, false),
+            Operation.CancelMerge => (Icons.ExclamationMarkBold, false),
+            _ => (Icons.ArrowRightBold, false),
+        };
+
+    /// <summary>One picture drawn as a mask over an ink, which is how every mark is drawn.</summary>
+    /// <param name="host">The host, whose icon library holds the picture.</param>
+    /// <param name="key">The picture's key.</param>
+    /// <param name="ink">What the picture is drawn in.</param>
+    /// <param name="size">How large it is.</param>
+    /// <returns>The picture to show.</returns>
+    private static Border Glyph(IPluginHost host, string key, Color ink, double size)
+    {
+        var glyph = new Border
+        {
+            Width = size,
+            Height = size,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            Background = new SolidColorBrush(ink),
+        };
+
+        if (host.Icons.Find(key) is { } picture)
+        {
+            glyph.OpacityMask = new ImageBrush(picture) { Stretch = Stretch.Uniform };
+            RenderOptions.SetBitmapInterpolationMode(glyph, BitmapInterpolationMode.HighQuality);
+        }
+
+        return glyph;
+    }
+
+    /// <summary>A sync row's count: the arrow of its direction and how many versions apart the two sides are.</summary>
+    /// <param name="row">The row.</param>
+    /// <param name="at">Where the reading was made, which the path is relative to.</param>
+    /// <param name="host">The host, whose icon library holds the pictures.</param>
+    /// <param name="view">The control the row belongs to, which holds the reading.</param>
+    /// <returns>The count to show.</returns>
+    private static Control Tally(TableRow row, string at, IPluginHost host, OverviewView view)
+    {
+        var state = row.Pills.Count > 0 ? row.Pills[0].State : State.Send;
+        var (icon, colour) = state switch
+        {
+            State.Receive => (Icons.ArrowDownBold, RorolalaColours.Fail),
+            State.Diverged => (Icons.GitForkBold, RorolalaColours.Fail),
+            _ => (Icons.ArrowUpBold, RorolalaColours.Success),
+        };
+
+        var number = new TextBlock
+        {
+            Text = DistanceNow(row.From, at, view._reading)?.ToString(CultureInfo.InvariantCulture)
+                ?? "?",
+            VerticalAlignment = VerticalAlignment.Center,
+            FontSize = 12,
+            FontWeight = FontWeight.SemiBold,
+            Foreground = new SolidColorBrush(colour),
+        };
+
+        var inner = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 2,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            Children = { Glyph(host, icon, colour, ActionGlyph), number },
+        };
+
+        return new Border
+        {
+            Child = inner,
+            Width = 42,
+            Height = 28,
+            CornerRadius = new CornerRadius(0),
+            Background = new SolidColorBrush(WithAlpha(colour, 0x24)),
+            BorderThickness = new Thickness(1),
+            BorderBrush = new SolidColorBrush(colour),
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 4, 0),
+        };
+    }
+
+    /// <summary>How many versions apart the two sides are, as the reading says, or nothing when it does not know.</summary>
+    /// <param name="path">The path, as the reading names it.</param>
+    /// <param name="at">Where the reading was made.</param>
+    /// <param name="reading">The reading, or nothing.</param>
+    /// <returns>The distance, or nothing.</returns>
+    private static ulong? DistanceNow(string path, string at, StatusReading? reading)
+    {
+        if (reading is null || at is not { Length: > 0 })
+        {
+            return null;
+        }
+
+        try
+        {
+            return RorolalaSync.Distance(reading, System.IO.Path.Combine(at, path));
+        }
+        catch (Exception error) when (error is not OutOfMemoryException)
+        {
+            _ = error;
+            return null;
+        }
     }
 
     /// <summary>
@@ -1441,6 +1575,12 @@ internal sealed class OverviewView : UserControl
         : row.To is { Length: > 0 } to ? to
         : row.From;
 
+    /// <summary>The rows of a set of groups, in the order they are read.</summary>
+    /// <param name="groups">The groups.</param>
+    /// <returns>Every row under them.</returns>
+    private static IReadOnlyList<TableRow> Flat(IReadOnlyList<RowGroup> groups) =>
+        [.. groups.SelectMany(group => group.Rows)];
+
     /// <summary>The states of the row a path is on, or none when no row names it.</summary>
     /// <param name="path">The path.</param>
     /// <param name="rows">The rows the table is showing.</param>
@@ -1568,7 +1708,7 @@ internal sealed class OverviewView : UserControl
     {
         if (_shown is { } shown)
         {
-            Show(shown.Said, shown.Rows, _reading);
+            Show(shown.Said, shown.Groups, _reading);
         }
     }
 
@@ -1668,9 +1808,8 @@ internal sealed class OverviewView : UserControl
         }
 
         var facts = reading.Facts;
-        _facts = facts;
-        var rows = facts is null ? [] : Rows(facts, _showIgnored);
-        var said = Line(reading, rows.Count);
+        var groups = facts is null ? [] : Rows(facts);
+        var said = Line(reading, groups.Sum(group => group.Rows.Count));
 
         // What a sync would carry is asked whenever the reading says the standings it is about have moved, see
         // `PlanIfMoved`. It is asked before the same-answer check below, since the plan may be stale even when
@@ -1699,7 +1838,7 @@ internal sealed class OverviewView : UserControl
         if (
             _shown is { } shown
             && shown.Said == said
-            && Same(shown.Rows, rows)
+            && Same(shown.Groups, groups)
             && _connecting is null
         )
         {
@@ -1710,7 +1849,7 @@ internal sealed class OverviewView : UserControl
             return;
         }
 
-        Show(said, rows, reading.Status);
+        Show(said, groups, reading.Status);
     }
 
     /// <summary>Asks what a sync would carry when the reading says the standings it is about have moved.</summary>
@@ -1750,13 +1889,13 @@ internal sealed class OverviewView : UserControl
     /// than about the reading.
     /// </remarks>
     /// <param name="said">What is said in the middle, or nothing when the table is what is shown.</param>
-    /// <param name="rows">The rows to show.</param>
+    /// <param name="groups">The groups to show.</param>
     /// <param name="reading">The reading the rows were made from, which a sync row's count is read from.</param>
-    private void Show(string? said, IReadOnlyList<TableRow> rows, StatusReading? reading)
+    private void Show(string? said, IReadOnlyList<RowGroup> groups, StatusReading? reading)
     {
         var previous = _reading;
 
-        _shown = new Shown(said, rows);
+        _shown = new Shown(said, groups);
         _reading = reading;
 
         // The rows the old reading answered for are being replaced, so its handle is given back with them.
@@ -1765,6 +1904,8 @@ internal sealed class OverviewView : UserControl
         {
             previous?.Dispose();
         }
+
+        var rows = Flat(groups);
 
         // A connection whose row is no longer in the table is nothing to finish, and a reader is not told about
         // it: the work moved under them, and what the button was about is gone. What is left is the table as the
@@ -1781,7 +1922,24 @@ internal sealed class OverviewView : UserControl
 
         if (rows.Count > 0)
         {
-            _tableCell.Children.Add(Table(rows, BaseDirectory.Current ?? string.Empty, _host, this));
+            var table = Table(groups, BaseDirectory.Current ?? string.Empty, _host, this);
+
+            // A reading that changes the work is a list that changes, and the reading rebuilds it whole:
+            // what a resolved row leaves behind is the list as it now is, so the change is shown by the
+            // list fading in rather than by a row fading out.
+            table.Opacity = 0;
+            table.Transitions = new Transitions
+            {
+                new DoubleTransition
+                {
+                    Property = Visual.OpacityProperty,
+                    Duration = TimeSpan.FromMilliseconds(140),
+                    Easing = new CubicEaseOut(),
+                },
+            };
+
+            _tableCell.Children.Add(table);
+            Dispatcher.UIThread.Post(() => table.Opacity = 1);
         }
     }
 
@@ -1815,13 +1973,19 @@ internal sealed class OverviewView : UserControl
     /// <param name="left">What one reading came to.</param>
     /// <param name="right">What another came to.</param>
     /// <returns>Whether the two are the same drawing.</returns>
-    internal static bool Same(IReadOnlyList<TableRow> left, IReadOnlyList<TableRow> right)
+    internal static bool Same(IReadOnlyList<RowGroup> left, IReadOnlyList<RowGroup> right)
     {
         ArgumentNullException.ThrowIfNull(left);
         ArgumentNullException.ThrowIfNull(right);
 
         return left.Count == right.Count
-            && left.Zip(right).All(pair => Same(pair.First, pair.Second));
+            && left
+                .Zip(right)
+                .All(pair =>
+                    pair.First.Key == pair.Second.Key
+                    && pair.First.Rows.Count == pair.Second.Rows.Count
+                    && pair.First.Rows.Zip(pair.Second.Rows).All(row => Same(row.First, row.Second))
+                );
     }
 
     /// <summary>Whether two rows would be drawn the same.</summary>
@@ -1837,81 +2001,313 @@ internal sealed class OverviewView : UserControl
         && left.Notes.SequenceEqual(right.Notes, StringComparer.Ordinal);
 
     /// <summary>
-    /// The changes as one table, which is the browser's list with a band over it.
+    /// The reading as a list of groups, each under its heading.
     /// </summary>
     /// <remarks>
-    /// The band names the columns and the rows carry the changes, and both are laid out by the same
-    /// columns, the two fixed ones for what a kind is called and what became of a content, and two that
-    /// share what is left for the paths. A path is one line however long it is: what a row cannot show is
-    /// on the path itself, and a row that grew to two lines would put every row under it out of step with
-    /// the ones beside it.
+    /// Not a table: a row is about one path and the few rows with two say so in the one cell, so there is no
+    /// column of shapes to line up. The groups are headed and counted, and a heading folds its rows away,
+    /// which is what keeps a long reading short enough to scan.
     /// </remarks>
-    /// <param name="rows">The changes.</param>
+    /// <param name="groups">The groups, in the order they are read.</param>
     /// <param name="at">Where the run is made, which is what a row's paths are read from.</param>
     /// <param name="host">The host, which is what a row's buttons reach to run and to report.</param>
-    /// <param name="view">The control the rows belong to, which is what a connection is remembered on.</param>
-    /// <returns>The table to show.</returns>
-    private static Control Table(IReadOnlyList<TableRow> rows, string at, IPluginHost host, OverviewView view)
+    /// <param name="view">The control the rows belong to, which is what a connection and the folded groups are held on.</param>
+    /// <returns>The list to show.</returns>
+    private static Control Table(
+        IReadOnlyList<RowGroup> groups,
+        string at,
+        IPluginHost host,
+        OverviewView view
+    )
     {
-        var list = new ListBox
+        var panel = new StackPanel();
+
+        for (var index = 0; index < groups.Count; index++)
         {
-            ItemsSource = rows,
+            panel.Children.Add(Section(groups[index], at, host, view, index == 0));
+        }
+
+        return new ScrollViewer
+        {
+            Content = panel,
             Background = Brushes.Transparent,
-            Padding = new Thickness(0),
-            BorderThickness = new Thickness(0),
-            ItemTemplate = new FuncDataTemplate<TableRow>((row, _) => Row(row, at, host, view), true),
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+        };
+    }
+
+    /// <summary>One group: a heading that folds its rows away, and the rows under it.</summary>
+    /// <param name="group">The group.</param>
+    /// <param name="at">Where the run is made.</param>
+    /// <param name="host">The host, which is what a row's buttons reach to run and to report.</param>
+    /// <param name="view">The control the rows belong to, which the folded groups are held on.</param>
+    /// <param name="first">Whether it is the first group, which the strip above already divides.</param>
+    /// <returns>The section to show.</returns>
+    private static Control Section(
+        RowGroup group,
+        string at,
+        IPluginHost host,
+        OverviewView view,
+        bool first
+    )
+    {
+        var rows = new StackPanel();
+
+        foreach (var row in group.Rows)
+        {
+            rows.Children.Add(Row(row, at, host, view));
+        }
+
+        // The room after the last row, which folds away with the rows rather than holding the group open.
+        rows.Children.Add(new Border { Height = 6 });
+
+        var arrow = new Path
+        {
+            Data = Geometry.Parse("M 1,0 L 5,4 L 1,8"),
+            StrokeThickness = 1.5,
+            StrokeLineCap = PenLineCap.Round,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            RenderTransformOrigin = RelativePoint.Center,
+            RenderTransform = TransformOperations.Parse("rotate(0deg)"),
+        };
+        arrow[!Shape.StrokeProperty] = new DynamicResourceExtension(PaletteKeys.Faint);
+        arrow.Transitions = new Transitions
+        {
+            new TransformOperationsTransition
+            {
+                Property = Visual.RenderTransformProperty,
+                Duration = TimeSpan.FromMilliseconds(160),
+                Easing = new CubicEaseOut(),
+            },
         };
 
-        // The row keeps the design's height, and its own inset is taken off so that the band and the rows
-        // share one edge; the four pixels left between two rows are the line's room.
-        list.Styles.Add(
-            new Style(selector => selector.OfType<ListBoxItem>())
-            {
-                Setters =
-                {
-                    new Setter(TemplatedControl.PaddingProperty, new Thickness(0)),
-                    new Setter(Layoutable.MarginProperty, new Thickness(0)),
-                    new Setter(Layoutable.MinHeightProperty, RowHeight),
-                    new Setter(TemplatedControl.CornerRadiusProperty, new CornerRadius(0)),
-                },
-            }
-        );
+        var caret = new Border
+        {
+            Width = 14,
+            VerticalAlignment = VerticalAlignment.Center,
+            Child = arrow,
+        };
 
-        var panel = new DockPanel { LastChildFill = true };
-        var band = Band();
-        DockPanel.SetDock(band, Dock.Top);
-        panel.Children.Add(band);
-        panel.Children.Add(list);
+        var label = new TextBlock
+        {
+            Text = group.Label.ToUpperInvariant(),
+            VerticalAlignment = VerticalAlignment.Center,
+            FontWeight = FontWeight.SemiBold,
+            FontSize = 12,
+        };
+
+        var count = new TextBlock
+        {
+            Text = group.Rows.Count.ToString(CultureInfo.InvariantCulture),
+            VerticalAlignment = VerticalAlignment.Center,
+            FontSize = 12,
+        };
+        count[!TextBlock.ForegroundProperty] = new DynamicResourceExtension(QuietInk);
+
+        var inner = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            VerticalAlignment = VerticalAlignment.Center,
+            Children = { caret, label, count },
+        };
+
+        var motion = new Transitions
+        {
+            new DoubleTransition
+            {
+                Property = Layoutable.MaxHeightProperty,
+                Duration = TimeSpan.FromMilliseconds(160),
+                Easing = new CubicEaseOut(),
+            },
+            new DoubleTransition
+            {
+                Property = Visual.OpacityProperty,
+                Duration = TimeSpan.FromMilliseconds(160),
+                Easing = new CubicEaseOut(),
+            },
+        };
+
+        var folded = view._collapsed.Contains(group.Key);
+
+        rows.ClipToBounds = true;
+        rows.Transitions = motion;
+
+        if (folded)
+        {
+            rows.MaxHeight = 0;
+            rows.Opacity = 0;
+        }
+
+        arrow.RenderTransform = TransformOperations.Parse(folded ? "rotate(0deg)" : "rotate(90deg)");
+
+        var head = new Border
+        {
+            Child = new Border
+            {
+                Padding = new Thickness(20, 0),
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                Child = inner,
+            },
+            Height = 36,
+            Background = Brushes.Transparent,
+            Cursor = new Cursor(StandardCursorType.Hand),
+        };
+
+        // The hover the look gives a row, and no press state at all: the press is the fold rather than a
+        // second way the row is coloured.
+        var wash = RorolalaColours.DarkLook
+            ? Color.FromArgb(0x14, 0xFF, 0xFF, 0xFF)
+            : Color.FromArgb(0x14, 0x00, 0x00, 0x00);
+
+        head.PointerEntered += (_, _) => head.Background = new SolidColorBrush(wash);
+        head.PointerExited += (_, _) => head.Background = Brushes.Transparent;
+
+        head.PointerPressed += (_, pressed) =>
+        {
+            if (!pressed.GetCurrentPoint(head).Properties.IsLeftButtonPressed)
+            {
+                return;
+            }
+
+            if (!view._collapsed.Remove(group.Key))
+            {
+                view._collapsed.Add(group.Key);
+            }
+
+            var now = view._collapsed.Contains(group.Key);
+            Fold(rows, motion, now);
+            arrow.RenderTransform = TransformOperations.Parse(
+                now ? "rotate(0deg)" : "rotate(90deg)"
+            );
+            pressed.Handled = true;
+        };
+
+        var section = new StackPanel { Children = { head, rows } };
+
+        var framed = new Border
+        {
+            Child = section,
+            BorderThickness = new Thickness(0, first ? 0 : 1, 0, 0),
+        };
+        framed[!Border.BorderBrushProperty] = new DynamicResourceExtension(EdgeInk);
+
+        return framed;
+    }
+
+    /// <summary>Folds a group's rows away or open, animating the height they take and their ink.</summary>
+    /// <param name="rows">The rows to fold.</param>
+    /// <param name="motion">What the fold is animated with.</param>
+    /// <param name="folded">Whether the rows are being folded shut.</param>
+    private static void Fold(StackPanel rows, Transitions motion, bool folded)
+    {
+        if (folded)
+        {
+            rows.MaxHeight = rows.Bounds.Height;
+            Dispatcher.UIThread.Post(() =>
+            {
+                rows.MaxHeight = 0;
+                rows.Opacity = 0;
+            });
+
+            return;
+        }
+
+        // The height it is going to take is not known while it is folded, so it is measured without the
+        // transition in the way, and the limit is put back before the animation is told to run.
+        rows.Transitions = null;
+        rows.MaxHeight = double.PositiveInfinity;
+        rows.Measure(new Size(rows.Bounds.Width, double.PositiveInfinity));
+        var height = rows.DesiredSize.Height;
+        rows.MaxHeight = 0;
+        rows.Transitions = motion;
+
+        Dispatcher.UIThread.Post(() =>
+        {
+            rows.MaxHeight = height;
+            rows.Opacity = 1;
+        });
+    }
+
+    /// <summary>One row's paths, as one cell: a move is the one row with two, joined by an arrow.</summary>
+    /// <param name="row">The row.</param>
+    /// <param name="at">Where the reading was made.</param>
+    /// <param name="host">The host, whose windows the browser is reached through.</param>
+    /// <returns>The cell to show.</returns>
+    private static Control Paths(TableRow row, string at, IPluginHost host)
+    {
+        var panel = new Grid
+        {
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(6, 0, 12, 0),
+        };
+
+        if (row.To is { Length: > 0 } to)
+        {
+            panel.ColumnDefinitions = new ColumnDefinitions("*,Auto,*");
+
+            Place(panel, Cell(row.From, row.Ignored, at, host), 0);
+
+            var arrow = new TextBlock
+            {
+                Text = "\u2192",
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(6, 0, 6, 0),
+            };
+            arrow[!TextBlock.ForegroundProperty] = new DynamicResourceExtension(QuietInk);
+            Place(panel, arrow, 1);
+
+            Place(panel, Cell(to, row.Ignored, at, host), 2);
+        }
+        else
+        {
+            panel.ColumnDefinitions = new ColumnDefinitions("*");
+            Place(panel, Cell(row.From, row.Ignored, at, host), 0);
+        }
 
         return panel;
     }
 
-    /// <summary>The band naming the table's columns, which is where a reading is read from.</summary>
-    /// <returns>The band to show.</returns>
-    private static Control Band()
+    /// <summary>A row's notes, which say what is not a state, such as why a merge cannot go on.</summary>
+    /// <param name="row">The row.</param>
+    /// <returns>The notes to show.</returns>
+    private static Control Note(TableRow row)
     {
-        var heads = new Grid { ColumnDefinitions = Definitions() };
-
-        Place(heads, Head(RolaI18N.Get("rorolala_vcs.status.column_state")), 0);
-        Place(heads, Head(RolaI18N.Get("rorolala_vcs.status.column_from")), 1);
-        Place(heads, Head(RolaI18N.Get("rorolala_vcs.status.column_to")), 2);
-        Place(heads, Head(RolaI18N.Get("rorolala_vcs.status.column_operations")), 3);
-
-        var band = new Border
+        var notes = new StackPanel
         {
-            Child = heads,
-            Padding = new Thickness(Inset, 0),
-            MinHeight = RowHeight,
-            BorderThickness = new Thickness(0, 0, 0, 1),
+            Orientation = Orientation.Horizontal,
+            Spacing = 6,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 12, 0),
         };
 
-        band[!Border.BackgroundProperty] = new DynamicResourceExtension(BandGround);
-        band[!Border.BorderBrushProperty] = new DynamicResourceExtension(EdgeInk);
+        foreach (var note in row.Notes)
+        {
+            if (note is { Length: > 0 })
+            {
+                notes.Children.Add(Note(note));
+            }
+        }
 
-        return band;
+        return notes;
     }
 
-    /// <summary>One row of the table: what the path's state is, the paths it is between, and what to do about it.</summary>
+    /// <summary>The columns a row is laid out by: the states, the paths, the note, and the actions.</summary>
+    /// <returns>The width of each column.</returns>
+    private static ColumnDefinitions RowColumns()
+    {
+        var columns = new ColumnDefinitions();
+
+        columns.Add(new ColumnDefinition(GridLength.Auto));
+        columns.Add(new ColumnDefinition(new GridLength(1, GridUnitType.Star)));
+        columns.Add(new ColumnDefinition(GridLength.Auto));
+        columns.Add(new ColumnDefinition(GridLength.Auto));
+
+        return columns;
+    }
+
+    /// <summary>One row: its states, its paths, what it has to say, and what to do about it.</summary>
     /// <param name="row">The row.</param>
     /// <param name="at">Where the run is made, which is what the row's paths are read from.</param>
     /// <param name="host">The host, which is what a button reaches to run and to report.</param>
@@ -1919,21 +2315,29 @@ internal sealed class OverviewView : UserControl
     /// <returns>The row to show.</returns>
     private static Control Row(TableRow row, string at, IPluginHost host, OverviewView view)
     {
-        var cells = new Grid { ColumnDefinitions = Definitions() };
+        var cells = new Grid { ColumnDefinitions = RowColumns() };
 
-        Place(cells, States(row, at, view), 0);
-        Place(cells, Cell(row.From, row.Ignored, at, host), 1);
-        Place(cells, Cell(row.To, row.Ignored, at, host), 2);
+        Place(cells, States(row, at, host, view), 0);
+        Place(cells, Paths(row, at, host), 1);
+        Place(cells, row.Tally ? Tally(row, at, host, view) : Note(row), 2);
         Place(cells, Cell(row, at, host, view), 3);
 
         var line = new Border
         {
             Child = cells,
-            Padding = new Thickness(Inset, 0),
-            BorderThickness = new Thickness(0, 0, 0, 1),
+            Padding = new Thickness(40, 5, 20, 5),
+            MinHeight = 33,
+            Background = Brushes.Transparent,
         };
 
-        line[!Border.BorderBrushProperty] = new DynamicResourceExtension(EdgeInk);
+        // The look's hover wash while the pointer is on the row, which is what tells a reader which row a
+        // button belongs to.
+        var wash = RorolalaColours.DarkLook
+            ? Color.FromArgb(0x14, 0xFF, 0xFF, 0xFF)
+            : Color.FromArgb(0x14, 0x00, 0x00, 0x00);
+
+        line.PointerEntered += (_, _) => line.Background = new SolidColorBrush(wash);
+        line.PointerExited += (_, _) => line.Background = Brushes.Transparent;
 
         return line;
     }
@@ -1959,9 +2363,10 @@ internal sealed class OverviewView : UserControl
     /// </remarks>
     /// <param name="row">The row.</param>
     /// <param name="at">Where the reading was made, whose paths a sync row's count is read against.</param>
+    /// <param name="host">The host, whose icon library holds the pictures the states are drawn as.</param>
     /// <param name="view">The control the row belongs to, which is what a sync row's words are read from.</param>
     /// <returns>The pills to show.</returns>
-    private static Control States(TableRow row, string at, OverviewView view)
+    private static Control States(TableRow row, string at, IPluginHost host, OverviewView view)
     {
         var state = new WrapPanel
         {
@@ -1973,8 +2378,8 @@ internal sealed class OverviewView : UserControl
         {
             state.Children.Add(
                 pill.State is State.Send or State.Receive or State.Create or State.Diverged
-                    ? Pill(pill, SyncSaid(pill.State, row.From, at, view._reading))
-                    : Pill(pill)
+                    ? Pill(pill, host, SyncSaid(pill.State, row.From, at, view._reading))
+                    : Pill(pill, host)
             );
         }
 
@@ -2012,141 +2417,77 @@ internal sealed class OverviewView : UserControl
     }
 
     /// <summary>
-    /// One pill: a rounded tag of its letters, in the state's own colour, with the whole of it said on hover.
+    /// One state, as the bead a row wears: the look's face tinted with the state's colour, a ring of that
+    /// colour, and the state's picture drawn in it.
     /// </summary>
     /// <remarks>
-    /// The line is the state's colour at a third of its strength and the ground behind it is that colour
-    /// laid thin, so a pill is one thing said rather than a colour with a label stuck on it. The letters
-    /// are the look's front ink rather than the state's colour entire, because a state is fixed and the
-    /// two looks are not: a green that carries white letters on the dark ground does not carry them on
-    /// the light one, and the letters are what says which state it is.
-    /// <para>
-    /// Every pill is the same size, whatever its letters: they are read as a column of marks rather than as
-    /// words, and a column whose marks grew and shrank with what they said would be one a reader has to measure
-    /// rather than scan. One letter and two both fit the width, so what a state is known by costs the column
-    /// nothing.
-    /// </para>
+    /// The bead is the look's face tinted with the state's colour rather than the colour entire, so a column
+    /// of marks is read at a glance without shouting; the ring is the same colour stronger, which tells the
+    /// bead from the row under it; and the picture stands in the state's own colour. The picture is a mask
+    /// over that ink rather than a coloured bitmap, so one picture serves every colour it is asked for.
     /// </remarks>
     /// <param name="pill">The pill.</param>
+    /// <param name="host">The host, whose icon library holds the picture the state is drawn as.</param>
     /// <param name="said">What the pointer rests on it for, where it is not what the pill was made with.</param>
-    /// <returns>The pill to show.</returns>
-    private static Border Pill(StatusPill pill, string? said = null)
+    /// <returns>The bead to show.</returns>
+    private static Border Pill(StatusPill pill, IPluginHost host, string? said = null)
     {
-        var words = new TextBlock
+        var dark = RorolalaColours.DarkLook;
+        var towards = dark ? Colors.White : Colors.Black;
+        var ground = RorolalaColours.Blend(RorolalaColours.Bright, pill.Fill, 0.35);
+        var glyphInk = RorolalaColours.Blend(pill.Fill, towards, dark ? 0.25 : 0.30);
+
+        var glyph = new Border
         {
-            Text = pill.Letters,
-            TextWrapping = TextWrapping.NoWrap,
-            VerticalAlignment = VerticalAlignment.Center,
+            Width = BeadGlyph,
+            Height = BeadGlyph,
             HorizontalAlignment = HorizontalAlignment.Center,
-            // Heavier than the words around it, since a pill is a state said rather than a value read. A bold
-            // face is also what makes one letter read as a mark rather than as the beginning of a word.
-            FontWeight = FontWeight.Bold,
-            Classes = { "pill" },
+            VerticalAlignment = VerticalAlignment.Center,
+            Background = new SolidColorBrush(glyphInk),
         };
 
-        // The look's own ink, because the tint behind it changes with the variant and the state's colour
-        // does not. The hue is still the pill's edge and wash, and the letters are what makes the state
-        // legible on either ground.
-        words[!TextBlock.ForegroundProperty] = new DynamicResourceExtension(PaletteKeys.Front);
-
-        var made = new Border
+        if (host.Icons.Find(pill.IconKey) is { } picture)
         {
-            Child = words,
-            // One size for every state: the letters are the column's marks, and a mark that changed size with
-            // what it said would be a column that has to be measured rather than read.
-            Width = PillWidth,
-            Height = PillHeight,
-            CornerRadius = TagRadius,
-            Background = new SolidColorBrush(WithAlpha(pill.Fill, PillWash)),
+            glyph.OpacityMask = new ImageBrush(picture) { Stretch = Stretch.Uniform };
+            RenderOptions.SetBitmapInterpolationMode(glyph, BitmapInterpolationMode.HighQuality);
+        }
+
+        var bead = new Border
+        {
+            Child = glyph,
+            Width = BeadSize,
+            Height = BeadSize,
+            CornerRadius = new CornerRadius(BeadSize / 2),
+            Background = new SolidColorBrush(ground),
             BorderThickness = new Thickness(1),
-            BorderBrush = new SolidColorBrush(WithAlpha(pill.Fill, PillEdge)),
-            // The room a pill keeps around it is its own rather than the panel's, since a panel spaces lines
-            // and not the things on them: what wraps onto the next line has to be told from the line above.
+            BorderBrush = new SolidColorBrush(RorolalaColours.Blend(ground, towards, 0.10)),
             Margin = new Thickness(0, 2, PillGap, 2),
             VerticalAlignment = VerticalAlignment.Center,
         };
 
-        // What the letters stand for is on the pill, at once: a reader who has stopped at one is asking what it
-        // is, and nothing is said by making them wait that the pill's own colour has not said already.
-        ToolTip.SetTip(made, said ?? pill.Hint);
-        ToolTip.SetShowDelay(made, 0);
+        ToolTip.SetTip(bead, said ?? pill.Hint);
+        ToolTip.SetShowDelay(bead, 0);
 
-        return made;
+        return bead;
     }
 
-    /// <summary>
-    /// How thin the colour behind a pill is laid.
-    /// </summary>
-    /// <remarks>
-    /// Enough that the pill is a shape rather than a word in a row, and no more: past a fifth or so the tint
-    /// stops being a tint of the row and starts being a surface of its own, which is the loudness a table of
-    /// states does not want.
-    /// </remarks>
-    private const byte PillWash = 0x24;
+    /// <summary>How large a bead is, and how large the picture inside it.</summary>
+    private const double BeadSize = 22;
 
-    /// <summary>How strong the line around a pill is, as the state's colour laid on.</summary>
-    /// <remarks>
-    /// A third of the colour: the wash says where the pill is and the line says where it ends, and a line
-    /// at full strength turns a column of marks into a column of filled tags.
-    /// </remarks>
-    private const byte PillEdge = 0x59;
+    /// <inheritdoc cref="BeadSize" />
+    private const double BeadGlyph = 13;
 
-    /// <summary>How round a pill is, which is the design's radius for a small control.</summary>
-    private static readonly CornerRadius TagRadius = new(5);
-
-    /// <summary>
-    /// How large a pill is, and how far one stands from the next.
-    /// </summary>
-    /// <remarks>
-    /// Wide enough for the two letters a state may be known by and no wider, since the marks are read across
-    /// rather than word by word; as tall as the words beside them, so that a row of states and the paths it is
-    /// about are read along one line. The gap is the pill's own rather than the panel's, because a panel spaces
-    /// lines and not the things on a line.
-    /// </remarks>
-    private const double PillWidth = 34;
-
-    /// <inheritdoc cref="PillWidth" />
-    private const double PillHeight = 18;
-
-    /// <inheritdoc cref="PillWidth" />
+    /// <summary>How far one bead stands from the next.</summary>
     private const double PillGap = 6;
 
-    /// <summary>
-    /// How wide the column of states is: three pills and the room between them.
-    /// </summary>
-    /// <remarks>
-    /// Three because that is what a row of states comes to before it wraps: a move whose file was edited is two,
-    /// and three is the most a reader is given before the rest goes on the next line. A width rather than a
-    /// share of the dock, because a column of one- to two-letter marks has nothing to gain from a wider window
-    ///, the room belongs to the paths, which is where it is read.
-    /// </remarks>
-    private const double StateColumn = (3 * PillWidth) + (3 * PillGap);
+    /// <summary>How large an action button is, and how large the picture inside it.</summary>
+    private const double ActionSize = 28;
 
-    /// <summary>
-    /// How wide a button is, and how far one stands from the next.
-    /// </summary>
-    /// <remarks>
-    /// Wide enough for the longest words a button ever carries, 「获取所有权」, and no wider, since the column
-    /// is taken from the paths beside it. The width is stated rather than left to the words, because the words
-    /// change while a connection is being made and the column must not: what a reader is doing is reading three
-    /// buttons that say what they are part of, and a button that moved out from under the pointer between the
-    /// two presses would be a button that has to be found twice.
-    /// </remarks>
-    private const double ButtonWidth = 84;
+    /// <inheritdoc cref="ActionSize" />
+    private const double ActionGlyph = 14;
 
-    /// <inheritdoc cref="ButtonWidth" />
+    /// <summary>How far one action button stands from the next.</summary>
     private const double ButtonGap = 4;
-
-    /// <summary>
-    /// How wide the column of operations is: three buttons and the room between them.
-    /// </summary>
-    /// <remarks>
-    /// Three because that is the most a row is ever offered, a loss wants rebuilding, connecting and confirming,
-    /// and a likely move wants confirming, taking back and connecting, so the column holds them all on one line
-    /// rather than wrapping the third under the others. A row with more than fits still wraps, which is what the
-    /// WrapPanel is for and what makes a row grow rather than lose a button.
-    /// </remarks>
-    private const double OperationsColumn = (3 * ButtonWidth) + (3 * ButtonGap);
 
     /// <summary>One colour with the alpha a pill's ground is laid at, over whatever the row is drawn on.</summary>
     /// <param name="colour">The state's colour.</param>
@@ -2154,20 +2495,6 @@ internal sealed class OverviewView : UserControl
     /// <returns>The colour to fill with.</returns>
     private static Color WithAlpha(Color colour, byte alpha) =>
         Color.FromArgb(alpha, colour.R, colour.G, colour.B);
-
-    /// <summary>The columns every row and the band are laid out by.</summary>
-    /// <returns>The width of each column.</returns>
-    private static ColumnDefinitions Definitions()
-    {
-        var columns = new ColumnDefinitions();
-
-        foreach (var width in Columns)
-        {
-            columns.Add(new ColumnDefinition(width));
-        }
-
-        return columns;
-    }
 
     /// <summary>Puts one cell in its column.</summary>
     /// <param name="grid">The row or band.</param>
@@ -2178,19 +2505,6 @@ internal sealed class OverviewView : UserControl
         Grid.SetColumn(cell, column);
         grid.Children.Add(cell);
     }
-
-    /// <summary>One column's name, over the column it names.</summary>
-    /// <param name="said">What it is called.</param>
-    /// <returns>The line to show.</returns>
-    private static TextBlock Head(string said) =>
-        new()
-        {
-            Text = said.ToUpperInvariant(),
-            TextWrapping = TextWrapping.NoWrap,
-            TextTrimming = TextTrimming.CharacterEllipsis,
-            VerticalAlignment = VerticalAlignment.Center,
-            Classes = { "label" },
-        };
 
     /// <summary>One cell of a row holding a path, or nothing where the path is not one.</summary>
     /// <remarks>
@@ -2217,6 +2531,7 @@ internal sealed class OverviewView : UserControl
             TextWrapping = TextWrapping.NoWrap,
             TextTrimming = TextTrimming.CharacterEllipsis,
             VerticalAlignment = VerticalAlignment.Center,
+            FontSize = 12.5,
             Classes = { "caption", "mono" },
         };
 
@@ -2304,10 +2619,10 @@ internal sealed class OverviewView : UserControl
             _ => RolaI18N.Get("rorolala_vcs.status.broken_unknown", reason.What),
         };
 
-    /// <summary>What the dock is showing, which is what a reading is compared against.</summary>
+    /// <summary>What is on screen now, which is what a reading is compared against.</summary>
     /// <param name="Said">The line said in place of a reading, or nothing when there is one.</param>
-    /// <param name="Rows">The rows the reading came to, which are none when it says a work is clean.</param>
-    private sealed record Shown(string? Said, IReadOnlyList<TableRow> Rows);
+    /// <param name="Groups">The groups the reading came to, which are none when it says a work is clean.</param>
+    private sealed record Shown(string? Said, IReadOnlyList<RowGroup> Groups);
 }
 
 /// <summary>
@@ -2348,8 +2663,8 @@ internal static class OverviewPaths
 
         try
         {
-            return Path.GetFullPath(
-                Path.Combine(at, said.Replace('/', Path.DirectorySeparatorChar))
+            return System.IO.Path.GetFullPath(
+                System.IO.Path.Combine(at, said.Replace('/', System.IO.Path.DirectorySeparatorChar))
             );
         }
         catch (Exception error)
