@@ -2031,9 +2031,9 @@ internal abstract class EntryView<TItem> : EntryView
     /// Remembers where the pointer went down, and what that press may become.
     /// </summary>
     /// <remarks>
-    /// A press on an entry of the choice, or on any entry at all where nothing is chosen, may become a drag of
-    /// what is chosen. Anywhere else it may become a frame, and that is what keeps a frame begun beside a choice
-    /// from carrying the entries it was drawn to add to. A press with <c>Shift</c> or <c>Ctrl</c>
+    /// A press on an entry of the choice may become a drag of what is chosen. A press on an entry that is not
+    /// chosen, or on the space around the entries, may become a frame, which is what keeps a frame begun beside a
+    /// choice from carrying the entries it was drawn to add to. A press with <c>Shift</c> or <c>Ctrl</c>
     /// held is a hand that is choosing rather than moving, so it may become a frame wherever it lands and never a
     /// drag; whether it became a click or a frame is what says what the modifier meant, since the two gestures
     /// have their own rules (see <see cref="Choice"/>).
@@ -2136,16 +2136,10 @@ internal abstract class EntryView<TItem> : EntryView
         // itself and passes them down, so either way they reach the listing.
         (at >= 0 ? List.ContainerFromIndex(at) : List)?.Focus();
 
-        if (at >= 0 && !shift && !control && (_base.Count == 0 || _base.Contains(at)))
+        if (at >= 0 && !shift && !control && _base.Contains(at))
         {
-            // Where nothing is chosen the entry is chosen at once, so that what a drag takes hold of is what the
-            // pointer is on. A choice already standing is left whole, and the pointer coming up without a drag is
-            // what narrows it to the one entry (see `Released`).
-            if (_base.Count == 0)
-            {
-                Select([at]);
-            }
-
+            // The choice is left whole while the press may still become a drag of it, and the pointer coming up
+            // without one is what narrows it to the one entry (see `Released`).
             _slip = e.GetPosition(List);
             _slippedAt = at;
             _from = e;
@@ -2419,9 +2413,9 @@ internal abstract class EntryView<TItem> : EntryView
     /// Starts a drag of the choice as it stood when the pointer went down.
     /// </summary>
     /// <remarks>
-    /// What is carried is the whole choice, or, where the press did not land on a chosen entry, the one entry it
-    /// landed on. Anywhere else the press begins a frame rather than a drag, which is what keeps a frame drawn
-    /// beside a choice from carrying the entries it was drawn to add to (see <see cref="Pressed"/>). Everything
+    /// What is carried is the whole choice as it stood when the pointer went down. A press that lands anywhere
+    /// else begins a frame rather than a drag, which is what keeps a frame drawn beside a choice from carrying
+    /// the entries it was drawn to add to (see <see cref="Pressed"/>). Everything
     /// after that is the listing's, because what a drag of a place's entries means is not what a drag of files
     /// means: a file is handed over as a file, and a place's entry is handed over as the data its provider kept
     /// (see <see cref="Listing{TItem}.DragOut"/>).
@@ -2442,9 +2436,9 @@ internal abstract class EntryView<TItem> : EntryView
         }
 
         var dragged = Items[pressed];
-        IReadOnlyList<TItem> carrying = chosen.Any(item => Same(item, dragged))
-            ? chosen
-            : [dragged];
+
+        // The press is on an entry of the choice, so what the drag carries is that whole choice.
+        IReadOnlyList<TItem> carrying = chosen;
 
         // What the listing will not hand over, a place that is not a thing, an entry that said it is not
         // draggable, is left out here rather than refused when the drag is begun.

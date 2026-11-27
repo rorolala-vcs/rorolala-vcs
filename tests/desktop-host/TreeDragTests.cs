@@ -25,7 +25,7 @@ public sealed class TreeDragTests
     /// </summary>
     /// <remarks>
     /// A modified press is the toolkit's selection rather than a drag, and a press on a step outside the choice
-    /// chooses that step alone, so neither keeps the choice.
+    /// begins a frame rather than a drag, so neither keeps the choice.
     /// </remarks>
     [Fact]
     public void APressOnAChosenStepKeepsTheChoiceForADrag()
@@ -35,5 +35,27 @@ public sealed class TreeDragTests
         Assert.False(TreeBrowser.KeepsChoice(["a", "b"], "c", KeyModifiers.None));
         Assert.False(TreeBrowser.KeepsChoice(["a", "b"], "b", KeyModifiers.Control));
         Assert.False(TreeBrowser.KeepsChoice(["a", "b"], "b", KeyModifiers.Shift));
+    }
+
+    /// <summary>
+    /// A frame chooses what it covers, and what is held says whether it replaces, toggles, takes away or adds.
+    /// </summary>
+    /// <remarks>
+    /// The rule is the listing's own (see <see cref="Choice.Framed"/>): nothing held chooses what the frame
+    /// covers, <c>Shift</c> toggles each step it covers, <c>Ctrl</c> takes each away, and the two together put
+    /// each back.
+    /// </remarks>
+    [Fact]
+    public void AFrameChoosesWhatItCovers()
+    {
+        Assert.Equal(["b", "c"], TreeBrowser.Framed(["a"], ["b", "c"], KeyModifiers.None));
+        Assert.Empty(TreeBrowser.Framed(["a"], [], KeyModifiers.None));
+        Assert.Equal(["a"], TreeBrowser.Framed(["a", "b"], ["b"], KeyModifiers.Control));
+        Assert.Equal(["a", "b"], TreeBrowser.Framed(["a"], ["b"], KeyModifiers.Shift));
+        Assert.Equal(["b"], TreeBrowser.Framed(["a", "b"], ["a"], KeyModifiers.Shift));
+        Assert.Equal(
+            ["a", "b", "c"],
+            TreeBrowser.Framed(["a"], ["b", "c"], KeyModifiers.Control | KeyModifiers.Shift)
+        );
     }
 }

@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Animation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
@@ -481,6 +482,12 @@ internal sealed class TreeBrowser : UserControl
     /// <summary>The card that follows a drag, drawn over the tree while the pointer is in it.</summary>
     private readonly Ghost _ghost;
 
+    /// <summary>The band a frame is drawn with.</summary>
+    private readonly Border _band = Band();
+
+    /// <summary>What the band a frame is drawn with arrives with.</summary>
+    private readonly Transitions _bandFade;
+
     /// <summary>Every row's badge strip, so that what it holds can be asked for again.</summary>
     private readonly List<(string Path, StackPanel Strip)> _worn = [];
 
@@ -542,6 +549,18 @@ internal sealed class TreeBrowser : UserControl
 
     /// <summary>The press a drag of a step would begin from, while it may still become one.</summary>
     private PointerPressedEventArgs? _pressed;
+
+    /// <summary>Whether that press may become a frame, and whether one is being drawn.</summary>
+    private bool _mayFrame;
+    private bool _framing;
+
+    /// <summary>Where a press that may become a frame landed, and the choice it was made from.</summary>
+    private Point _framedAt;
+    private IReadOnlyList<string> _framedBase = [];
+    private KeyModifiers _framedWith;
+
+    /// <summary>The pointer that holds the capture, while a frame is being drawn.</summary>
+    private IPointer? _framePointer;
 
     /// <summary>
     /// The steps that are to be read again when they are next opened.
@@ -625,12 +644,12 @@ internal sealed class TreeBrowser : UserControl
     private string? _slipped;
 
     /// <summary>
-    /// Whether that press became a drag.
+    /// Whether that press became a drag or a frame.
     /// </summary>
     /// <remarks>
     /// A step of the tree is both a place and a thing: choosing one goes there, and dragging one carries it
-    /// there. Which of the two a press was is settled by whether it turned into a drag before it was let go, and
-    /// the answer is kept until the next press so that the release of a drag is not also a step.
+    /// there. A press that moves far enough is one of the two gestures rather than a click, and the answer is
+    /// kept until the next press so that the release of either is not also a step.
     /// </remarks>
     private bool _dragged;
 
@@ -711,6 +730,7 @@ internal sealed class TreeBrowser : UserControl
         AddHandler(PointerPressedEvent, Pressed, RoutingStrategies.Tunnel);
         AddHandler(PointerMovedEvent, Moved, RoutingStrategies.Tunnel);
         AddHandler(PointerReleasedEvent, Released, RoutingStrategies.Tunnel);
+        AddHandler(PointerCaptureLostEvent, Uncaptured, RoutingStrategies.Tunnel);
 
         // Ctrl+A is the tree's own selection, which the toolkit does not provide on its own: the whole of what is
         // on screen is chosen, not the step the keyboard happens to be on. Taken here as well as at the dock, since
@@ -734,7 +754,11 @@ internal sealed class TreeBrowser : UserControl
             UnwatchingAll();
         };
 
+        _bandFade = new Transitions { host.Motion.Fade(Visual.OpacityProperty, host.Motion.Feedback) };
+        _band.Transitions = _bandFade;
+
         var over = new Canvas { IsHitTestVisible = false };
+        over.Children.Add(_band);
         _ghost = new Ghost(over, host.Motion);
 
         var grid = new Grid();
@@ -826,17 +850,22 @@ internal sealed class TreeBrowser : UserControl
         e.DataTransfer.Contains(DataFormat.File) ? Drops.Over(e) : DragDropEffects.Copy;
 
     /// <summary>
-    /// Takes a press as the beginning of a drag of the step it landed on.
+    /// Takes a press as the beginning of a drag of the choice, or of a frame, depending on what it landed on.
     /// </summary>
     /// <remarks>
-    /// Nothing is decided until the pointer has moved far enough to say the hand meant a drag rather than a click
-    /// (<see cref="Drag.Slip"/>), so a press that only chooses a step still chooses it. The computer is not
-    /// carried: it stands for the drives rather than being one of them.
+    /// A press on a step already chosen may become a drag of the whole choice; a press on a step outside it, on
+    /// the space around the steps, or with <c>Shift</c> or <c>Ctrl</c> held may become a frame, which is how a
+    /// hand that is choosing rather than moving is read. Nothing is decided until the pointer has moved far enough
+    /// to say which gesture it meant (<see cref="Drag.Slip"/>), so a press that only chooses a step still chooses
+    /// it. The computer is not carried: it stands for the drives rather than being one of them.
     /// </remarks>
     /// <param name="sender">The tree.</param>
     /// <param name="e">The press.</param>
     private void Pressed(object? sender, PointerPressedEventArgs e)
     {
+        // A frame whose release was never seen is not finished by the next press.
+        StopFrame();
+
         _dragged = false;
         _pressed = null;
         _slipped = null;
@@ -848,25 +877,55 @@ internal sealed class TreeBrowser : UserControl
             return;
         }
 
-        var at = e.GetPosition(this);
-
-        if (Step(at) is not { } path || Browser.IsComputer(path))
+        // The tree's own chrome, its scrollbar and a step's expander, is not a press on the steps.
+        if (e.Source is Visual source && Chrome(source))
         {
             return;
         }
 
-        _pressed = e;
-        _slip = at;
-        _slipped = path;
-        _pressedInChoice = KeepsChoice(_chosen, path, e.KeyModifiers);
-        _pressedChoice = _pressedInChoice ? _chosen : [];
+        var at = e.GetPosition(this);
+        var path = Step(at);
+        var shift = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
+        var control = e.KeyModifiers.HasFlag(KeyModifiers.Control);
+
+        // Read before the toolkit chooses the row the press landed on, because a frame is drawn from the choice
+        // as it stood and a drag carries the choice as it stood.
+        _framedAt = at;
+        _framedBase = _chosen;
+        _framedWith = e.KeyModifiers;
+
+        if (
+            path is { } step
+            && !Browser.IsComputer(step)
+            && !shift
+            && !control
+            && _chosen.Contains(step, StringComparer.Ordinal)
+        )
+        {
+            _pressed = e;
+            _slip = at;
+            _slipped = step;
+            _pressedInChoice = KeepsChoice(_chosen, step, e.KeyModifiers);
+            _pressedChoice = _pressedInChoice ? _chosen : [];
+
+            return;
+        }
+
+        _mayFrame = true;
     }
 
-    /// <summary>Starts the drag of a step once the press has slipped far enough to mean one.</summary>
+    /// <summary>Starts the drag or the frame once the press has slipped far enough to mean one.</summary>
     /// <param name="sender">The tree.</param>
     /// <param name="e">The move.</param>
     private void Moved(object? sender, PointerEventArgs e)
     {
+        if (_mayFrame)
+        {
+            FollowFrame(e);
+
+            return;
+        }
+
         if (_slipped is not { } path || _pressed is not { } from)
         {
             return;
@@ -896,7 +955,7 @@ internal sealed class TreeBrowser : UserControl
         Drag.Away(_browser, from, carrying, lead, _host.Log.Error);
     }
 
-    /// <summary>Lets a press that never became a drag go, so that it is read as the step it was.</summary>
+    /// <summary>Lets a press that never became a drag or a frame go, so that it is read as the step it was.</summary>
     /// <param name="sender">The tree.</param>
     /// <param name="e">The release.</param>
     private void Released(object? sender, PointerReleasedEventArgs e)
@@ -905,6 +964,238 @@ internal sealed class TreeBrowser : UserControl
         _slipped = null;
         _pressedInChoice = false;
         _pressedChoice = [];
+
+        if (_mayFrame)
+        {
+            StopFrame();
+        }
+    }
+
+    /// <summary>Turns a press that may become a frame into one, and follows it.</summary>
+    /// <param name="e">The move.</param>
+    private void FollowFrame(PointerEventArgs e)
+    {
+        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+        {
+            return;
+        }
+
+        var away = e.GetPosition(this) - _framedAt;
+
+        if (!_framing)
+        {
+            if (Math.Abs(away.X) < Drag.Slip && Math.Abs(away.Y) < Drag.Slip)
+            {
+                return;
+            }
+
+            _framing = true;
+
+            // A frame is not a tap: the step it began on must not be walked into when the pointer comes up.
+            _dragged = true;
+            _framePointer = e.Pointer;
+            e.Pointer.Capture(this);
+        }
+
+        Stretch(e);
+    }
+
+    /// <summary>Draws the frame and previews the choice it comes to.</summary>
+    /// <param name="e">The move.</param>
+    private void Stretch(PointerEventArgs e)
+    {
+        var frame = new Rect(_framedAt, e.GetPosition(this)).Normalize();
+
+        if (!_band.IsVisible)
+        {
+            _band.IsVisible = true;
+
+            // The band is the pointer's answer, so it lands short and leaves at once. With motion off it is
+            // simply there.
+            if (_host.Motion.FadeTime(_host.Motion.Feedback) > TimeSpan.Zero)
+            {
+                _band.Transitions = null;
+                _band.Opacity = 0;
+                _band.Transitions = _bandFade;
+
+                Dispatcher.UIThread.Post(() => _band.Opacity = 1);
+            }
+            else
+            {
+                _band.Opacity = 1;
+            }
+        }
+
+        Canvas.SetLeft(_band, frame.X);
+        Canvas.SetTop(_band, frame.Y);
+        _band.Width = frame.Width;
+        _band.Height = frame.Height;
+
+        var covered = Covered(frame);
+        var choice = Framed(_framedBase, covered, _framedWith);
+
+        _chosen = choice;
+        Restore(choice);
+        _anchor = covered.Count > 0 ? IndexOf(covered[^1]) : -1;
+    }
+
+    /// <summary>The steps a frame covers, in the order the tree shows them.</summary>
+    /// <remarks>
+    /// Only the rows the tree has made count: a step never drawn is one the user cannot see, and a frame is a
+    /// gesture on what is on screen. A row the tree only shows is not a step to be chosen.
+    /// </remarks>
+    /// <param name="frame">The frame, in this view's own coordinates.</param>
+    /// <returns>The paths of the steps it covers.</returns>
+    private IReadOnlyList<string> Covered(Rect frame)
+    {
+        var covered = new List<string>();
+
+        foreach (var row in VisibleRows())
+        {
+            if (row.Tag is not string path || VirtualEntries.Find(path) is not null)
+            {
+                continue;
+            }
+
+            if (row.Bounds.Width <= 0 || row.Bounds.Height <= 0)
+            {
+                continue;
+            }
+
+            if (row.TranslatePoint(new Point(0, 0), this) is not { } origin)
+            {
+                continue;
+            }
+
+            if (frame.Intersects(new Rect(origin, row.Bounds.Size)))
+            {
+                covered.Add(path);
+            }
+        }
+
+        return covered;
+    }
+
+    /// <summary>
+    /// The choice a frame leaves: a rule read over every step the frame covers.
+    /// </summary>
+    /// <remarks>
+    /// The rule is the listing's (see <see cref="Choice.Framed"/>): with nothing held the frame chooses what it
+    /// covers and nothing else, <c>Shift</c> toggles each step it covers, <c>Ctrl</c> takes each away, and the two
+    /// together put each back.
+    /// </remarks>
+    /// <param name="from">The choice as it stood when the pointer went down.</param>
+    /// <param name="covered">The steps the frame covers, in the order the tree shows them.</param>
+    /// <param name="modifiers">What was held while it was drawn.</param>
+    /// <returns>The steps to choose.</returns>
+    internal static IReadOnlyList<string> Framed(
+        IReadOnlyList<string> from,
+        IReadOnlyList<string> covered,
+        KeyModifiers modifiers
+    )
+    {
+        ArgumentNullException.ThrowIfNull(from);
+        ArgumentNullException.ThrowIfNull(covered);
+
+        var shift = modifiers.HasFlag(KeyModifiers.Shift);
+        var control = modifiers.HasFlag(KeyModifiers.Control);
+
+        if (!shift && !control)
+        {
+            return [.. covered];
+        }
+
+        var chosen = new List<string>(from);
+
+        foreach (var path in covered)
+        {
+            var at = chosen.FindIndex(one => string.Equals(one, path, StringComparison.Ordinal));
+
+            if (shift && control)
+            {
+                if (at < 0)
+                {
+                    chosen.Add(path);
+                }
+            }
+            else if (control)
+            {
+                if (at >= 0)
+                {
+                    chosen.RemoveAt(at);
+                }
+            }
+            else if (at >= 0)
+            {
+                chosen.RemoveAt(at);
+            }
+            else
+            {
+                chosen.Add(path);
+            }
+        }
+
+        return chosen;
+    }
+
+    /// <summary>Clears the frame: no capture, no band, and nothing left waiting to become one.</summary>
+    private void StopFrame()
+    {
+        _mayFrame = false;
+        _framing = false;
+        _band.IsVisible = false;
+        _framePointer?.Capture(null);
+        _framePointer = null;
+    }
+
+    /// <summary>Ends a frame whose capture was taken away, which leaves what it chose chosen.</summary>
+    /// <param name="sender">The view.</param>
+    /// <param name="e">The lost capture.</param>
+    private void Uncaptured(object? sender, PointerCaptureLostEventArgs e)
+    {
+        if (_mayFrame)
+        {
+            StopFrame();
+        }
+    }
+
+    /// <summary>Whether a visual is the tree's own chrome rather than a step of it.</summary>
+    /// <param name="visual">Where a press landed.</param>
+    /// <returns>Whether it is a scrollbar or an expander.</returns>
+    private static bool Chrome(Visual visual)
+    {
+        for (var one = visual; one is not null; one = one.GetVisualParent())
+        {
+            if (one is ScrollBar or ToggleButton)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// The band a frame is drawn with: a border of the primary and a wash of it inside.
+    /// </summary>
+    /// <remarks>
+    /// Both are bound rather than read, because a resource read where the view is built is read before the view
+    /// is anywhere a theme reaches, and a band that fell back to a colour of its own would be a second answer to
+    /// what the primary is.
+    /// </remarks>
+    private static Border Band()
+    {
+        var band = new Border
+        {
+            IsVisible = false,
+            IsHitTestVisible = false,
+            BorderThickness = new Thickness(1),
+        };
+
+        band[!Border.BorderBrushProperty] = new DynamicResourceExtension(PaletteKeys.Primary);
+        band[!Border.BackgroundProperty] = new DynamicResourceExtension(PaletteKeys.Selection);
+
+        return band;
     }
 
     /// <summary>The step under a point, or nothing where no step is there.</summary>
@@ -2563,8 +2854,8 @@ internal sealed class TreeBrowser : UserControl
                 return;
             }
 
-            // A press that became a drag is not also a step: the drag took the pointer, and a hand letting go of
-            // one is putting something down rather than choosing a place.
+            // A press that became a drag or a frame is not also a step: the gesture took the pointer, and a hand
+            // letting go of one is putting something down or finishing a choice rather than choosing a place.
             if (_dragged)
             {
                 return;
